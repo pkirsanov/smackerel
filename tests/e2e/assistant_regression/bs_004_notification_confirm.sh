@@ -16,6 +16,26 @@
 # Pre-conditions (any missing => skip-77):
 #   - test env wires the notification surface and the proposal fixture
 #     (SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED)
+#
+# ---------------------------------------------------------------------------
+# CORRECTION 2026-08-28 — this fixture is STALE, not blocked on missing work.
+#
+# The expected shape above names scenario/status tokens that the implementation
+# never adopted. BS-004 behaviour IS shipped (spec 061 SCOPE-08, "confirm-card
+# state machine activated end-to-end"): contracts.KindConfirm and ConfirmCard
+# both exist, as does smackerel_assistant_confirm_card_outcomes_total.
+#
+# Design-era token (asserted above)     ->  Shipped token (verify before use)
+#   notification_decision_propose       ->  scenario "notification_schedule"
+#                                           (internal/assistant/shortcuts.go:49, "/remind")
+#   status "awaiting_user_confirmation" ->  status "reminder_proposed"
+#   status "committed"                  ->  status "reminder_confirmed"
+#   (alt-flow, spec 061 spec.md:1642)   ->  status "reminder_cancelled"
+# Shipped tokens: internal/assistant/contracts/response.go:164-166.
+#
+# So the unblock is a REWRITE against the shipped vocabulary, not a wait for a
+# feature. Until that happens this slot stays skip-77 and the lane exits non-zero.
+# ---------------------------------------------------------------------------
 #   - test stack seeds at least one outstanding notification proposal
 #     against the BS-004 chat id
 #
