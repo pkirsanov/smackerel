@@ -46,10 +46,17 @@ import (
 	"time"
 )
 
-// warmupBudgetEnv mirrors the SST contract names owned by
-// tests/integration/agent/routerwarmup. They are duplicated as literals here
-// rather than imported because that package carries integration-tier build
-// constraints; the names themselves are the contract surface under test.
+// SST contract names, restated here rather than imported from
+// tests/integration/agent/routerwarmup.
+//
+// Not because that package is unreachable — it carries no build constraint and
+// is already imported under the integration, stress, and untagged
+// configurations. Restating them keeps this tier's verdict independent of the
+// integration tier's helper: routerwarmup.LoadTimings runs Timings.Validate,
+// which itself enforces two of the three orderings asserted below, so importing
+// the loader would make this test assert whatever that helper currently accepts
+// instead of the contract. A rename in the SST still fails loud here, because
+// the lookup of the old name misses.
 const (
 	envWarmTargetLatencyMs = "AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS"
 	envWarmupBudgetMs      = "AGENT_ROUTING_WARMUP_BUDGET_MS"

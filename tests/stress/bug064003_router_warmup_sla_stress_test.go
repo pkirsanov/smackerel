@@ -111,6 +111,55 @@ const (
 // flake under a loaded CI box and far too tight to admit an unbounded wait.
 const budgetTolerance = 250 * time.Millisecond
 
+// waiterOutcome is what one concurrent waiter observed from the warm-up gate.
+type waiterOutcome struct {
+	wall              time.Duration
+	err               error
+	warmed            bool
+	probes            int
+	qualifyingLatency time.Duration
+}
+
+// runConcurrentWaiters races n waiters through the warm-up gate at once. Each
+// owns its embedder, so the contention is on the scheduler and the gate rather
+// than on the fake.
+func runConcurrentWaiters(n int, timings routerwarmup.Timings, latency time.Duration) []waiterOutcome {
+	outcomes := make([]waiterOutcome, n)
+
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			embedder := &slaEmbedder{latency: latency}
+			start := time.Now()
+			res, err := routerwarmup.WaitForWarmEmbedder(context.Background(), embedder, timings, "probe")
+			outcomes[idx] = waiterOutcome{
+				wall:              time.Since(start),
+				err:               err,
+				warmed:            res.Warmed(),
+				probes:            res.Probes,
+				qualifyingLatency: res.QualifyingLatency,
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return outcomes
+}
+
+// worstWall reports the slowest waiter: the budget must bound every one of
+// them, so the worst case is the number the claim is about, not the mean.
+func worstWall(outcomes []waiterOutcome) time.Duration {
+	var worst time.Duration
+	for _, o := range outcomes {
+		if o.wall > worst {
+			worst = o.wall
+		}
+	}
+	return worst
+}
+
 // TestBUG064003_SLABudgetsArePresentAndOrdered asserts the SST contract shape
 // against the REAL environment this lane receives. It is the half of T6 that
 // covers the production values; the load tests below cover the behaviour.
@@ -205,30 +254,9 @@ func TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters(t *testing.T) {
 	timings := stressTimings()
 	const waiters = 32
 
-	type outcome struct {
-		wall   time.Duration
-		err    error
-		warmed bool
-		probes int
-	}
+	outcomes := runConcurrentWaiters(waiters, timings, neverWarmLatency)
 
-	results := make([]outcome, waiters)
-	var wg sync.WaitGroup
-	wg.Add(waiters)
-
-	for i := 0; i < waiters; i++ {
-		go func(idx int) {
-			defer wg.Done()
-			embedder := &slaEmbedder{latency: neverWarmLatency}
-			start := time.Now()
-			res, err := routerwarmup.WaitForWarmEmbedder(context.Background(), embedder, timings, "probe")
-			results[idx] = outcome{wall: time.Since(start), err: err, warmed: res.Warmed(), probes: res.Probes}
-		}(i)
-	}
-	wg.Wait()
-
-	var worst time.Duration
-	for i, r := range results {
+	for i, r := range outcomes {
 		if !errors.Is(r.err, routerwarmup.ErrEmbedderNotWarm) {
 			t.Fatalf("waiter %d: expected ErrEmbedderNotWarm under contention; got err=%v warmed=%v",
 				i, r.err, r.warmed)
@@ -237,13 +265,10 @@ func TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters(t *testing.T) {
 			t.Fatalf("waiter %d: warm-up overran its declared budget under contention — "+
 				"budget=%s observed=%s probes=%d", i, timings.WarmupBudget, r.wall, r.probes)
 		}
-		if r.wall > worst {
-			worst = r.wall
-		}
 	}
 
 	t.Logf("BUG-064-003 T6 concurrent never-warm: %d waiters, budget=%s, worst observed=%s",
-		waiters, timings.WarmupBudget, worst)
+		waiters, timings.WarmupBudget, worstWall(outcomes))
 }
 
 // TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad is the positive
@@ -257,46 +282,25 @@ func TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad(t *testing.T) 
 	timings := stressTimings()
 	const waiters = 32
 
-	walls := make([]time.Duration, waiters)
-	errs := make([]error, waiters)
-	qualifying := make([]time.Duration, waiters)
+	outcomes := runConcurrentWaiters(waiters, timings, warmLatency)
 
-	var wg sync.WaitGroup
-	wg.Add(waiters)
-	for i := 0; i < waiters; i++ {
-		go func(idx int) {
-			defer wg.Done()
-			embedder := &slaEmbedder{latency: warmLatency}
-			start := time.Now()
-			res, err := routerwarmup.WaitForWarmEmbedder(context.Background(), embedder, timings, "probe")
-			walls[idx] = time.Since(start)
-			errs[idx] = err
-			qualifying[idx] = res.QualifyingLatency
-		}(i)
-	}
-	wg.Wait()
-
-	var worst time.Duration
-	for i := range walls {
-		if errs[i] != nil {
+	for i, r := range outcomes {
+		if r.err != nil {
 			t.Fatalf("waiter %d: a probe at %s must qualify against a %s target; got %v",
-				i, warmLatency, timings.WarmTargetLatency, errs[i])
+				i, warmLatency, timings.WarmTargetLatency, r.err)
 		}
-		if qualifying[i] <= 0 || qualifying[i] > timings.WarmTargetLatency {
+		if r.qualifyingLatency <= 0 || r.qualifyingLatency > timings.WarmTargetLatency {
 			t.Fatalf("waiter %d: qualifying latency %s must be >0 and within the %s target",
-				i, qualifying[i], timings.WarmTargetLatency)
+				i, r.qualifyingLatency, timings.WarmTargetLatency)
 		}
 		// A warm embedder must not consume the budget. Half of it is generous
 		// for a 1ms probe and still fails a fix that always waits the full term.
-		if walls[i] > timings.WarmupBudget/2 {
+		if r.wall > timings.WarmupBudget/2 {
 			t.Fatalf("waiter %d: a warm embedder consumed %s of a %s budget — warm-up is not "+
-				"returning on the first qualifying probe", i, walls[i], timings.WarmupBudget)
-		}
-		if walls[i] > worst {
-			worst = walls[i]
+				"returning on the first qualifying probe", i, r.wall, timings.WarmupBudget)
 		}
 	}
 
 	t.Logf("BUG-064-003 T6 concurrent warm path: %d waiters, budget=%s, worst observed=%s",
-		waiters, timings.WarmupBudget, worst)
+		waiters, timings.WarmupBudget, worstWall(outcomes))
 }

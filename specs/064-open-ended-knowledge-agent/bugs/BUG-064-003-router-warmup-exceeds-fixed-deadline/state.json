@@ -137,7 +137,11 @@
   "completedPhases": [
     "discovery",
     "documentation",
-    "analysis"
+    "analysis",
+    "implement",
+    "test",
+    "regression",
+    "simplify"
   ],
   "artifacts": {
     "present": ["bug.md", "spec.md", "design.md", "scopes.md", "report.md", "state.json"],
