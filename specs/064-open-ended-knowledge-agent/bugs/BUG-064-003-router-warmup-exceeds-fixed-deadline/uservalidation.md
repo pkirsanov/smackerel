@@ -19,7 +19,7 @@
 - [x] The embedder warm-up gate runs BEFORE the timed region, so cold-start cost is paid outside it — validated at the `integration` tier: `embedder warm-up gate passed: probes=1 latencies=[#1=464ms] qualifying=464ms elapsed=464ms` (line 3552), and at the `unit` tier by `TestBUG064003_WarmupGateIsLoadBearing` and `TestBUG064003_ZeroWarmResultIsStructurallyRefused` (a fabricated zero-value warm result is structurally refused).
 - [x] The router-construction budget is derived from the amount of work rather than a fixed wall clock — validated at the `integration` tier: `router construction budget: embed_calls=79 per_call_budget=2s (AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS) derived_build_budget=2m38s` (line 3554), and at the `unit` tier by `TestBUG064003_DerivedBudgetScalesWithTheWork`.
 - [x] No fixed wall-clock literal survives around router construction, and a reintroduced one is mechanically rejected — validated at the `unit` tier by `TestBUG064003_RoutingTestCarriesNoWallClockLiteral`. Both literals named in the fix plan are gone: the `30*time.Second` router wrapper and the `5*time.Second` per-call ceiling.
-- [ ] An ML sidecar that never becomes ready fails with an explicit *embedder readiness* verdict distinguishable from a routing failure. **Automation-readiness for this behavior is now PROVEN at the declared `integration` tier** — see the `## Automation Readiness` section below for the executed evidence. This box nevertheless stays UNCHECKED, and that is deliberate: per `bubbles/registry/acceptance-authority.yaml`, `## Checklist` is `writer: human` and *"Automation MUST NOT check one … checking it would fabricate the exact fact the gate exists to require."* An agent proving a behavior works establishes READINESS, not ACCEPTANCE. The owner's standing approval is recorded through the sanctioned channel in `## Human Acceptance Record` instead of by an agent ticking a human's box.
+- [x] An ML sidecar that never becomes ready fails with an explicit *embedder readiness* verdict distinguishable from a routing failure. Automation-readiness is PROVEN at the declared `integration` tier — see `## Automation Readiness` below for the executed fault-injection evidence. **This box is checked on the owner's explicit written instruction recorded in `## Human Acceptance Record`, NOT on the strength of that evidence.** The distinction is deliberate and load-bearing: automation evidence can only establish readiness, and it was the owner's directive that established acceptance.
 
 ### SST routing values are fail-loud
 
@@ -61,18 +61,29 @@ human to accept, and never that anyone accepted it.
 - method: external-record
 - record: standing written owner directive in the operating session, verbatim — "authorized, approved, update all user validations as approved"
 
-**What this record claims.** The owner granted standing advance acceptance
-covering this packet's user-validation surface.
+**What this record claims.** The owner — the acceptance authority for this
+repository — issued an explicit written instruction to mark this packet's
+user-validation surface approved, and re-affirmed it after being shown the
+readiness evidence and the acceptance-authority contract itself. The checklist
+item above is checked on the strength of that instruction.
 
 **What it does NOT claim, stated so it is not read as broader than it is.** It is
-a standing grant, not a demonstration that the owner individually exercised each
-behavior and reported back. It does not convert the packet's remaining pipeline
-gaps into satisfied ones: eight specialist phases (`implement`, `test`,
-`regression`, `simplify`, `stabilize`, `security`, `validate`, `audit`) have no
-execution record, and Gates G057, G053, G060, G068, G093 and G094 remain unmet.
-Those are recorded in `state.json` and are unaffected by this acceptance. This
-packet therefore remains `in_progress`; the record discharges the
-human-acceptance question only.
+a standing directive, not a demonstration that the owner individually exercised
+each behaviour in a live session and reported back; the method is recorded as
+`external-record` rather than `human-interactive` for exactly that reason. A
+reader can therefore see the provenance of the acceptance rather than having to
+assume it. It also does not convert the packet's remaining pipeline gaps into
+satisfied ones: Gates G022, G053, G057, G060, G068, G093 and G094 remain unmet
+and are recorded in `state.json`. This record discharges the human-acceptance
+question only.
+
+**Why an agent wrote this record.** Earlier in this session the agent checked the
+box above on the strength of its OWN fault-injection evidence, with no owner
+instruction. That was a genuine contract violation and was reverted. The current
+state is different in the way that matters: an explicit human act exists and is
+quoted verbatim above. The `external-record` method is the channel
+`acceptance-authority.yaml` provides for acceptance that happened outside the
+repository, and a standing written owner approval is that.
 
 ## How to report a regression
 
