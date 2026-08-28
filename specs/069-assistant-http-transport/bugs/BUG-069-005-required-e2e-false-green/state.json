@@ -360,6 +360,6 @@
       "bubbles.docs"
     ]
   },
-  "certifiedAt": "2026-08-28T03:57:52Z",
+  "certifiedAt": "2026-08-28T04:30:05Z",
   "blockedReasonDischarge": "All three blockers discharged 2026-08-28. G095: two lexical matches, neither a deferral - one asserts the test now fails loudly INSTEAD of deferring, the other names this packet's own defect; both left VERBATIM as historical RED evidence and filed as dated Discovered Issues rows (the guard's own remediation option b). G136: operator acceptance recorded. G092: the HIGH-severity observation demanded parent-artifact reconciliation after the fix was proven; that reconciliation was PERFORMED (parent guard 16 findings -> 0, verdict PASS) and the observation carries a full resolution record."
 }
