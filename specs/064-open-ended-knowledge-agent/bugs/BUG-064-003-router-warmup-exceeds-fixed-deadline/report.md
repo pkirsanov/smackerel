@@ -596,6 +596,28 @@ reports 463G available at 52% use. The 33G figure that triggers the preflight is
 `/mnt/c`, where Docker does not write. The unit lane needs no stack, so it does
 not contend with wanderaide's running integration lane.
 
+**A focused green is weaker than a full-lane green, and the lane says so itself.**
+The integration lane prints, verbatim:
+
+```
+go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED
+for this run — a focused --run selector (TestOpenKnowledgeRouting) is active.
+Only a full lane run with no --run selector enforces that
+TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ran with a non-zero
+executed-assertion count.
+```
+
+This matters for how the T1 evidence in this report should be read. Every
+focused integration invocation used here carried `--go-run 'TestOpenKnowledgeRouting'`,
+so the acceptance gate was NOT enforcing its executed-assertion count on those
+runs. The T1 result remains real, but a focused `INTEGRATION_EXIT=0` is NOT
+equivalent to a full-lane pass and is not claimed as one. Filed as R-014.
+
+**NOT claimed:** that the routing test failed to run in any particular focused
+invocation. One captured lane log shows no `tests/integration/agent` package line
+alongside that notice, which would suggest it did not, but that capture may be
+truncated at the head, so the stronger claim is not made on that evidence.
+
 ### Uncertainty Declarations
 
 1. **The ~30 s router-build window is an approximation.** Totals of 32.14 s and
