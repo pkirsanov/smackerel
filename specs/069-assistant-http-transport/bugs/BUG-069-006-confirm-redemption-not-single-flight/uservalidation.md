@@ -14,14 +14,14 @@ delivers. An item is checked only when it has been observed to hold.
 
 ## Checklist
 
-- [ ] Two people, or one person double-tapping, cannot make a single confirmation execute a gated action twice.
-- [ ] A confirm that loses a race is refused with the same message a user sees when confirming something already handled, revealing nothing about the race.
-- [ ] The audit trail shows exactly one terminal outcome per confirmation, so it never records both an acceptance and a timeout for one card.
-- [ ] Confirming a card normally still executes the action exactly once and returns the expected result.
-- [ ] Re-submitting an already-used confirmation still declines to execute the action a second time.
-- [ ] Cancelling a confirm card behaves correctly when a cancellation and an acceptance arrive at the same moment.
-- [ ] A confirm card that expires while being accepted resolves to one outcome, not two.
-- [ ] Nothing else in the conversation - working context, pending disambiguation, pending clarification - is disturbed when a confirmation is redeemed.
+- [x] Two people, or one person double-tapping, cannot make a single confirmation execute a gated action twice.
+- [x] A confirm that loses a race is refused with the same message a user sees when confirming something already handled, revealing nothing about the race.
+- [x] The audit trail shows exactly one terminal outcome per confirmation, so it never records both an acceptance and a timeout for one card.
+- [x] Confirming a card normally still executes the action exactly once and returns the expected result.
+- [x] Re-submitting an already-used confirmation still declines to execute the action a second time.
+- [x] Cancelling a confirm card behaves correctly when a cancellation and an acceptance arrive at the same moment.
+- [x] A confirm card that expires while being accepted resolves to one outcome, not two.
+- [x] Nothing else in the conversation - working context, pending disambiguation, pending clarification - is disturbed when a confirmation is redeemed.
 
 ## Verification Steps
 
@@ -38,3 +38,20 @@ delivers. An item is checked only when it has been observed to hold.
    single terminal outcome.
 8. Run the existing sequential confirm scenario unmodified and confirm it still
    passes.
+
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-28
+- method: external-record
+- record: Operator directive in the working session on 2026-08-28, verbatim "authorized, approved, update all user validations as approved".
+
+### Scope of this acceptance, stated precisely
+
+The operator's acceptance covers the delivered single-flight confirm-redemption
+behaviour, which is proven by this packet's own tests. It does NOT close the
+packet: one DoD item remains genuinely unsatisfiable and the packet stays
+`blocked` for that reason, stated in `state.json`.
+
+**What is NOT claimed.** No agent performed a live messaging-channel turn.
