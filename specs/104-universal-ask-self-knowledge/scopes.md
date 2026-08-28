@@ -13,6 +13,7 @@ machine is resource-constrained — do NOT build there).
 ## Scope 1 (P0): General embedding-backed namespace `SemanticSearcher`
 
 **Status:** Done
+**Tags:** foundation:true  
 **Depends On:** —
 **FR:** FR-4, NFR-4
 
@@ -110,7 +111,7 @@ Scenario: idempotent ingestion with stale sweep
 ## Scope 4 (P0): `self_knowledge` tool + allowlist + planner routing
 
 **Status:** Done
-**Depends On:** Scope 1, Scope 3
+**Depends On:** Scope 1 (foundation — the general `SemanticSearcher`), Scope 3
 **FR:** FR-1, FR-5
 
 `internal/assistant/openknowledge/tools/self_knowledge.go` implementing

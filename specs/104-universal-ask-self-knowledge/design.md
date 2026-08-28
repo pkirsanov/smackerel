@@ -227,3 +227,58 @@ general namespace `SemanticSearcher`, the `smackerel_self` namespace, the `/help
 twin, cite-back/provenance integration tests, e2e, deploy. Out of scope:
 switching `internal_retrieval` to the new searcher (follow-on), other
 products/tenants, and any provenance relaxation.
+
+---
+
+## Capability Foundation
+
+The reusable capability this spec introduces is **namespace-scoped semantic
+retrieval**, not "self-knowledge". Self-knowledge is one caller of it.
+
+The foundation is the `SemanticSearcher` interface in
+`internal/assistant/openknowledge/tools/semantic_searcher.go`:
+
+```go
+type SemanticSearcher interface {
+        Search(ctx context.Context, namespace, query string, k int) ([]GraphArtifact, error)
+}
+```
+
+Two seams keep it general rather than self-knowledge-shaped:
+
+- **`namespace` is a parameter, not a constant.** The searcher has no knowledge
+  of `smackerel_self`. A caller supplies the namespace it owns, which is what
+  lets an unrelated corpus reuse the same retrieval path with no edit here.
+- **`Embedder` is an injected interface**, so the embedding backend is a
+  substitution point rather than a hard dependency on the ML sidecar.
+
+The searcher fails loud rather than degrading: an empty namespace returns
+`ErrSemanticSearchNamespace`, and a nil `Embedder` panics at construction in
+`NewPgxSemanticSearcher`. Both are deliberate — a silent fallback here would
+return results from the wrong corpus, which is worse than an error.
+
+## Concrete Implementations
+
+| Implementation | Location | Backing store | Status |
+|---|---|---|---|
+| `PgxSemanticSearcher` | `internal/assistant/openknowledge/tools/semantic_searcher.go` | PostgreSQL + pgvector, via the injected `rowQuerier` | delivered (SCOPE-01) |
+
+One concrete implementation exists today. That is the honest count: the
+interface is justified by having a real second CALLER rather than a second
+backend — `SelfKnowledge` consumes it through the interface with a fixed
+namespace, and `internal_retrieval` is the identified next consumer. The
+`rowQuerier` seam is what makes the single implementation testable without a
+live database.
+
+### Variation Axes
+
+| Axis | Varies by | Mechanism | Exercised today |
+|---|---|---|---|
+| Corpus | caller | `namespace` argument | yes — `smackerel_self` vs the user's own graph |
+| Embedding backend | deployment | injected `Embedder` interface | yes — real sidecar in production, stub in unit tests |
+| Result breadth | call site | `k` argument | yes — tool-level default vs test-supplied values |
+| Storage driver | construction | `rowQuerier` interface | partly — real pool in production, fake rows in unit tests |
+
+The axis this design deliberately does NOT open is ranking strategy: ordering
+is pgvector distance, with no pluggable reranker. Adding one would be a new
+axis and a new spec, not a variation of this one.

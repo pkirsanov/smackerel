@@ -183,3 +183,23 @@ Feature: /ask answers questions about smackerel itself
 | FR-7 general seam | (design-documented) | §General seam |
 | FR-8 honest fallback | 5 | §Trust integration |
 | FR-9 deploy-time reingestion | 7 | §Ingestion lifecycle |
+
+## Domain Capability Model
+
+This spec introduces one reusable domain capability and one consumer of it.
+
+**Capability: namespace-scoped semantic retrieval.** Given a namespace, a query
+string and a result count, return the semantically nearest artifacts in that
+namespace. The capability is domain-neutral: it knows nothing about
+self-knowledge, and gains nothing from knowing.
+
+**Consumer: self-knowledge answering.** The `self_knowledge` tool binds the
+capability to the `smackerel_self` namespace so `/ask` can answer questions
+about Smackerel itself with citations, using the same retrieval path a user's
+own corpus uses.
+
+The split is the point. Retrieval is a foundation with real variation axes
+(corpus, embedding backend, result breadth — see design.md § Variation Axes);
+self-knowledge is a single bound configuration of it. A second consumer,
+`internal_retrieval`, is identified and out of scope here, which is what makes
+the seam a foundation rather than speculative generality.

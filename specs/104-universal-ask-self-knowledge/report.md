@@ -665,3 +665,74 @@ certified.
 None of these findings were remediated in this session — the task was to execute
 the verification phases and report truthfully, not to change delivered code.
 Status remains `blocked`.
+
+---
+
+### Code Diff Evidence
+
+Spec 104's implementation landed in three commits. Diffstats below are real
+`git show --stat` output, not a summary.
+
+```text
+$ git log --oneline -- internal/assistant/openknowledge/tools/semantic_searcher.go \
+    internal/assistant/openknowledge/tools/self_knowledge.go internal/assistant/selfknowledge/
+8dc29f63 feat(104): SCOPE-05/06/07 product-doc corpus + /help twin + trust perimeter
+d34cdfe7 feat(104): SCOPE-02/03/04 self-knowledge corpus + self_knowledge tool
+1745369f feat(104): SCOPE-01 general embedding-backed namespace SemanticSearcher
+```
+
+SCOPE-01 — the general, namespace-scoped, embedding-backed searcher:
+
+```text
+$ git show --stat --oneline 1745369f
+1745369f feat(104): SCOPE-01 general embedding-backed namespace SemanticSearcher
+ .../openknowledge/tools/semantic_searcher.go       | 131 +++++++++++++++++++++
+ .../openknowledge/tools/semantic_searcher_test.go  |  95 +++++++++++++++
+ .../openknowledge/semantic_searcher_test.go        | 118 +++++++++++++++++++
+ 3 files changed, 344 insertions(+)
+```
+
+SCOPE-02/03/04 — the self-knowledge corpus, its derivation, ingestion, and the
+tool that exposes it, wired into `cmd/core`:
+
+```text
+$ git show --stat --oneline d34cdfe7
+d34cdfe7 feat(104): SCOPE-02/03/04 self-knowledge corpus + self_knowledge tool
+ cmd/core/main.go                                   |  11 ++
+ cmd/core/wiring_assistant_openknowledge.go         |  45 +++++-
+ cmd/core/wiring_selfknowledge.go                   |  71 +++++++++
+ .../openknowledge/tools/self_knowledge.go          | 140 +++++++++++++++++
+ .../openknowledge/tools/self_knowledge_test.go     | 121 +++++++++++++++
+ internal/assistant/selfknowledge/derive.go         | 116 ++++++++++++++
+ internal/assistant/selfknowledge/derive_test.go    | 105 +++++++++++++
+ internal/assistant/selfknowledge/ingestor.go       | 144 ++++++++++++++++++
+ .../openknowledge/self_knowledge_tool_test.go      |  76 ++++++++++
+ tests/integration/selfknowledge/ingest_test.go     | 167 +++++++++++++++++++++
+ 10 files changed, 994 insertions(+), 2 deletions(-)
+```
+
+SCOPE-05/06/07 — product-doc corpus, the `/help` twin, and the trust perimeter:
+
+```text
+$ git show --stat --oneline 8dc29f63
+8dc29f63 feat(104): SCOPE-05/06/07 product-doc corpus + /help twin + trust perimeter
+ cmd/core/wiring_assistant_facade.go                |   5 +
+ cmd/core/wiring_selfknowledge.go                   |   5 +-
+ .../selfknowledge/corpus/product_overview.md       |  51 +++++++++
+ internal/assistant/selfknowledge/docsource.go      | 107 +++++++++++++++++++
+ internal/assistant/selfknowledge/docsource_test.go |  94 +++++++++++++++
+ internal/telegram/bot.go                           |  48 ++++-----
+ internal/telegram/help_test.go                     |  58 ++++++++++-
+ internal/telegram/legacy_aliases.go                |  65 ++++++++++--
+ specs/104-universal-ask-self-knowledge/report.md   |  71 ++++++++++++-
+ specs/104-universal-ask-self-knowledge/scopes.md   |  34 +++---
+ specs/104-universal-ask-self-knowledge/state.json  |  11 +-
+ .../self_knowledge_provenance_test.go              | 115 +++++++++++++++++++++
+ 12 files changed, 605 insertions(+), 59 deletions(-)
+```
+
+Non-planning delta across the three commits: **25 distinct files** under
+`cmd/`, `internal/`, and `tests/` — production wiring, two new packages, an
+embedded corpus, and unit + integration + e2e coverage. Only three of the 25
+touched paths are under `specs/`, so this is a delivery packet, not a
+planning-only one.
