@@ -8,6 +8,17 @@ Commands: build/test/lint via `./smackerel.sh`; build+deploy through the knb-own
 `<target>` adapter on `<deploy-host>` per the BUG-061-009 recipe (the development
 machine is resource-constrained — do NOT build there).
 
+### Change Boundary
+
+**Included file families:** `internal/assistant/openknowledge/tools/`, `internal/assistant/selfknowledge/`, `cmd/core/` (wiring only), `internal/telegram/` (`/help` twin + legacy aliases), `tests/integration/openknowledge/`, `tests/integration/selfknowledge/`, `tests/e2e/openknowledge/`
+
+**Excluded surfaces:** `internal/api/`, `internal/whatsapp/`, `internal/graph/`, `internal/connector/`, `internal/auth/`, `internal/scheduler/`, `ml/`, `config/` (read-only — the corpus DERIVES from `config/assistant/scenarios.yaml`, it never edits it), `deploy/`, `.github/bubbles/`
+
+The three delivery commits touched 25 distinct non-planning files, all inside the
+included families — verified in [report.md](report.md) → "Code Diff Evidence". The
+read-only treatment of `config/` is the load-bearing one: a corpus that WROTE to
+the SST it derives from would defeat FR-2's fresh-by-construction guarantee.
+
 ---
 
 ## Scope 1 (P0): General embedding-backed namespace `SemanticSearcher`
@@ -254,6 +265,8 @@ Scenario: live /ask about smackerel answers with citations
 | Test Type | Category | File | Description | Command | Live |
 |---|---|---|---|---|---|
 | E2E | `e2e-api`/`e2e-ui` | `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` | full-stack /ask meta-question → cited answer | `./smackerel.sh test e2e` | Yes |
+| Regression E2E (scenario-specific) | `e2e-api` | `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` | persistent scenario-specific regression coverage for SCN-104-A08: `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` pins the cited-answer path and `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` pins the honest-refusal path, so a regression to either cannot pass silently | `./smackerel.sh test e2e` | Yes |
+| Regression E2E (broader suite) | `e2e-api` | full suite | the two tests above run alongside every other e2e in the repo, proving they survive their neighbours | `./smackerel.sh test e2e` | Yes |
 | Stress | `stress` | (extend openknowledge p95) | self_knowledge search within budget | per existing | Yes |
 
 ### Definition of Done
@@ -261,4 +274,7 @@ Scenario: live /ask about smackerel answers with citations
 - [x] Built + signed with the cosign identity managed by `<operator>` + deployed through `<target>` on `<deploy-host>`; running digests healthy; corpus ingested (verified) → core sha256:3b6261a9… + ml sha256:25f36dc5… running/healthy/0-restarts; 13 smackerel_self artifacts ingested (Evidence: report.md#scope-8)
 - [x] `<operator>` behavioral smoke test recorded (or noted operator-only) → noted operator-only (agent cannot send Telegram; the deployed HTTP surface needs PASETO); behavior e2e-proven + deploy-verified (Evidence: report.md#scope-8)
 - [x] Live `/ask` about smackerel answers with citations — `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` drives a meta-question through the running ephemeral stack and asserts the answer carries `smackerel_self` sources; its sibling `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` pins the negative half, so a refusal cannot be mistaken for a cited answer (Evidence: report.md#scope-8)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` (cited-answer path) and `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` (honest-refusal path) are persistent tests bound to SCN-104-A08, so a regression to either half is caught rather than passing silently. **Claim Source:** executed. Evidence: [report.md](report.md#scope-8)
+- [x] Broader E2E regression suite passes with these tests in place — `./smackerel.sh test e2e` (full suite) exit 0 on 2026-08-28; all three go phases green (`PASS: go-e2e`, `PASS: go-e2e-graph-disabled`, `PASS: go-e2e-corpus-enforce`). **Claim Source:** executed. Evidence: [report.md](report.md#scope-8)
+- [x] Change Boundary is respected and zero excluded file families were changed — the three delivery commits touched 25 distinct non-planning files, all inside the included families; `config/` was read only. **Claim Source:** executed. Evidence: [report.md](report.md) → "Code Diff Evidence"
 - [x] Build Quality Gate clean → module compiles; format clean; Trivy gate passed in the signed build (Evidence: report.md#scope-8)

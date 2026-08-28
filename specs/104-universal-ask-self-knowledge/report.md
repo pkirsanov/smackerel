@@ -789,3 +789,75 @@ Non-planning delta across the three commits: **25 distinct files** under
 embedded corpus, and unit + integration + e2e coverage. Only three of the 25
 touched paths are under `specs/`, so this is a delivery packet, not a
 planning-only one.
+
+---
+
+### validate
+
+Executed by `bubbles.goal` after three `bubbles.validate` dispatches returned no
+output and made no change to the working tree (verified: `git status --porcelain`
+empty, `completedPhases` unchanged, zero `### validate` sections). Recording who
+actually did the work rather than attributing it to a specialist that did not run.
+
+Whole delivered surface, uncached where it matters:
+
+```text
+$ go test ./internal/assistant/openknowledge/... ./internal/assistant/selfknowledge/... ./internal/telegram/
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/llm             0.970s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/tools           (cached)
+ok      github.com/smackerel/smackerel/internal/assistant/selfknowledge                 0.326s
+ok      github.com/smackerel/smackerel/internal/telegram                                27.715s
+Exit Code: 0
+```
+
+Per-requirement verdict, each bound to a test actually run this session:
+
+```text
+$ go test ./internal/assistant/openknowledge/tools/ ./internal/assistant/selfknowledge/ \
+    -run 'TestSelfKnowledge_Contract|TestSelfKnowledge_ExecuteMapsCitedSources|TestSelfKnowledge_ExecuteErrorPaths|TestNewSelfKnowledge_NilArgsPanic|TestPgxSemanticSearcher|TestDerive_|TestDocCorpus_' -v -count=1
+--- PASS: TestSelfKnowledge_Contract (0.00s)
+--- PASS: TestNewSelfKnowledge_NilArgsPanic (0.00s)
+--- PASS: TestSelfKnowledge_ExecuteMapsCitedSources (0.00s)
+--- PASS: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit (0.00s)
+--- PASS: TestSelfKnowledge_ExecuteErrorPaths (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/tools   0.015s
+--- PASS: TestDerive_FromRealScenariosYAML (0.00s)
+--- PASS: TestDerive_Deterministic (0.00s)
+--- PASS: TestDerive_NilManifest (0.00s)
+--- PASS: TestDocCorpus_Entries_FromEmbeddedOverview (0.00s)
+--- PASS: TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/selfknowledge 0.032s
+Exit Code: 0
+
+$ go test ./internal/telegram/ -run TestHelp_RendersCapabilitiesFromSharedCorpus -v -count=1
+--- PASS: TestHelp_RendersCapabilitiesFromSharedCorpus (0.00s)
+ok      github.com/smackerel/smackerel/internal/telegram        0.145s
+Exit Code: 0
+```
+
+| Requirement | Verdict | Bound by |
+|---|---|---|
+| FR-1 `self_knowledge` is a grounded source | matches | `TestSelfKnowledge_Contract`, `TestSelfKnowledge_ExecuteMapsCitedSources` |
+| FR-2 fresh-by-construction corpus | matches | `TestDerive_FromRealScenariosYAML` reads the live `config/assistant/scenarios.yaml`; `TestDerive_Deterministic` |
+| FR-3 real ingestion + semantic search | matches | `TestIngestor_IdempotentWithStaleSweep` (integration), `TestPgxSemanticSearcher_NamespaceScopedCosine` |
+| FR-4 general embedding-backed searcher | matches | `namespace` is a parameter of `SemanticSearcher.Search`, not a constant; `Embedder` injected |
+| FR-5 namespace isolation | matches | `TestSelfKnowledgeTool_CitesOnlySmackerelSelf`, `TestSelfKnowledge_TrustPerimeter` |
+| FR-6 `/help` human twin | matches | `TestHelp_RendersCapabilitiesFromSharedCorpus` |
+| FR-7 general command-as-source seam | matches (design-documented, per the spec's own traceability row) | design.md § General seam + § Capability Foundation |
+| FR-8 honest fallback preserved | matches | `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` passed in the full suite this session |
+| FR-9 deploy-time (re)ingestion | matches | boot wiring in `cmd/core/wiring_selfknowledge.go`; live ingestion recorded in the deployment section above |
+| NFR-1 provenance unchanged | matches | `TestSelfKnowledge_TrustPerimeter` |
+| NFR-4 fail-loud, no silent fallback | matches | `ErrSemanticSearchNamespace`; `NewPgxSemanticSearcher` panics on nil `Embedder`; proven adversarially by the RED→GREEN mutation above |
+
+**What I could NOT validate, stated plainly.** No requirement was validated by a
+human conversational turn against the deployed bot — the agent cannot send
+Telegram, and the deployed HTTP surface requires PASETO. Those turns are covered
+by the operator's recorded acceptance in `uservalidation.md`, which states the
+same limit. The e2e half of FR-8 and FR-3 rests on the ephemeral-stack suite run
+this session, not on the production deployment.
+
+**No gap found between spec and delivery.** That is a finding, not a formality:
+the requirement most at risk was FR-4's generality claim, and it holds because
+`namespace` genuinely is a call-site parameter — a searcher hard-coded to
+`smackerel_self` would have satisfied every self-knowledge test while failing the
+requirement.
