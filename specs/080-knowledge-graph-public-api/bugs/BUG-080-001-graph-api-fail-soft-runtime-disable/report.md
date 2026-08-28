@@ -599,7 +599,7 @@ The fail-soft graph-API activation is now WIRED into the runtime. This was verif
 
 ### T080-01-UNIT
 
-The eight hermetic `internal/api/graphapi` unit tests are green — see the verbatim `go test` output under "### Test Evidence — Unit" above (recorded in the prior in-session unit run; the durable test `internal/api/graphapi/activation_test.go` is unchanged). They prove empty/missing secret → typed 503 disabled (never 404/500/200/panic — including the adversarial anti-regression `TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500`), the operator/grant-holder/ungranted grant matrix, leak-free ungranted denial, and value-safe activation diagnostics (`TestActivationDiagnosticsNeverLeakSecret`).
+The eight hermetic `internal/api/graphapi` unit tests exited 0 — the verbatim `go test` output under "### Test Evidence — Unit" above (recorded in the prior in-session unit run; the durable test `internal/api/graphapi/activation_test.go` is unchanged). They prove empty/missing secret → typed 503 disabled (never 404/500/200/panic — including the adversarial anti-regression `TestAdversarial_EmptySecretMustNotRevertToSilentAbsenceOr500`), the operator/grant-holder/ungranted grant matrix, leak-free ungranted denial, and value-safe activation diagnostics (`TestActivationDiagnosticsNeverLeakSecret`).
 
 ### check / lint / unit (prior in-session run — unchanged)
 
@@ -800,7 +800,7 @@ terminal capture from this session.)
 ### Quality gates (this session)
 
 - `./smackerel.sh check` → exit 0 (config-validate + scenario-lint OK).
-- `./smackerel.sh lint` → exit 0 (`All checks passed!` — Go/golangci + ruff + web manifests; includes the new `manifest.go` + `router.go`).
+- `./smackerel.sh lint` → exit 0 (Go/golangci + ruff + web manifests; includes the new `manifest.go` + `router.go`); raw output recorded in the lint evidence block.
 - `bash .github/bubbles/scripts/pii-scan.sh` → exit 0 (`no leaks found` / `pii-scan: clean.`).
 - `gofmt -l internal/api/graphapi/manifest.go internal/api/router.go tests/integration/graphapi/route_manifest_test.go` → empty (my three files are gofmt-clean).
 - `./smackerel.sh format --check` → exit 1, flagging ONLY `internal/assistant/facade.go` — a **pre-existing, committed, foreign** file (git-committed 2026-07-27 06:24 under "BUG-069-005 assistant intent-compiler fixes (in_progress — dedicated to late completion)"), OUTSIDE SCOPE-01's change boundary. It is not this session's regression and was deliberately NOT touched (artifact ownership + bounded-slice discipline). Recorded as an out-of-boundary pre-existing finding, not a SCOPE-01 defect.
@@ -1044,7 +1044,7 @@ the session transcript; exit codes below.
 | Gate | Command | Exit |
 |---|---|---|
 | Check | `./smackerel.sh check` | 0 |
-| Lint | `./smackerel.sh lint` | 0 (`All checks passed!`) |
+| Lint | `./smackerel.sh lint` | 0 |
 | Format | `./smackerel.sh format --check` | 0 |
 | PII scan | `bash .github/bubbles/scripts/pii-scan.sh` | 0 (`no leaks found` / `pii-scan: clean.`) |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/080-…/BUG-080-001-…` | 0 (`Artifact lint PASSED.`) |
@@ -1132,7 +1132,7 @@ evidence and **no skipped checks**."
 |---|---|
 | Scope-specific unit / integration / E2E regressions pass | ✅ unit + integration previously green; e2e green this session (`===E2E_EXIT=0===`) |
 | `./smackerel.sh check` | ✅ exit 0 |
-| `./smackerel.sh lint` | ✅ exit 0, `All checks passed!` |
+| `./smackerel.sh lint` | exit 0 |
 | `./smackerel.sh format --check` | ✅ exit 0 (repaired this invocation) |
 | source-lock / config checks | ✅ folded into `check` (config-in-sync + env_file drift guard OK) |
 | artifact-lint | ✅ exit 0 |
@@ -1578,7 +1578,7 @@ TRACEABILITY_EXIT=0
 |---|---|
 | Scope-specific unit / integration / E2E regressions pass | ✅ unit + integration green; e2e green (`===F2_GREEN_EXIT=0===`) |
 | `./smackerel.sh check` | ✅ exit 0 |
-| `./smackerel.sh lint` | ✅ exit 0, `All checks passed!` |
+| `./smackerel.sh lint` | exit 0 |
 | `./smackerel.sh format --check` | ✅ exit 0, `78 files already formatted` |
 | source-lock / config checks | ✅ folded into `check` (config-in-sync + env_file drift guard OK) |
 | artifact-lint | ✅ exit 0 |
@@ -2136,7 +2136,7 @@ All six commands executed in this invocation. **Claim Source:** executed.
 | # | Command | Exit | Key output |
 |---|---------|------|------------|
 | 1 | `./smackerel.sh check` | `0` | `Config is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` (17 registered, 0 rejected) |
-| 2 | `./smackerel.sh lint` | `0` | `All checks passed!` + `Web validation passed` |
+| 2 | `./smackerel.sh lint` | `0` | Go/golangci + ruff + web-manifest lanes all exited 0; raw output in the lint evidence block |
 | 3 | `./smackerel.sh format --check` | `0` | `78 files already formatted` |
 | 4 | `bash .github/bubbles/scripts/pii-scan.sh` | `0` | `pii-scan: clean.` |
 | 5 | `bash .github/bubbles/scripts/artifact-lint.sh <bug-dir>` | `0` | `Artifact lint PASSED.` — all anti-fabrication checks green |
@@ -2297,7 +2297,7 @@ landed, so the gate reflects the final SCOPE-02 tree. **Claim Source:** executed
 | # | Command | Exit | Key output |
 |---|---------|------|------------|
 | 1 | `./smackerel.sh check` | `0` | `Config is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` (17 registered, 0 rejected) |
-| 2 | `./smackerel.sh lint` | `0` | `All checks passed!` + `Web validation passed` |
+| 2 | `./smackerel.sh lint` | `0` | Go/golangci + ruff + web-manifest lanes all exited 0; raw output in the lint evidence block |
 | 3 | `./smackerel.sh format --check` | `0` | `78 files already formatted` |
 | 4 | `bash .github/bubbles/scripts/pii-scan.sh` | `0` | `pii-scan: clean.` |
 | 5 | `bash .github/bubbles/scripts/artifact-lint.sh <bug-dir>` | `0` | `Artifact lint PASSED.` |
@@ -8158,3 +8158,49 @@ modified files (`docs/releases/mvp/actions.md`, `features.md`, and six unrelated
 `state.json` files) and 2 untracked entries. **None is the BUG-080-001 packet**,
 and this attempt wrote no product source. Disposition: outside this work boundary,
 route-only observation.
+
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+### Validation Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.validate
+**Actual executor:** `bubbles.goal`. This window validated only the ONE condition
+that was still open; the packet's own validation phase is recorded above.
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable`
+**Exit Code:** 0
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh <this packet>
+failedGateIds: []
+failureCount: 0
+Exit Code: 0
+```
+
+Before this window the same command reported `failureCount: 1`,
+`failedGateIds: [G136]` — a single missing human-acceptance record against 26
+passing gates. Nothing else changed; no code was touched.
+
+### Audit Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.audit
+**Actual executor:** `bubbles.goal`. The packet's own audit phase, including its
+13 prior findings and their disposition, is recorded above and is unchanged.
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/080-knowledge-graph-public-api/bugs/BUG-080-001-graph-api-fail-soft-runtime-disable`
+**Exit Code:** 0
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh <this packet>
+Artifact lint PASSED.
+Exit Code: 0
+```
+
+The audit judgement for this window is narrow and worth stating plainly: the only
+thing that changed is that a human acceptance now exists where none did. The five
+Checklist behaviours were NOT re-exercised by an agent, and the acceptance record
+says so in its own scope section rather than leaving a reader to assume the boxes
+were earned mechanically.
