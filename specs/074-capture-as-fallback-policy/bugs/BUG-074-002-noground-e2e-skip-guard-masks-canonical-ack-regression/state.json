@@ -7,7 +7,7 @@
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct",
   "status": "blocked",
-  "blockedReason": "state-transition-guard.sh returned exit 1 with verdict FAIL at 2026-08-24T04:20:00Z (5 failures, 3 warnings; failedGateIds G027, G136; blockingCode DELIVERY_COMPLETION_FAILED), and goal-fidelity-guard.sh returned exit 1 independently at the pre-certification boundary (G070). Three blockers, none of which this packet can clear from inside itself. (1) G022 CLEARED 2026-08-24 - a fourth bubbles.audit dispatch succeeded where three had returned without writing; the audit phase now exists on all three surfaces (report.md '## Audit Phase', a completedPhaseClaims entry, and an executionHistory entry with agent bubbles.audit). The audit verified per-branch disjointness and the infrastructure-keying of both surviving skips by source reading, and surfaced one narrative over-claim (report.md and the scopes.md header said ten checked DoD items against an artifact that has had eight since the test phase's own commit); both surfaces were corrected to 8/11 on 2026-08-24. (2) G027 - SCOPE-BUG-074-002-01 is In Progress with 11 of 19 DoD items unchecked and certification.completedScopes is empty. Nine of the eleven need two machine states this packet cannot create: a live stack that reaches the grounding decision (every attempted run returned error_cause=provider_unavailable before the switch could branch) and an assistant e2e package run that clears disk-preflight (refused at exit 1 on 39 GB free against a 40 GB requirement, before any container started; the audit phase re-measured the same refusal at 35 GB). Owner: bubbles.test, plus a host that can supply those two states. (3) G136 - uservalidation.md carries four unchecked items and no authored Human Acceptance Record; only a person can supply it, and checking those boxes on the author's behalf would fabricate the acceptance the gate exists to require. Owner: human author. (4) G070 - spec.md carries no non-empty '## Outcome Contract' section, so Intent, Success Signal, Hard Constraints and Failure Condition are unstated and certification cannot claim constraints were preserved. G070 is not wired into this packet's transition-guard check set, so it was invisible to every prior phase. Owner: bubbles.analyst. blocked rather than in_progress because every remaining step needs an agent this packet cannot invoke, a person, or a machine state the environment refused to provide. Six phases WERE genuinely executed and are certified in certification.certifiedCompletedPhases; that certification is about phase execution and is not a claim about delivery. Evidence: report.md '## Validate Phase'.",
+  "blockedReason": "ROOT CAUSE IDENTIFIED 2026-08-28, and it is NOT what the earlier text implied. The 11 unchecked DoD items all depend on TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround actually EXECUTING. It does not execute; it skips. The skip reason, read from this session's e2e log, is concrete: capture_fallback_trigger_e2e_test.go:236 reports 'upstream provider unavailable (error_cause=\"provider_unavailable\", status=\"unavailable\")'. Six sibling capture-fallback tests plus TestIntentCompilerE2E_MalformedJSONBlocksRoutingAndCaptures skip for the same reason. WHY THE PROVIDER IS UNAVAILABLE: the test stack DOES start its own ollama (smackerel-test-ollama-1 was created, started and reported Healthy in this session's run) but NO MODEL IS EVER PULLED INTO IT, so it serves nothing. The pull is scripts/commands/ollama-test-pull.sh, and smackerel.sh:2310 invokes it ONLY inside the SMACKEREL_TEST_OLLAMA=1 branch (smackerel.sh:2285). Without that opt-in the lane brings up an empty ollama and every LLM-dependent assertion degrades to a skip. That is the actual mechanism behind these 11 items, and it is a one-flag change - not missing product code. ATTEMPTED AND REFUSED 2026-08-28: 'SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e' was run. It was refused by disk-preflight before any test executed: 'C: (backs the vhdx): 31 GB free, required: 40 GB'. WHY THIS IS OPERATOR-ONLY AND WAS NOT FORCED: (a) DISK_PREFLIGHT_OVERRIDE=1 exists but was NOT used - overriding a disk guard to run a multi-GB model pull is exactly how a daemon gets wedged. (b) The 133.5 GB docker reports as reclaimable is dominated by a single 128.1 GB volume, quantitativefinance_timescaledb_data, which is ANOTHER PRODUCT'S persistent database; deleting it is destructive and outside this repo's ownership. (c) Deleting it would not even work: the binding constraint is Windows C:, and WSL2's ext4.vhdx grows but never auto-shrinks, so reclaiming space INSIDE WSL returns no space to C:. The only real remedies are freeing space on C: directly, or 'wsl --shutdown' followed by an elevated Optimize-VHD compaction - both of which terminate every session and are operator actions. ACTION TO UNBLOCK, now precise: reclaim C: space (or compact the vhdx), then run 'SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e'. The model pull will populate the test-owned ollama, the seven currently-skipping assistant E2E tests should execute, and these 11 DoD items become decidable on real evidence. PRIOR BLOCKER TEXT RETAINED BELOW FOR HISTORY: state-transition-guard.sh returned exit 1 with verdict FAIL at 2026-08-24T04:20:00Z (5 failures, 3 warnings; failedGateIds G027, G136; blockingCode DELIVERY_COMPLETION_FAILED), and goal-fidelity-guard.sh returned exit 1 independently at the pre-certification boundary (G070). Three blockers, none of which this packet can clear from inside itself. (1) G022 CLEARED 2026-08-24 - a fourth bubbles.audit dispatch succeeded where three had returned without writing; the audit phase now exists on all three surfaces (report.md '## Audit Phase', a completedPhaseClaims entry, and an executionHistory entry with agent bubbles.audit). The audit verified per-branch disjointness and the infrastructure-keying of both surviving skips by source reading, and surfaced one narrative over-claim (report.md and the scopes.md header said ten checked DoD items against an artifact that has had eight since the test ph",
   "statusCorrectionNote": "CORRECTED 2026-08-23 by bubbles.goal. This field read 'route_required', which is a ROUTING OUTCOME vocabulary word, not a schema-valid persisted status. transition-contract-resolver.sh:329 accepts only not_started, in_progress, blocked, the mode's statusCeiling, or a declared terminalAlias; bugfix-fastlane inherits ceiling 'done' and declares no aliases, so the guard failed at contract resolution with E009-TARGET-MISMATCH and exit 2 and never reached Check 6 at all. The packet was therefore unmeasurable rather than merely failing. in_progress is the accurate replacement: implement has shipped and been recorded, test is next. The routing intent is not lost -- it already lives in routing.outcome, which is its correct home and is unchanged. A portfolio scan of all state.json files found this packet was the only one carrying a non-schema status. || SUPERSEDED-IN-PART 2026-08-24T03:52:00Z by bubbles.validate. The 2026-08-23 correction above stays accurate as history: route_required was never a schema-valid persisted status, and in_progress was the correct replacement at that time. Status has since moved to blocked, which transition-contract-resolver.sh:329 accepts on the same line as in_progress, so this is a status change rather than a second schema correction. The reason lives in blockedReason, not here.",
   "severity": "S3",
   "severityClass": "test-integrity",
@@ -97,7 +97,11 @@
       {
         "at": "2026-08-18",
         "agent": "bubbles.bug",
-        "phasesExecuted": ["discovery", "documentation", "analysis"],
+        "phasesExecuted": [
+          "discovery",
+          "documentation",
+          "analysis"
+        ],
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
         "summary": "Filed the packet closing the DI-5 routing loop from BUG-061-009. Re-verified every line number by reading tests/e2e/assistant/capture_fallback_trigger_e2e_test.go at HEAD d62f2e75 (119 lines, sha256 3d695eac...92b1d): guard `if env.Status != string(contracts.StatusSavedAsIdea)` at line 98 with t.Skipf at 99-100; the four SCOPE-074-04B contract assertions below it at 103/106/109/117; unconditional assertions above it at 83/86/89; second t.Skipf at 71. No line-number corrections were required. Root cause: the test absorbs live-model nondeterminism at the assertion layer, and the variable it tolerates (status) IS the contract under test, so tolerance and detection collapse into one predicate and tolerance always wins. Policy violated: .github/copilot-instructions.md line 331 (no failure-condition early exits). Primary fix direction chosen: assert unconditionally via a two-branch outcome-space assertion modelled on tests/e2e/assistant/high_band_refusal_e2e_test.go (18 t.Errorf/t.Fatalf assertions, single t.Skip at line 90 for adapter-never-bound); deterministic stubbing retained as a declared fallback with a falsifiable adoption condition. NO fix implemented and NO test executed."
@@ -105,7 +109,9 @@
       {
         "at": "2026-08-23T23:05:01Z",
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -116,7 +122,9 @@
       {
         "at": "2026-08-24T00:05:14Z",
         "agent": "bubbles.test",
-        "phasesExecuted": ["test"],
+        "phasesExecuted": [
+          "test"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -127,7 +135,9 @@
       {
         "at": "2026-08-24T00:50:55Z",
         "agent": "bubbles.regression",
-        "phasesExecuted": ["regression"],
+        "phasesExecuted": [
+          "regression"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -139,7 +149,9 @@
       {
         "at": "2026-08-24T01:17:41Z",
         "agent": "bubbles.simplify",
-        "phasesExecuted": ["simplify"],
+        "phasesExecuted": [
+          "simplify"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -150,7 +162,9 @@
       {
         "at": "2026-08-24T01:32:02Z",
         "agent": "bubbles.stabilize",
-        "phasesExecuted": ["stabilize"],
+        "phasesExecuted": [
+          "stabilize"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -162,7 +176,9 @@
       {
         "at": "2026-08-24T01:56:53Z",
         "agent": "bubbles.security",
-        "phasesExecuted": ["security"],
+        "phasesExecuted": [
+          "security"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -174,7 +190,9 @@
       {
         "at": "2026-08-24T03:52:00Z",
         "agent": "bubbles.validate",
-        "phasesExecuted": ["validate"],
+        "phasesExecuted": [
+          "validate"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -186,7 +204,9 @@
       {
         "at": "2026-08-24T04:14:00Z",
         "agent": "bubbles.audit",
-        "phasesExecuted": ["audit"],
+        "phasesExecuted": [
+          "audit"
+        ],
         "provenanceMode": "specialist",
         "executionModel": "direct-authorized-runner",
         "claimSource": "executed",
@@ -233,23 +253,61 @@
         "verdict": "FAIL",
         "failureCount": 8,
         "warningCount": 3,
-        "failedGateIds": ["G022", "G027", "G136"],
-        "failedChecks": ["Check-4-completion", "Check-5-all-done"],
+        "failedGateIds": [
+          "G022",
+          "G027",
+          "G136"
+        ],
+        "failedChecks": [
+          "Check-4-completion",
+          "Check-5-all-done"
+        ],
         "blockingCode": "DELIVERY_COMPLETION_FAILED",
         "capturedAt": "2026-08-24T03:45:17Z",
         "outputSha256": "3e09bec795452cce02813bdc286294b8f9ef4b5eab6ce393c1f22f66d963beb8",
         "outputLines": 376
       },
       "supportingGuards": [
-        {"script": "artifact-lint.sh", "exitCode": 0, "result": "PASSED", "outputSha256": "d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada", "outputLines": 41},
-        {"script": "traceability-guard.sh", "exitCode": 0, "result": "PASSED (0 warnings)", "outputSha256": "fc2eae58834d05ef3ddda77a948ed5ac7df53cf44bd8fb4fb4a3f2c01ea193d0", "outputLines": 55},
-        {"script": "implementation-reality-scan.sh", "exitCode": 0, "result": "PASSED with 1 warning", "detail": "4 files scanned, 0 violations; scopes.md yielded 0 files so discovery fell back to design.md (DI-19)"},
-        {"script": "artifact-freshness-guard.sh", "exitCode": 0, "result": "PASS (0 failures, 0 warnings)"},
-        {"script": "goal-fidelity-guard.sh --boundary pre-certification", "exitCode": 1, "result": "FAIL findings=2", "detail": "G070: spec.md has no non-empty '## Outcome Contract' and declares no Hard Constraints. Not wired into this packet's transition-guard check set (absent from both passedGateIds and failedGateIds), so it was unmeasured until this phase ran it directly (DI-20)."}
+        {
+          "script": "artifact-lint.sh",
+          "exitCode": 0,
+          "result": "PASSED",
+          "outputSha256": "d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada",
+          "outputLines": 41
+        },
+        {
+          "script": "traceability-guard.sh",
+          "exitCode": 0,
+          "result": "PASSED (0 warnings)",
+          "outputSha256": "fc2eae58834d05ef3ddda77a948ed5ac7df53cf44bd8fb4fb4a3f2c01ea193d0",
+          "outputLines": 55
+        },
+        {
+          "script": "implementation-reality-scan.sh",
+          "exitCode": 0,
+          "result": "PASSED with 1 warning",
+          "detail": "4 files scanned, 0 violations; scopes.md yielded 0 files so discovery fell back to design.md (DI-19)"
+        },
+        {
+          "script": "artifact-freshness-guard.sh",
+          "exitCode": 0,
+          "result": "PASS (0 failures, 0 warnings)"
+        },
+        {
+          "script": "goal-fidelity-guard.sh --boundary pre-certification",
+          "exitCode": 1,
+          "result": "FAIL findings=2",
+          "detail": "G070: spec.md has no non-empty '## Outcome Contract' and declares no Hard Constraints. Not wired into this packet's transition-guard check set (absent from both passedGateIds and failedGateIds), so it was unmeasured until this phase ran it directly (DI-20)."
+        }
       ]
     },
     "scopeProgress": [
-      {"scopeId": "SCOPE-BUG-074-002-01", "status": "in_progress", "dodComplete": 8, "dodTotal": 19}
+      {
+        "scopeId": "SCOPE-BUG-074-002-01",
+        "status": "in_progress",
+        "dodComplete": 8,
+        "dodTotal": 19
+      }
     ],
     "achievedAssuranceLevel": "Fix implemented and statically verified; six pipeline phases executed and certified. Zero live-stack assurance: the grounded and captured branches of the new switch were never traversed (every run returned error_cause=provider_unavailable) and the assistant e2e package never ran (disk-preflight refused at exit 1). No audit. No human acceptance.",
     "assuranceDerivation": "Not derived via assurance-derive.sh. That helper resolves an achieved level for a TERMINAL certification, and this packet is blocked rather than terminal - implementation is not complete by its own DoD (11 of 19 items unchecked), tests did not run to completion, and no independent audit occurred. Recording a derived level here would imply a terminal transition that did not happen.",
@@ -269,14 +327,38 @@
     }
   },
   "policySnapshot": {
-    "grill": {"value": "off", "source": "repo-default"},
-    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
-    "autoCommit": {"value": "off", "source": "user-request"},
-    "lockdown": {"value": "off", "source": "repo-default"},
-    "regression": {"value": "standard", "source": "repo-default"},
-    "validation": {"value": "required", "source": "repo-default"},
-    "regressionStrictness": {"value": "standard", "source": "repo-default"},
-    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+    "grill": {
+      "value": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "value": "scenario-first",
+      "source": "workflow-forced"
+    },
+    "autoCommit": {
+      "value": "off",
+      "source": "user-request"
+    },
+    "lockdown": {
+      "value": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "value": "standard",
+      "source": "repo-default"
+    },
+    "validation": {
+      "value": "required",
+      "source": "repo-default"
+    },
+    "regressionStrictness": {
+      "value": "standard",
+      "source": "repo-default"
+    },
+    "validateCertificationRequired": {
+      "value": true,
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [
     {
@@ -309,7 +391,11 @@
       "writtenBy": "bubbles.implement",
       "reason": "Implementation landed at commit 343d6076: the status-keyed skip guard in tests/e2e/assistant/capture_fallback_trigger_e2e_test.go is replaced by a five-branch total switch that classifies on error_cause/sources and asserts on status/body. Change boundary held - zero files under internal/. The DoD test matrix in scopes.md SCOPE-BUG-074-002-01 is owned by bubbles.test, which executes it and records the per-item evidence; certification remains owned by bubbles.validate per certification.status."
     },
-    "subsequentOwners": ["bubbles.test", "bubbles.analyst", "bubbles.validate"]
+    "subsequentOwners": [
+      "bubbles.test",
+      "bubbles.analyst",
+      "bubbles.validate"
+    ]
   },
   "related": {
     "originFinding": "specs/061-conversational-assistant/bugs/BUG-061-009-high-band-refusal-masked-as-saved-as-idea/report.md#discovered-issues (DI-5)",
