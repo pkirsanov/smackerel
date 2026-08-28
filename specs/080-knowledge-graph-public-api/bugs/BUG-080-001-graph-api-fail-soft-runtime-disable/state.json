@@ -15,7 +15,7 @@
   "specDependsOn": [
     "specs/080-knowledge-graph-public-api"
   ],
-  "certifiedAt": "2026-08-28T03:23:24Z",
+  "certifiedAt": "2026-08-28T03:38:04Z",
   "requiresRevalidation": false,
   "corpusOwnershipModel": {
     "mode": "single-operator-owned-global-corpus",
