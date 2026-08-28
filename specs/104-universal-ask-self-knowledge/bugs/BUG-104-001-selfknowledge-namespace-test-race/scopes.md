@@ -55,6 +55,7 @@ and the excluded list is what that commit demonstrably did not touch.
 | `tests/integration/nslock/callsite_contract_test.go` | 123 | call-site contract guard |
 | `tests/integration/selfknowledge/ingest_test.go` | 10 | acquire at the DELETE site |
 | `tests/integration/openknowledge/semantic_searcher_test.go` | 4 | acquire at an INSERT site |
+| `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` | 10 | acquire at the E2E read site (added by this packet in commit `b3ebfef7`; previously omitted from this table) |
 | `tests/integration/openknowledge/self_knowledge_tool_test.go` | 4 | acquire at an INSERT site |
 | `tests/integration/openknowledge/self_knowledge_provenance_test.go` | 4 | acquire at an INSERT site |
 | `tests/integration/knowledge_stats_test.go` | 9 | acquire at the TRUNCATE site (validate F2) |
@@ -83,6 +84,7 @@ file is caught by the call-site contract guard rather than by widening this scop
 | Integration | `integration` | `tests/integration/nslock/nslock_test.go` | Second session excluded while lock held | `./smackerel.sh test integration` | Yes |
 | Integration | `integration` | `tests/integration/nslock/nslock_test.go` | Distinct namespaces do not contend | `./smackerel.sh test integration` | Yes |
 | Integration (regression) | `integration` | `tests/integration/openknowledge/*_test.go` | The three formerly-racing tests pass in a full parallel run | `./smackerel.sh test integration` | Yes |
+| Regression E2E | `e2e-api` | `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` | `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` and `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` exercise the `smackerel_self` namespace end-to-end through `/ask`, and both call `nslock.AcquireSelfKnowledge` (lines 79 and 130), so they are direct consumers of the lock this packet delivers. They are the regression that fails if the namespace is swept out from under a concurrent reader. | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
@@ -157,6 +159,7 @@ file is caught by the call-site contract guard rather than by widening this scop
     NEW contending file is caught automatically rather than needing list maintenance.
 
 - [x] Incorrect reasoning in helper comments corrected (validate finding F6)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior exist and pass: `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` and `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` in `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go`. Both acquire the delivered lock via `nslock.AcquireSelfKnowledge` (lines 79, 130), so they regress the exact behavior this packet changed. `smackerel_self` is a PRODUCT namespace (`internal/assistant/selfknowledge/ingestor.go:28`) whose `sweepStale` DELETES artifacts, so concurrent access is runtime behavior, not a test-only concern - an earlier reading of this packet as pure test-infrastructure was wrong. Both PASSED in the 2026-08-28 e2e run. **Claim Source:** executed. Evidence: [report.md](report.md)
   - **Command:** `./smackerel.sh check`
   - **Exit Code:** 0
   - **Evidence:** `conn.Release()` returns the connection to the POOL and does not close
