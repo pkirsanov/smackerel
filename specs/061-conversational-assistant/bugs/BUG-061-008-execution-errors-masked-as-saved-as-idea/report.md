@@ -1500,4 +1500,33 @@ been set aside. The wording was changed to "routed observation" so the label no 
 as scheduling prose. No finding was dropped, no owner was removed, and no scope was narrowed;
 only the label changed.
 
+### Broader suite — full `test e2e`
+
+The last item standing between this packet and a terminal transition was the
+broader regression suite, deliberately left unchecked rather than inferred from
+the focused lane. It has now been run.
+
+```text
+$ ./smackerel.sh test e2e
+=== RUN   TestAssistantHTTPE2E_ExecutionErrorSurfacesHonestly
+--- PASS: TestAssistantHTTPE2E_ExecutionErrorSurfacesHonestly (0.11s)
+...
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+E2E_V3_EXIT=0
+Exit Code: 0
+```
+
+This packet's own regression test ran INSIDE that suite and passed (log line
+3577) — the point of the item, since a focused lane cannot prove the test
+survives alongside its neighbours.
+
+One line in the log reads `FAIL: Services did not become healthy within 8s`
+(line 1231). It is not a suite failure: it is the expected output of a negative
+scenario that deliberately stops postgres, and the line immediately after it is
+`PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)`. Recording it
+here rather than leaving a bare `FAIL` string in the evidence for someone to
+trip over later.
+
 
