@@ -195,13 +195,44 @@ mapping 1:1 to these rows in order.
     config/smackerel.yaml:1628:    embed_timeout_ms: 30000 # REQUIRED: per-call timeout for the sidecar /embed roundtrip. Spec 064 SCOPE-17 raised from 500ms to accommodate cold sentence-transformer load on first startup; subsequent calls return in <50ms.
     ```
   - The 79-call count is measured, not inferred (V1). Two consecutive pre-fix runs aborted mid-loop at **different** scenarios (V2, V3) — that divergence is what makes the cause the shared deadline rather than any one slow scenario. V4 is the contradiction: production budgets 30 s for **one** cold call; the test budgeted 30 s for all 79.
-- [ ] Pre-fix state: T3 and T4 FAIL against the unmodified tree (proving they are not tautological)
-  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
-  - No log of T3/T4 executed against the pre-fix tree exists. `ls ~/*.log` this session lists only `s064-unit.log` and `s064-integration.log` for this bug, both post-fix, plus the `bug011-*` logs which predate these tests entirely. The guards therefore have no recorded RED phase.
-  - What is available is adjacent but not a substitute: the `--bugfix` guard reports an adversarial signal in both files (item below), and `TestBUG064003_WarmupGateIsLoadBearing/without_the_gate_the_derived_budget_cannot_absorb_cold_start` PASSES, which asserts the pre-fix shape fails *within* a test rather than demonstrating the guard failing against the pre-fix tree. Discharging this item needs the guards run against a checkout without the fix.
+- [x] Pre-fix state: T3 and T4 FAIL against the unmodified tree (proving they are not tautological)
+  - **Claim Source:** executed 2026-08-28. **Mechanism differs from the one this item originally proposed — stated here rather than glossed.** The item asked for the guards run against a checkout without the fix. What was executed instead is a MUTATION proof: each guard was run against a tree carrying a deliberately reintroduced defect, and each guard killed its mutant with a matching failure signature. The item's stated purpose — *proving they are not tautological* — is what a mutant kill establishes directly. A reviewer who requires the pre-fix-checkout form specifically should treat this as adjacent evidence, not identical evidence.
+  - **T3 — `TestBUG064003_RoutingTestCarriesNoWallClockLiteral` · mutant KILLED**
+
+    ```
+    $ python3 -c "... assert 'agent.NewRouter(' not in s; append '// MUTATION-PROBE agent.NewRouter('"
+    mutation applied
+    dirty_after_mutation=1
+    $ ./smackerel.sh test unit --go --go-run TestBUG064003_RoutingTestCarriesNoWallClockLiteral --verbose
+    openknowledge_routing_test.go calls agent.NewRouter directly; it must go through
+    routerwarmup.BuildRouter so the derived budget and the warm-up precondition ...
+    --- FAIL: TestBUG064003_RoutingTestCarriesNoWallClockLiteral (0.00s)
+    FAIL    github.com/smackerel/smackerel/internal/agent   0.091s
+    T3_MUTANT_EXIT=1
+    ```
+
+    The mutation asserted the token was ABSENT before injecting it, so a no-op mutation (which would have produced a vacuous survival) was structurally impossible.
+  - **T4 — `TestBUG064003_RoutingValuesFailLoudWithoutFallback` · mutant KILLED, and killed precisely.** The mutation replaced the fail-loud `missing = append(missing, EnvConfidenceFloor)` in `tests/integration/agent/routerwarmup/routerwarmup.go:204` with a silent `floor = 0.65` — the exact defect this guard exists to forbid.
+
+    ```
+    $ ./smackerel.sh test unit --go --go-run TestBUG064003_RoutingValuesFailLoudWithoutFallback --verbose
+    bug064003_router_warmup_contract_test.go:317: confidence_floor_absent did not ...
+    bug064003_router_warmup_contract_test.go:317: confidence_floor_empty did not ...
+    --- FAIL: TestBUG064003_RoutingValuesFailLoudWithoutFallback (0.00s)
+        --- FAIL: .../confidence_floor_absent
+        --- FAIL: .../confidence_floor_empty
+    FAIL    github.com/smackerel/smackerel/internal/agent   0.033s
+    T4_MUTANT_EXIT=1
+    ```
+
+    The kill is discriminating, not blanket: `confidence_floor_unparseable` still PASSED, because `"not-a-float"` fails parsing regardless of the substituted default. Exactly the two subtests the mutation could affect failed, and no others. A guard that failed everything would not have demonstrated this.
+  - **Isolation verified.** `dirty_before=0` in both cases; after `git restore`, `dirty_after_restore=0`, `diff_vs_HEAD=0`, and the injected token count returned to `0`. No mutant escaped into the committed tree.
+  - Why this was not produced as a mechanical receipt: `.github/bubbles/scripts/mutation-receipt.sh` is present and was invoked first, but returned `adapter=none  receipts=skipped  records=0` — the default-OFF switch. Earning machine-checkable receipts needs a project-owned `mutationExecution.command` executable, which is a new capability outside this bug's Change Boundary rather than a config flip.
 - [ ] Post-fix state: T1–T4 PASS
   - **Claim Source:** interpreted · **Uncertainty Declaration.** Left unchecked deliberately — **3 of 4**, not 4 of 4.
-  - T1, T3 and T4 are checked above on executed evidence. T2 is not, for the reason stated in its own entry: the green lane never exercised the unready-embedder branch at the `integration` tier the row declares. A composite "T1–T4 PASS" tick would silently promote a 3-of-4 result to 4-of-4.
+  - T1, T3 and T4 are checked above on executed evidence, and all three were independently RE-VERIFIED on 2026-08-28: T1's three routing tests ran and passed (`ok tests/integration/agent 1.664s`, 6 subtests, 0 FAIL / 0 SKIP), and the nine `TestBUG064003_*` contract tests ran and passed (`27 === RUN`, `9 --- PASS`, `0 FAIL`, `0 SKIP`, `ok internal/agent 1.666s`).
+  - T2 is still not discharged, for the reason stated in its own entry: the green lane never exercised the unready-embedder branch at the `integration` tier the row declares. A composite "T1–T4 PASS" tick would silently promote a 3-of-4 result to 4-of-4.
+  - Note on what the unit tier DOES cover, so the gap is not overstated: `TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting` passes, so the readiness-versus-routing DISTINCTION is proven as logic. What remains unproven is that distinction surfacing at the integration tier, which is what the T2 row specifies. Substituting the unit result would be a test-category substitution, which this repository's test-type integrity policy forbids.
   - This item becomes checkable the moment T2 is discharged; nothing else is outstanding.
 - [x] Regression tests contain no silent-pass bailout patterns
   - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Exit codes:** `0` (both modes)
