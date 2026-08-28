@@ -131,7 +131,9 @@
       "status": "in_progress"
     }
   ],
-  "completedScopes": [],
+  "completedScopes": [
+    "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start"
+  ],
   "completedPhases": [
     "discovery",
     "documentation",
