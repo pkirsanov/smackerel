@@ -304,3 +304,86 @@ holds today:
 The expected and correct measurement outcome is therefore a guard result with a
 non-zero failure count. That result is worth more than the silence it replaces:
 a failure count is a number a portfolio sweep can act on, and an abort is not.
+
+---
+
+## Closure by supersession — 2026-08-28
+
+The reasoning above was correct while spec 104 was still open. It no longer
+holds. Spec 104 is now certified:
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/104-universal-ask-self-knowledge
+failedGateIds: []
+failureCount: 0
+verdict: PASS
+Exit Code: 0
+```
+
+Leaving this packet `blocked` would now misreport a delivered, live, and
+certified fix as unfixed — which is the opposite of the honesty the original
+reasoning was protecting.
+
+### Code Diff Evidence
+
+This packet wrote no code. The fix it routed was implemented by spec 104 in three
+commits; the diffstats below are real `git show --stat` output:
+
+```text
+$ git log --oneline -- internal/assistant/openknowledge/tools/semantic_searcher.go \
+    internal/assistant/openknowledge/tools/self_knowledge.go internal/assistant/selfknowledge/
+8dc29f63 feat(104): SCOPE-05/06/07 product-doc corpus + /help twin + trust perimeter
+d34cdfe7 feat(104): SCOPE-02/03/04 self-knowledge corpus + self_knowledge tool
+1745369f feat(104): SCOPE-01 general embedding-backed namespace SemanticSearcher
+
+$ git show --stat --oneline 1745369f
+ .../openknowledge/tools/semantic_searcher.go       | 131 +++++++++++++++++++++
+ .../openknowledge/tools/semantic_searcher_test.go  |  95 +++++++++++++++
+ .../openknowledge/semantic_searcher_test.go        | 118 +++++++++++++++++++
+ 3 files changed, 344 insertions(+)
+
+$ git show --stat --oneline d34cdfe7
+ cmd/core/main.go                                   |  11 ++
+ cmd/core/wiring_selfknowledge.go                   |  71 +++++++++
+ .../openknowledge/tools/self_knowledge.go          | 140 +++++++++++++++++
+ internal/assistant/selfknowledge/derive.go         | 116 ++++++++++++++
+ internal/assistant/selfknowledge/ingestor.go       | 144 ++++++++++++++++++
+ tests/integration/selfknowledge/ingest_test.go     | 167 +++++++++++++++++++++
+ 10 files changed, 994 insertions(+), 2 deletions(-)
+
+$ git show --stat --oneline 8dc29f63
+ .../selfknowledge/corpus/product_overview.md       |  51 +++++++++
+ internal/assistant/selfknowledge/docsource.go      | 107 +++++++++++++++++++
+ internal/telegram/bot.go                           |  48 ++++-----
+ .../self_knowledge_provenance_test.go              | 115 +++++++++++++++++++++
+ 12 files changed, 605 insertions(+), 59 deletions(-)
+Exit Code: 0
+```
+
+Implementation files delivering this bug's fix:
+
+- `internal/assistant/openknowledge/tools/semantic_searcher.go`
+- `internal/assistant/openknowledge/tools/self_knowledge.go`
+- `internal/assistant/selfknowledge/derive.go`
+- `internal/assistant/selfknowledge/ingestor.go`
+- `internal/assistant/selfknowledge/docsource.go`
+- `cmd/core/wiring_selfknowledge.go`
+
+### Regression coverage
+
+The persistent regression tests for this bug's behaviour are owned by spec 104
+and passed in the full suite this session:
+
+```text
+$ ./smackerel.sh test e2e
+--- PASS: TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E
+--- PASS: TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+Exit Code: 0
+```
+
+The second test is the one that matters for this bug: it pins the honest-refusal
+half, so a future regression cannot restore the original symptom (an ungrounded
+meta-question answered as if it were grounded) without failing.
