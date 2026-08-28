@@ -748,6 +748,22 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 				f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 				return resp, nil
 			}
+			// A shortcut with no argument is a command missing a slot,
+			// not a stray thought. Answer the missing slot honestly
+			// rather than letting it fall through to capture-as-fallback,
+			// which would tell the user their command was saved as an
+			// idea (BUG-061-006 DEFECT 2, previously fixed only in the
+			// Telegram adapter and still live on this path).
+			if prompt, missing := MissingSlotPrompt(msg.Text); missing {
+				resp = contracts.AssistantResponse{
+					Status:     contracts.StatusUnavailable,
+					ErrorCause: contracts.ErrSlotMissing,
+					Body:       prompt,
+					EmittedAt:  emittedAt,
+				}
+				f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
+				return resp, nil
+			}
 			shortcutScenarioID = scenarioID
 		}
 	}

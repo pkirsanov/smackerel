@@ -140,3 +140,49 @@ func StripShortcutPrefix(text string) string {
 	}
 	return strings.TrimSpace(trimmed[i:])
 }
+
+// shortcutMissingSlotPrompts gives each argument-taking slash shortcut an
+// honest prompt for the argument it needs.
+//
+// Every entry in SlashShortcuts except /reset carries a required argument,
+// and a bare invocation is a COMMAND WITH A MISSING SLOT — never a stray
+// thought. Rendering it as a capture ("saved as an idea") tells the user
+// their command was filed away, which is the BUG-061-006 DEFECT 2 lie.
+// That defect was originally fixed in the Telegram adapter only, so the
+// same bare command over the HTTP transport still answered
+// status="saved_as_idea" until this table existed. Keying the fix off the
+// shortcut TABLE rather than off one command means a shortcut added later
+// inherits the honest behaviour instead of re-opening the defect.
+//
+// The /weather wording is byte-identical to the string
+// handleWeatherShortcut already returned, so the spec-007 assertion on
+// that exact prompt is unaffected.
+var shortcutMissingSlotPrompts = map[string]string{
+	"/ask":     "what would you like to know? try `/ask <your question>`.",
+	"/weather": "which location? try `/weather <city or ZIP>`.",
+	"/remind":  "what should i remind you about? try `/remind <what> <when>`.",
+	"/recipe":  "what would you like to cook? try `/recipe <dish or ingredients>`.",
+	"/cook":    "what would you like to cook? try `/cook <dish or ingredients>`.",
+}
+
+// MissingSlotPrompt reports the honest prompt for a slash shortcut invoked
+// with no argument.
+//
+// ok is false when text is not a shortcut, when it is /reset (which takes
+// no argument and is handled before this point), or when an argument IS
+// present — so callers cannot accidentally prompt a well-formed command.
+func MissingSlotPrompt(text string) (prompt string, ok bool) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "", false
+	}
+	first := trimmed
+	if i := indexAnyWhitespace(trimmed); i >= 0 {
+		first = trimmed[:i]
+	}
+	if StripShortcutPrefix(text) != "" {
+		return "", false
+	}
+	prompt, ok = shortcutMissingSlotPrompts[first]
+	return prompt, ok
+}
