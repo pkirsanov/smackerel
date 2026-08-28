@@ -667,6 +667,7 @@ truncated at the head, so the stronger claim is not made on that evidence.
 | Date | Issue | Where it surfaced | Disposition | Tracked at |
 |------|-------|-------------------|-------------|------------|
 | 2026-08-28 | `TestSearxNGIntegration_Smoke` asserts on live third-party search results and fails with `expected at least one snippet from live SearxNG; got 0` while its `/healthz` probe passes | Full integration lane run for this packet (`tests/integration`, ROOT package) | Routed to the owner of `specs/064-open-ended-knowledge-agent` SCOPE-07 (web search). Not altered from this packet, because the credible fix changes that test's assertion semantics and a careless relaxation would mask a genuine SearxNG regression | `.specify/memory/open-work.md` row **R-015**; test at `tests/integration/openknowledge_searxng_test.go:56`; settings at `config/searxng/settings.yml` |
+| 2026-08-28 | `/api/health` returns `{"status":"degraded","services":null}` — the per-service map is null, so an individual component's readiness (for example the ML sidecar embedder) is not expressible at the operator-visible HTTP surface | Authoring T5 for this packet; a test asserting per-service readiness detail was run against the live stack and its premise was falsified | Routed to the health-surface owner. Not altered from this packet: populating `services` is a product change to the health handler, well outside a router warm-up bug, and weakening the test to match the null would have produced coverage that proves nothing. The T5 test asserting it was removed rather than shipped red or shipped vacuous | This report, "T5 — E2E regression" section; handler at `internal/api/router.go` (`r.Get("/health", deps.HealthHandler)`) |
 
 ## Out of Scope
 
@@ -834,6 +835,80 @@ $ ... --require RED_VERIFIED --require IMPLEMENTED --require GREEN_TARGETED --re
 this packet's tier can earn. `GREEN_LIVE` and `OBSERVED` are not applicable —
 they describe production-observed behaviour, and this fix is confined to the
 integration tier.
+
+## T5 — E2E regression (`tests/e2e/agent/bug064003_router_warmup_e2e_test.go`)
+
+T5 covers the tier the integration test structurally cannot reach. The
+integration test proves the contract for a router IT builds, from timings IT
+loads. A stack launched with absent or inverted warm-up budgets would leave every
+integration assertion green while the deployed product could not honour the
+contract. T5a closes exactly that gap by asserting the budgets and their ordering
+invariants against the environment the running core was actually launched with.
+
+Final full-lane run, all three Go blocks green with T5 included:
+
+```
+$ ./smackerel.sh test e2e
+=== RUN   TestBUG064003_E2E_T5a_WarmupBudgetContractHoldsInLiveStack
+--- PASS: TestBUG064003_E2E_T5a_WarmupBudgetContractHoldsInLiveStack (0.00s)
+
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+setup failed count: 0
+```
+
+### Two failures found by running it, not by reasoning about it
+
+Both were my own defects, caught because the test was executed against the live
+stack rather than reviewed:
+
+1. **Package conflict.** The file declared `package agent`; the other 13 files in
+   `tests/e2e/agent/` declare `package agent_e2e`. Go reported
+   `found packages agent_e2e (api_invoke_test.go) and agent (bug064003_router_warmup_e2e_test.go)`,
+   the package failed setup, and **all three** go-e2e blocks went red. I had
+   verified the build tag but assumed the package name. Fixed to `agent_e2e`;
+   `setup failed` returned to 0.
+2. **Wrong health path.** A second test requested `/health` and received
+   `404 page not found`. The route is registered inside the `/api` group, so the
+   operator-visible path is `/api/health` — the path the other 35 health
+   assertions in this suite already used.
+
+### Why T5 ships one test and not two
+
+After the path fix, the second test still failed — and its failure was
+informative rather than incidental:
+
+```
+bug064003_router_warmup_e2e_test.go:183: BUG-064-003 T5b: http://smackerel-core:8080/api/health
+reports no per-service detail ... raw={"status":"degraded","services":null}
+```
+
+The test asserted that an unready component is nameable AS a readiness fact at
+the HTTP surface. The live stack falsified that premise: `services` is `null`.
+
+There were three ways forward and only one honest one. Weakening the assertion
+until it passed would have produced a test that proves nothing while looking like
+coverage. Shipping it red would have broken a shared lane for every other packet.
+So the test was removed, and the observation filed as a Discovered Issue for the
+health-surface owner. SCN-064-003-02 loses nothing: it remains fully proven at
+the integration tier, where `ErrEmbedderNotWarm` is directly observable rather
+than inferred from an HTTP payload.
+
+### R-011 was re-tested, not assumed
+
+This item had been recorded as blocked partly by R-011 (`go-e2e-stack-start`
+SIGKILLed at exit 137). It did NOT reproduce in any of the four consecutive
+full-lane runs this session; the lane reported
+`oom-preflight: OK — 36446 MB available` and proceeded. The 31 GB of Docker
+build-cache and dangling-volume reclaim performed earlier is the plausible cause.
+R-011 is updated rather than closed, because a non-reproduction is not a root
+cause.
+
+R-010 (ollama pull ordering) is real but does not gate this item: that block is
+guarded by `SMACKEREL_TEST_OLLAMA`, unset in the default lane, so its tests emit
+an explicit opt-in skip rather than a masked failure. It stays owned by
+`bubbles.devops`.
 
 ### Durability limit of these receipts
 

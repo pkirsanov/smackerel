@@ -19,7 +19,7 @@
 
 ## Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start
 
-**Status:** In Progress
+**Status:** Done
 
 **foundation: true** — this scope establishes the `routerwarmup.BuildRouter`
 seam described under `## Capability Foundation` in [design.md](design.md). It is
@@ -218,8 +218,8 @@ from word overlap.
 Both items are deliberately UNCHECKED. They are real outstanding work, not a
 formality, and they are the only reason this scope is not Done.
 
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior - T5 is not authored yet. Honest position: this fix changed NO product source (only an integration test, a new `_test.go` contract guard, a `tests/`-scoped support package, and 3 SST keys), so the integration tier is currently the highest tier that exercises it. That is an argument for E2E being low-value here, NOT evidence that it exists, so the box stays open rather than being talked shut.
-- [ ] Broader E2E regression suite passes - not runnable as a clean signal today. The e2e lane has two recorded defects of its own: the ollama model pull runs AFTER the block that needs it (R-010) and `go-e2e-stack-start` was SIGKILLed at exit 137 (R-011), both in `.specify/memory/open-work.md`. Claiming a green broader suite before those are fixed would be a false green.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior - T5 authored as `tests/e2e/agent/bug064003_router_warmup_e2e_test.go` (build tag `e2e`, package `agent_e2e`) and PASSING on the live stack: `--- PASS: TestBUG064003_E2E_T5a_WarmupBudgetContractHoldsInLiveStack`, inside `PASS: go-e2e` with `setup failed` count 0. It covers the tier the integration test structurally cannot reach: the integration test proves the contract for a router IT builds from timings IT loads, so a stack launched with absent or inverted warm-up budgets would leave every integration assertion green while the deployed product could not honour the contract. T5a asserts the three budgets are present AND satisfy the ordering invariants against the env the running core was actually launched with. It ships ONE test, not two: a second test asserting the health surface exposes per-service readiness was authored, run, and FALSIFIED by the live stack (`/api/health` returns `{"status":"degraded","services":null}`). It was removed rather than weakened into a vacuous assertion or shipped red, and the observation is filed as a Discovered Issue. SCN-064-003-02 stays fully proven at the integration tier where the readiness verdict is directly observable. Evidence: [report.md#test-evidence](report.md#test-evidence) T5.
+- [x] Broader E2E regression suite passes - VERIFIED, and the two blockers previously recorded here were re-tested rather than assumed. Full `./smackerel.sh test e2e`: all three Go blocks green (`PASS: go-e2e`, `PASS: go-e2e-graph-disabled`, `PASS: go-e2e-corpus-enforce`), `setup failed` count 0. R-011 (`go-e2e-stack-start` SIGKILL at exit 137) did NOT reproduce across four consecutive full-lane runs this session — the lane printed `oom-preflight: OK — 36446 MB available` and proceeded; the 31 GB of Docker build-cache and dangling-volume reclaim performed earlier is the plausible cause and R-011 is updated rather than deleted, since a non-reproduction is not a root cause. R-010 (ollama pull ordering) is real but does NOT gate this item: that block is guarded by `SMACKEREL_TEST_OLLAMA`, which is unset in the default lane, so its tests report an explicit opt-in skip rather than a masked failure. R-010 remains owned by `bubbles.devops` in `.specify/memory/open-work.md`. Evidence: [report.md#test-evidence](report.md#test-evidence) T5.
 
 #### SLA / stress coverage
 
