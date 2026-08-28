@@ -843,3 +843,74 @@ raises `SCS-REVISION-DRIFT` against every receipt above, and the campaign has to
 be re-earned at whatever revision the packet finally closes on. That property is
 recorded as **R-017** in `.specify/memory/open-work.md`. The table above is the
 durable record; the receipts are the perishable proof.
+
+### T6 Stress Evidence
+
+Gate G026 requires a scope that declares latency SLAs to own a stress run. This
+scope declares three, so `tests/stress/bug064003_router_warmup_sla_stress_test.go`
+was authored to close it. The gap the DoD named was specific: every timing figure
+in this packet had been measured on an **idle** sidecar, which says nothing about
+the case where a derived budget is most likely to be wrong.
+
+The file asserts two separable things. Against the **real** lane environment it
+checks the three SST budgets are present and satisfy the ordering invariant the
+SST itself documents (`build_per_call_budget_ms >= warmup_target_latency_ms`),
+failing loud when absent per smackerel-no-defaults. Against a **short synthetic
+budget** it asserts the behaviour: that the budget is a genuine upper bound under
+sequential repeats and under concurrency. The synthetic budget is deliberate —
+"Elapsed never exceeds WarmupBudget" is scale-free, and the production 60s value
+would make the concurrent profile run for tens of minutes without testing
+anything more.
+
+```
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test stress --go-run 'BUG064003'
+=== RUN   TestBUG064003_SLABudgetsArePresentAndOrdered
+    bug064003_router_warmup_sla_stress_test.go:152: BUG-064-003 T6 SST budgets: target=1s budget=1m0s per-call=2s embed-timeout=30s
+--- PASS: TestBUG064003_SLABudgetsArePresentAndOrdered (0.00s)
+=== RUN   TestBUG064003_WarmupBudgetBoundsRepeatedNeverWarmWaits
+    bug064003_router_warmup_sla_stress_test.go:195: BUG-064-003 T6 sequential never-warm: 25 iterations, budget=300ms, worst observed=301.794713ms
+--- PASS: TestBUG064003_WarmupBudgetBoundsRepeatedNeverWarmWaits (7.52s)
+=== RUN   TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters
+    bug064003_router_warmup_sla_stress_test.go:245: BUG-064-003 T6 concurrent never-warm: 32 waiters, budget=300ms, worst observed=301.346458ms
+--- PASS: TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters (0.30s)
+=== RUN   TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad
+    bug064003_router_warmup_sla_stress_test.go:300: BUG-064-003 T6 concurrent warm path: 32 waiters, budget=300ms, worst observed=1.430401ms
+--- PASS: TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/stress     8.008s
+T6_STRESS_EXIT=0
+```
+
+The numbers are the point. A 300ms budget worst-cased at `301.794713ms` across 25
+sequential runs and at `301.346458ms` across 32 concurrent waiters means the
+deadline holds to roughly two milliseconds even under contention — which is the
+property whose absence gave this bug its name. The warm-path figure is the
+counterweight: 32 concurrent warm embedders qualified in `1.430401ms` against the
+same 300ms budget, so warm-up returns on the first qualifying probe rather than
+burning the term.
+
+#### The stress test is adversarial, not decorative
+
+A budget assertion that cannot fail proves nothing, so it was falsified
+deliberately. Stretching the deadline to `WarmupBudget * 4` — the shape of the
+original defect — must break it:
+
+```
+$ python3 ... 'deadline := started.Add(t.WarmupBudget)' -> 'deadline := started.Add(t.WarmupBudget * 4)'
+mutation: warm-up deadline stretched to 4x its declared budget
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test stress --go-run 'BUG064003'
+--- PASS: TestBUG064003_SLABudgetsArePresentAndOrdered (0.00s)
+    bug064003_router_warmup_sla_stress_test.go:187: iteration 0: warm-up overran its declared budget — this is BUG-064-003 reappearing. budget=300ms observed=1.200s
+--- FAIL: TestBUG064003_WarmupBudgetBoundsRepeatedNeverWarmWaits (1.20s)
+    bug064003_router_warmup_sla_stress_test.go:237: waiter 0: warm-up overran its declared budget under contention — budget=300ms observed=1.201104848s probes=24
+--- FAIL: TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters (1.20s)
+--- PASS: TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad (0.00s)
+T6_MUTATED_EXIT=1 (must be non-zero)
+restored=0
+```
+
+Both bound tests failed and named the regression; the SST-shape and warm-path
+tests correctly kept passing, because neither of them measures the bound. That
+selectivity is what distinguishes a discriminating test from one that merely goes
+red when anything moves. The mutation was reverted under a `trap ... EXIT INT
+TERM` and the restore verified with `restored=0`.
