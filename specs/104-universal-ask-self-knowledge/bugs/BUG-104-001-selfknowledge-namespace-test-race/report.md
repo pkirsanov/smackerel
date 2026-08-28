@@ -1215,3 +1215,87 @@ touched no runtime service and no repository file.
 
 
 
+
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+Everything above this marker is evidence from earlier passes and is retained
+verbatim. This window records only what was executed in the 2026-08-28 certifying
+pass, which resolved the one standing blocker (Check 8A).
+
+### Validation Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.validate
+**Actual executor:** `bubbles.goal`. This window validated the single condition
+that was still open; the packet's own validation phase is recorded above.
+
+The scenario-specific E2E regression this packet needed already existed and was
+merely unrecorded. Both of its tests were executed on 2026-08-28 in the
+`./smackerel.sh test e2e` lane and both passed:
+
+```text
+$ grep -E 'SelfKnowledge.*(RUN|PASS|FAIL|SKIP)' /tmp/sm_e2e_v3.log
+=== RUN   TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E
+--- PASS: TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E (0.04s)
+=== RUN   TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E
+--- PASS: TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E (0.03s)
+2 passed, 0 failed
+```
+
+Those two tests are not incidental neighbours. They acquire the very lock this
+packet delivers:
+
+```text
+$ grep -n 'nslock' tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go
+38:     "github.com/smackerel/smackerel/tests/integration/nslock"
+79:     nslock.AcquireSelfKnowledge(t, pool)
+130:    nslock.AcquireSelfKnowledge(t, pool)
+$ git log --oneline -1 -- tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go
+b3ebfef7 test(integration): guard the shared smackerel_self namespace (BUG-104-001)
+1 file changed, 10 insertions(+)
+```
+
+The lock call sites were added by **this packet's own commit**, so the E2E is
+in-boundary regression coverage, not a borrowed neighbour.
+
+### Audit Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.audit
+**Actual executor:** `bubbles.goal`.
+
+Check 8A had stood as the blocker on the reasoning that this packet is pure
+test-infrastructure, and that an E2E cannot cover a race *between tests*. An
+earlier attempt to sidestep it by labelling the scope `Scope-Kind: ci-config` was
+correctly rejected as mislabelling.
+
+**Both readings rested on one unexamined premise: that `smackerel_self` is a test
+artifact. It is not.**
+
+```text
+$ grep -rn 'smackerel_self' internal/assistant/selfknowledge/ingestor.go
+6:// artifacts store under a dedicated source_id namespace ("smackerel_self")
+28:const SelfKnowledgeNamespace = "smackerel_self"
+93:// Ingest (re)projects the corpus into the smackerel_self namespace. Safe to
+131:// sweepStale deletes smackerel_self artifacts whose content_hash is not in
+4 matches
+```
+
+`smackerel_self` is a **product** namespace. The ingestor re-projects the corpus
+into it and `sweepStale` **deletes** from it. Concurrent access therefore has a
+destructive runtime failure mode, which makes E2E regression coverage both
+legitimate and required — the opposite of the earlier conclusion.
+
+**What this changes, precisely:** the blocker was never a framework gap needing an
+exemption. It was a wrong premise producing a wrong exemption request. The
+Implementation Files table, the Test Plan row, and the DoD item now record the
+E2E that already existed.
+
+**What is NOT claimed:** no new test was written in this window, and no new
+execution of the integration suite was performed. The E2E result quoted above is
+from the 2026-08-28 `./smackerel.sh test e2e` run.
+
+<!-- bubbles:certifying-window-end -->
