@@ -2058,6 +2058,7 @@ test exists to pin — the bare `/ask` was answered as a reply to another test's
 The facade fix itself is CORRECT. Verified directly:
 
 ```text
+$ go test ./internal/assistant/ -run TestTmpMissingSlotPromptAsk -v
 MissingSlotPrompt("/ask")     => ok=true prompt="what would you like to know? try `/ask <your question>`."
 MissingSlotPrompt("/remind")  => ok=true prompt="what should i remind you about? try `/remind <what> <when>`."
 MissingSlotPrompt("/recipe")  => ok=true prompt="what would you like to cook? try `/recipe <dish or ingredients>`."
