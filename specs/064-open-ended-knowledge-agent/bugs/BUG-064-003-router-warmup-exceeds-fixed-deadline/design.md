@@ -341,6 +341,48 @@ routed back for re-scoping.
    answer is "yes", the guard's `_test.go` / `tests/` exclusions are themselves
    a gap worth a separate bug against spec 020. This bug does not presume the
    answer.
+
+   **DECISION (recorded 2026-08-28, owner-delegated): YES — the policy binds
+   test code, but what it forbids is the fallback FORM, not explicit test
+   values.** The two are different things and the current carve-out conflates
+   them.
+
+   The distinction that matters:
+
+   - `os.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.7")` in a test is an
+     EXPLICIT value. It is permitted, and always was. The policy never targeted
+     it.
+   - A helper of the shape `getenvOr("AGENT_ROUTING_CONFIDENCE_FLOOR", 0.65)`
+     inside test code is a SILENT SUBSTITUTION. It is forbidden, because it lets
+     a test pass under a configuration production would reject — which erases
+     the very fail-loud contract the test exists to prove.
+
+   The guard's own words show it was aimed at the first case, not licensing the
+   second. `internal/config/sst_grep_guard_test.go:13` justifies the exemption
+   as *"test fixtures with explicit intent to use deterministic test values"*.
+   Explicit is the operative word. The MECHANISM, however, is broader than the
+   rationale: `sstGuardSkipFile` skips whole files by suffix
+   (`strings.HasSuffix(path, "_test.go")`, line 75), so it exempts the
+   silent-substitution case too, and the meta-test at lines 285-310 pins that
+   file-level skip in place.
+
+   Why the answer is "yes" rather than "tests are exempt": this bug's own T4
+   asserts that absent or unparseable `AGENT_ROUTING_CONFIDENCE_FLOOR` /
+   `AGENT_ROUTING_CONSIDER_TOP_N` fail loud instead of substituting `0.65` / `5`.
+   If test code were free to substitute defaults, a future helper could satisfy
+   T4's setup while quietly restoring the behaviour T4 forbids, and the guard
+   would not see it. A test suite that may itself default stops being evidence
+   that the fail-loud contract holds. That is the same false-green class already
+   filed in this repository as BUG-069-005.
+
+   **Consequence, per this question's own terms:** the `_test.go` / `tests/`
+   exclusion IS a gap. It is not fixed here — it belongs to spec 020 and to the
+   guard's owner, and narrowing a file-level skip to a form-level one is a
+   change with its own blast radius across every existing test. It is filed as
+   residue `R-012` in `.specify/memory/open-work.md` with `bubbles.design` as
+   next owner, so it is owned rather than lost. NOT claimed: that any current
+   test actually exploits the gap. This decision is about what the policy means,
+   and no audit for live violations was performed.
 2. **Should stack bring-up warm the ML sidecar embedder?** That would fix this
    class of problem for every integration test at once rather than one test at a
    time, but it changes `smackerel.sh` / compose behaviour and belongs to a
