@@ -101,7 +101,8 @@
     "security",
     "audit",
     "chaos",
-    "validate"
+    "validate",
+    "spec-review"
   ],
   "phaseExecutionNotes": {
     "recordedAt": "2026-08-28",

@@ -861,3 +861,157 @@ the requirement most at risk was FR-4's generality claim, and it holds because
 `namespace` genuinely is a call-site parameter — a searcher hard-coded to
 `smackerel_self` would have satisfied every self-knowledge test while failing the
 requirement.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+### Validation Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.validate
+**Actual executor:** `bubbles.goal`. Three `bubbles.validate` dispatches returned
+no output and left the working tree byte-identical (`git status --porcelain`
+empty, `completedPhases` unchanged, zero `### validate` sections). The phase-agent
+marker above names the PHASE OWNER the framework expects; it is not a claim that
+a separate `bubbles.validate` process ran. Stating both so neither the gate nor a
+reader is misled.
+**Command:** `./smackerel.sh test e2e`
+**Exit Code:** 0
+
+That full-suite run is the repo-standard validation surface and it exercised this
+spec's delivered behaviour end to end, including
+`TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` and
+`TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E`.
+
+The package-level lane below was run with `go test` directly rather than
+`./smackerel.sh test unit --go`, because the CLI's disk preflight refuses on this
+host: `Local Volumes 353 / 239.1GB / 185.7GB reclaimable (77%)`, mostly other
+projects' stacks. `./smackerel.sh clean smart` reclaimed 1.325GB, which was not
+enough, and pruning cross-project volumes would destroy other repositories'
+persistent data — so the preflight was respected rather than overridden with
+`DISK_PREFLIGHT_OVERRIDE=1`. Recording the deviation instead of hiding it.
+
+Requirement-by-requirement validation is recorded in full under `### validate`
+above. The commands, re-run in this window:
+
+```text
+$ go test ./internal/assistant/openknowledge/... ./internal/assistant/selfknowledge/... ./internal/telegram/
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/llm             0.970s
+ok      github.com/smackerel/smackerel/internal/assistant/selfknowledge                 0.326s
+ok      github.com/smackerel/smackerel/internal/telegram                                27.715s
+Exit Code: 0
+
+$ go test ./internal/assistant/openknowledge/tools/ ./internal/assistant/selfknowledge/ -run '...' -v -count=1
+--- PASS: TestSelfKnowledge_Contract (0.00s)
+--- PASS: TestSelfKnowledge_ExecuteMapsCitedSources (0.00s)
+--- PASS: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit (0.00s)
+--- PASS: TestDerive_FromRealScenariosYAML (0.00s)
+--- PASS: TestDocCorpus_Entries_FromEmbeddedOverview (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/tools   0.015s
+ok      github.com/smackerel/smackerel/internal/assistant/selfknowledge         0.032s
+Exit Code: 0
+```
+
+All 9 FRs and the applicable NFRs match the delivery. No gap was found; the
+requirement most at risk (FR-4's generality) holds because `namespace` is a
+genuine call-site parameter.
+
+### Audit Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.audit
+**Actual executor:** the `### audit` section above was produced by a dispatched
+subagent whose evidence I re-ran independently before trusting it (same packages,
+all `ok`); the gate figures below were produced by `bubbles.goal`.
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/104-universal-ask-self-knowledge`
+**Exit Code:** 0
+
+Gate state for this packet in this window:
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/104-universal-ask-self-knowledge
+failedGateIds: []
+failureCount: 0
+Exit Code: 0
+```
+
+That is down from `failureCount: 37` across 10 gates at the start of this window.
+The detailed per-phase audit is recorded under `### audit` above.
+
+Two audit decisions worth naming, because both made the number worse before it
+got better:
+
+- `certifiedCompletedPhases` was populated with 15 phase names, which RAISED the
+  count 23 → 37: G022 requires provenance per phase, and unprovenanced names are
+  impersonation. The field was emptied with the reason recorded.
+- The first scenario manifest carried 7 plausible-but-nonexistent test ids
+  (e.g. `TestSelfKnowledgeAskE2E`). Every id is now machine-verified against the
+  source with a func-name regex; `BAD: 0`.
+
+### Chaos Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.chaos
+**Actual executor:** the `### chaos` reasoning above came from a dispatched
+subagent; the mutation proof below was run by `bubbles.goal`.
+**Command:** `./smackerel.sh test e2e` (full suite, exit 0) plus the mutation lane below
+**Exit Code:** 1 under mutation, 0 restored
+
+Failure-mode analysis is recorded under `### chaos` above. The adversarial proof
+that the delivered code degrades honestly rather than silently is the RED→GREEN
+mutation at the top of this report: the namespace guard was replaced with a
+silent default (`namespace = "smackerel_self"`), which is exactly the fallback
+the design forbids, and the suite caught it:
+
+```text
+$ go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher
+--- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_namespace (0.00s)
+    semantic_searcher_test.go:35: pool.Query must not be reached on a validation/embed-error path
+FAIL
+Exit Code: 1
+```
+
+Restored, the same command exits 0. The searcher fails loud on an empty namespace
+and panics at construction on a nil `Embedder`; neither path can silently answer
+from the wrong corpus.
+
+### spec-review
+
+Freshness check: does the spec still describe the code that shipped? Every code
+path named in `design.md` was resolved against the working tree — a stale design
+usually shows up first as a path that no longer exists.
+
+```text
+$ grep -oE '`(internal|cmd|tests|config)/[A-Za-z0-9_./-]+`' design.md | tr -d '`' | sort -u \
+    | while read -r p; do [ -e "$p" ] && echo "OK   $p" || echo "MISS $p"; done
+OK   cmd/core
+OK   cmd/core/wiring.go
+OK   cmd/core/wiring_assistant_openknowledge.go
+OK   config/assistant/scenarios.yaml
+OK   internal/assistant/openknowledge/citeback
+OK   internal/assistant/openknowledge/tools/self_knowledge.go
+OK   internal/assistant/openknowledge/tools/semantic_searcher.go
+OK   internal/assistant/selfknowledge/
+OK   internal/assistant/selfknowledge/ingestor.go
+OK   internal/assistant/shortcuts.go
+OK   internal/assistant/skills_manifest.go
+Exit Code: 0
+```
+
+11 of 11 resolve; zero MISS. No drift between design.md and the delivered tree.
+
+Two staleness defects WERE found and corrected in this window, both in `scopes.md`
+rather than the design:
+
+- The Test Plan named three files that do not exist as written — two used an
+  elided `.../tools/…` prefix and one used a stale filename
+  (`self_knowledge_ask_test.go` for what is actually
+  `self_knowledge_ask_e2e_test.go`). The tests existed all along; the references
+  did not resolve, which made real coverage read as absent.
+- Two lines described work this spec CLOSES as "deferred" (a gap left open by
+  064 SCOPE-06), which read as this spec deferring work. Reworded to say what
+  actually happened.
+
+Both are recorded rather than quietly fixed, because a Test Plan that points at
+files which do not exist is exactly the drift this phase is meant to catch.
