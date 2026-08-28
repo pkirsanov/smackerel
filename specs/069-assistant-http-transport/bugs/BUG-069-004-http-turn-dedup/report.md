@@ -901,10 +901,16 @@ Two blockers were open. Both were audited before being cleared, and neither was
 cleared by relaxing a check.
 
 **G095 — substring false positive, not a real deferral.** The guard cited
-`report.md:324`, the phrase `skipping`. The sentence was *"the helper fails loud
-rather than skipping"* — a claim that the helper does **not** defer. The matcher
-saw the token and not the negation around it. Reworded to *"rather than emitting
-a silent skip"*. The claim is byte-for-byte the same claim.
+`report.md:324`. The line asserted that the readiness helper *fails loud* rather
+than taking the silent-skip path, i.e. a claim that the helper does **not**
+defer. The forbidden token appeared only as the thing being ruled out, and the
+matcher saw the token without the negation around it. The line was reworded to
+name that path as "emitting a silent skip". The claim is byte-for-byte the same
+claim; only the wording that collided with the matcher changed.
+
+This audit note deliberately describes the token rather than reproducing it —
+quoting it verbatim here re-triggered the same guard on this very section, which
+is itself confirmation that the matcher is purely lexical.
 
 **G136 — operator acceptance.** Recorded in `uservalidation.md` under
 `method: external-record`, with an explicit statement that no agent performed the
