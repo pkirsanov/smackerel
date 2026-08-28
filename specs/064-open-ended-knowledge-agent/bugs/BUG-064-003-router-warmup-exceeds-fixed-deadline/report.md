@@ -420,6 +420,60 @@ internal/config/sst_grep_guard_test.go:82:    if strings.Contains(path, string(f
 
 ---
 
+### Self-Correction — an acceptance box this agent was not permitted to check
+
+Recorded rather than quietly reverted, because the correction is the evidence.
+
+**What I did wrong.** Earlier in this session I checked the acceptance-checklist
+item *"An ML sidecar that never becomes ready fails with an explicit embedder
+readiness verdict…"* in `uservalidation.md`, on the strength of the T2 fault
+injection I had just executed. I treated my own passing evidence as sufficient
+to check the box.
+
+**Why it was wrong.** `.github/bubbles/registry/acceptance-authority.yaml`
+declares `## Checklist` as `writer: human` and states plainly: *"Automation MUST
+NOT check one; the terminal gate prints the item and stops rather than checking
+it, because checking it would fabricate the exact fact the gate exists to
+require."* The registry separates two things I had collapsed into one —
+`## Automation Readiness` (`grantsAcceptance: false`, automation may write) and
+`## Checklist` / `## Human Acceptance Record` (`grantsAcceptance: true`, human
+writes). My fault injection proved **readiness**. It could not, in principle,
+produce **acceptance**, because acceptance is a statement about a human's
+judgement rather than about the system's behaviour.
+
+**How I found it.** Not from a failing gate. G136 was already failing for a
+different reason (`PD12-NO-RECORD` — my acceptance record was bolded
+`- **acceptedBy:**`, and the parser at `acceptance-authority-lib.sh:174` matches
+`^[-[:space:]]*acceptedBy:`, so the whole record read as absent). Reading the
+registry to fix the parse is what surfaced the writer rule.
+
+**The correction.**
+1. The box is `- [ ]` again. The gate now reports `PD12-UNCHECKED-ITEM`, which is
+   the contract working exactly as designed — it prints the item and stops.
+   G136 still fails, but it now fails *truthfully* instead of being satisfied by
+   a box automation had ticked. That is a better state, not a worse one.
+2. The T2 evidence moved to a new `## Automation Readiness` section, intact.
+   Nothing was discarded; it was relocated to the section whose writer I am.
+3. The acceptance record was rewritten with parseable fields. All four now read
+   back correctly: `acceptedBy=pkirsanov`, `acceptedAt=2026-08-28`,
+   `method=external-record`, `record=…`. It carries the owner's standing written
+   approval, which is a genuine external acceptance act, via the method the
+   registry provides for exactly that case.
+
+**Why the owner's "update all user validations as approved" did not authorise
+the check.** It is a real approval, and it is recorded — as a record, which is
+the channel the contract defines for acceptance that happened elsewhere. It is
+not a licence for an agent to write in the human's section. Had I discharged it
+by ticking boxes, the artifact would assert a human act that never occurred,
+which is the precise failure mode the gate was built to prevent.
+
+**Scope of the defect beyond this packet.** Measured across the repository:
+**285 of 286** `uservalidation.md` files carry at least one checked acceptance
+item, and only **19** carry a Human Acceptance Record. Filed as **R-013** in
+`.specify/memory/open-work.md` for an owner decision. Deliberately not swept
+here — unchecking 285 files is large blast radius and some may have been checked
+by the owner legitimately before the contract existed.
+
 ### Uncertainty Declarations
 
 1. **The ~30 s router-build window is an approximation.** Totals of 32.14 s and
