@@ -1009,9 +1009,9 @@ rather than the design:
   (`self_knowledge_ask_test.go` for what is actually
   `self_knowledge_ask_e2e_test.go`). The tests existed all along; the references
   did not resolve, which made real coverage read as absent.
-- Two lines described work this spec CLOSES as "deferred" (a gap left open by
-  064 SCOPE-06), which read as this spec deferring work. Reworded to say what
-  actually happened.
+- Two lines used scheduling-flavoured wording for a gap that 064 SCOPE-06 left
+  open and that THIS spec closes, which read as if this spec were postponing its
+  own work. Reworded to say what actually happened.
 
 Both are recorded rather than quietly fixed, because a Test Plan that points at
 files which do not exist is exactly the drift this phase is meant to catch.
