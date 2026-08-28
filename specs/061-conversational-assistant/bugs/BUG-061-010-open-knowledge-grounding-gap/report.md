@@ -387,3 +387,69 @@ Exit Code: 0
 The second test is the one that matters for this bug: it pins the honest-refusal
 half, so a future regression cannot restore the original symptom (an ungrounded
 meta-question answered as if it were grounded) without failing.
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+### Validation Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.validate
+**Actual executor:** `bubbles.goal`. This packet routes rather than implements, so
+validation here means confirming the routed fix is really delivered and certified.
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/104-universal-ask-self-knowledge`
+**Exit Code:** 0
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/104-universal-ask-self-knowledge
+failedGateIds: []
+failureCount: 0
+verdict: PASS
+Exit Code: 0
+
+$ ./smackerel.sh test e2e
+--- PASS: TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E
+--- PASS: TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+Exit Code: 0
+```
+
+The routed fix is delivered, certified, and covered by persistent regression
+tests. The honest-refusal half is pinned separately from the cited-answer half,
+so this bug's original symptom cannot silently return.
+
+### Audit Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.audit
+**Actual executor:** `bubbles.goal`.
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-010-open-knowledge-grounding-gap`
+**Exit Code:** 0
+
+```text
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh <this packet>
+🟢 PASSED: No source code reality violations detected
+Exit Code: 0
+
+$ bash .github/bubbles/scripts/state-transition-guard.sh <this packet>
+failedGateIds: []
+failureCount: 0
+Exit Code: 0
+```
+
+Down from `failureCount: 25` across 7 gates at the start of this window.
+
+Two audit notes worth recording, because both were shape problems rather than
+substance problems and could easily have been "fixed" the wrong way:
+
+- G041 twice flagged non-DoD bullets as reformatted checkboxes — first the
+  `(P)`/`(R)` legend, then the implementation-file list. Both were converted to
+  tables. Neither was a real attempt to bypass checkbox validation, but the gate
+  is right to be suspicious of `- **` bullets adjacent to a DoD block.
+- G028 reported `ZERO_FILES_RESOLVED` rather than a stub: the packet declared no
+  implementation files because it deliberately owns none. Naming spec 104's
+  delivered files under `### Implementation Files` resolved it without claiming
+  authorship.
