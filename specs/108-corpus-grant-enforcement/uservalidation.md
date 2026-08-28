@@ -88,3 +88,21 @@ authority held by the recording agent. Uncheck an item to withdraw its ruling.
 ### Gaps this ratification surfaced (recorded, not silently absorbed)
 
 - [x] Ratifying items 8 and 10 exposed that **no scope in `scopes.md` currently owns** the S7 grant-issuance notice or the Register 3 human-copy rendering on the PWA, extension, and Telegram surfaces. The five planned scopes cover the wire envelope (Register 1) and the Telegram routing remedy, but not the human copy or the admin notice. This is recorded as a routed planning gap in `state.json.certification.outstandingFindings` rather than absorbed by inventing scopes during a ratification pass.
+
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-28
+- method: external-record
+- record: Operator directive in the working session on 2026-08-28, verbatim "authorized, approved, update all user validations as approved".
+
+### Scope of this acceptance, stated precisely
+
+This acceptance covers the delivered SCOPE-01/02/03/05 behaviour. It does **NOT**
+close this packet. SCOPE-04 remains genuinely blocked on three operator-owned,
+time-bound items that no acceptance can substitute for: at least 14 consecutive
+OBSERVE days, operator-performed rotation of every principal whose grants are
+unknowable, and the OBSERVE-window go/no-go query returning an empty or
+explicitly-accepted denial set. **No agent exercised any of these**, and none of
+them can be satisfied by an agent at all.

@@ -72,11 +72,28 @@
     "certifiedCompletedPhases": [],
     "certifiedCompletedPhasesNote": "EMPTY by design, not by omission (Gate G022). This packet was authored by an analyst -> ux -> design -> plan chain, but no phase completed as a separately-provenanced, independently-certified specialist dispatch with its own recorded evidence. Under the anti-fabrication contract a phase may only be listed here when its provenance can be shown; listing analyze/design/plan without that provenance would be an invented claim. Under-claiming is correct; over-claiming would be fabrication. What actually ran is recorded factually in executionHistory, and the planning chain itself is independently verified by Gate G091 (analyst -> ux -> design -> plan), which passes. STILL EMPTY after the 2026-08-13 validate pass, and deliberately so. 'plan' has an executionHistory entry with outcome completed_owned, but it is self-reported rather than independently certified, which is the bar this field holds. 'test' has a dispatch whose recorded outcome is route_required and which states 'Scope 02 NOT marked Done', so it did not complete. 'implement' has no executionHistory dispatch entry at all, only execution.completedPhases, which is an execution claim rather than certified provenance. 'validate' is NOT listed either: this pass reached a BLOCKED verdict, not a passing one, and a validate phase may only be certified on a passing verdict, so listing it would certify the very phase that refused.",
     "scopeProgress": [
-      { "scope": 1, "status": "done" },
-      { "scope": 2, "status": "done" },
-      { "scope": 3, "status": "done" },
-      { "scope": 4, "status": "blocked", "blockedReason": "F-108-TELEGRAM-01 is RESOLVED: the bridge's reachability under ENFORCE is no longer unknown, it was measured by TP-04-02 (tests/integration/graphapi/corpus_telegram_bridge_test.go), and design.md 5 now records it as MEASURED rather than unknown. What remains is not an engineering unknown but three operator-owned, time-bound DoD items: >= 14 consecutive OBSERVE days, proactive rotation of principals whose grants are unknowable, and the go/no-go query over a real window." },
-      { "scope": 5, "status": "done", "resolutionNote": "F-108-FLAG-DEFAULT-DIVERGENCE is RESOLVED: the bundles now follow the enforced release-train policy (default-ON in exactly one owning train), and TP-05-01 (internal/config/corpus_grant_flag_contract_test.go) holds that parity mechanically, including adversarial fixtures for bundle deletion, a non-owning train switched ON, and an all-OFF state." }
+      {
+        "scope": 1,
+        "status": "done"
+      },
+      {
+        "scope": 2,
+        "status": "done"
+      },
+      {
+        "scope": 3,
+        "status": "done"
+      },
+      {
+        "scope": 4,
+        "status": "blocked",
+        "blockedReason": "F-108-TELEGRAM-01 is RESOLVED: the bridge's reachability under ENFORCE is no longer unknown, it was measured by TP-04-02 (tests/integration/graphapi/corpus_telegram_bridge_test.go), and design.md 5 now records it as MEASURED rather than unknown. What remains is not an engineering unknown but three operator-owned, time-bound DoD items: >= 14 consecutive OBSERVE days, proactive rotation of principals whose grants are unknowable, and the go/no-go query over a real window."
+      },
+      {
+        "scope": 5,
+        "status": "done",
+        "resolutionNote": "F-108-FLAG-DEFAULT-DIVERGENCE is RESOLVED: the bundles now follow the enforced release-train policy (default-ON in exactly one owning train), and TP-05-01 (internal/config/corpus_grant_flag_contract_test.go) holds that parity mechanically, including adversarial fixtures for bundle deletion, a non-owning train switched ON, and an all-OFF state."
+      }
     ],
     "securityReview": {
       "reviewedBy": "bubbles.security",
@@ -717,5 +734,11 @@
       "summary": "Adversarial audit executed in an isolated worktree (/tmp/smackerel-spec108-traceability-merge-20260813) so its mutations could not perturb the main tree. It did not take the packet's non-vacuity claims on trust; it BROKE each mechanism and confirmed the guard fired. (1) Removing the gate's bypass emit failed TestCorpusGrantGate_Observe_BypassedSessionSourcesAreCountedButNotPredicted on BOTH shared_token and bootstrap. (2) Collapsing per-principal attribution failed TestCorpusGrantMetrics_CoverageCellIsClosableByEitherOutcome with 'the denied principal has a non-zero ALLOWED count (1)'. (3) Breaking the non-owning-train check failed TestCorpusGrantFlag_BundleParity_TP_05_01/adversarial_non_owning_train_ON_is_rejected with 'this is exactly the G111 violation condition'. Each revert was verified byte-clean (git diff --stat empty) and each test re-passes on the clean tree. It also re-ran release-train-guard at HEAD: exit 0, 2 trains, warnings only. No discrepancy raised. RECORDED FROM THE OBSERVED TRANSCRIPT: the dispatch returned no closing report, so this entry cites the commands and outputs seen directly rather than a summary the agent authored."
     }
   ],
-  "nextRequiredOwner": "bubbles.plan"
+  "nextRequiredOwner": "bubbles.plan",
+  "completedScopes": [
+    "SCOPE-01",
+    "SCOPE-02",
+    "SCOPE-03",
+    "SCOPE-05"
+  ]
 }
