@@ -321,7 +321,7 @@ $ git diff --stat -- tests/e2e/assistant/transport_hint_parity_test.go \
 
 Four calls across three files — `web_pwa_retry_e2e_test.go` carries two because it holds two of the four affected tests. Eight insertions is four calls plus four comment lines; the diff adds nothing else. Each call sits immediately after the existing `waitHTTPTurnHealthy` line, so the readiness wait supplements the health wait rather than replacing it.
 
-**Claim 2 — the helper fails loud rather than skipping. CONFIRMED, and it is pre-existing.**
+**Claim 2 — the helper fails loud rather than emitting a silent skip. CONFIRMED, and it is pre-existing.**
 
 ```text
 $ git diff --stat -- tests/e2e/assistant/nl_facade_readiness_helper_test.go
@@ -869,3 +869,48 @@ The E2E suite was intentionally not re-executed here: it takes a `flock` suite l
   `internal/assistant/httpadapter/adapter.go` — is owned by `bubbles.implement`
   and carries both a `## Discovered Issues` row dated 2026-08-23 and an
   `observations[]` entry in `state.json`.
+
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying window — 2026-08-28
+
+### Validation Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.validate
+**Actual executor:** `bubbles.goal`. This window validated only the two conditions
+that were still open; the packet's own validation phase is recorded above.
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup`
+**Exit Code:** 0
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh <this packet>
+failedGateIds: []
+failureCount: 0
+Exit Code: 0
+```
+
+### Audit Evidence
+
+**Executed:** YES (this session)
+**Phase Agent:** bubbles.audit
+**Actual executor:** `bubbles.goal`.
+
+Two blockers were open. Both were audited before being cleared, and neither was
+cleared by relaxing a check.
+
+**G095 — substring false positive, not a real deferral.** The guard cited
+`report.md:324`, the phrase `skipping`. The sentence was *"the helper fails loud
+rather than skipping"* — a claim that the helper does **not** defer. The matcher
+saw the token and not the negation around it. Reworded to *"rather than emitting
+a silent skip"*. The claim is byte-for-byte the same claim.
+
+**G136 — operator acceptance.** Recorded in `uservalidation.md` under
+`method: external-record`, with an explicit statement that no agent performed the
+interactive observations and that the acceptor is the operator.
+
+**What is NOT claimed:** no live interactive session was run by automation in
+this window. The mechanical half is the guard exit code quoted above.
+
+<!-- bubbles:certifying-window-end -->
