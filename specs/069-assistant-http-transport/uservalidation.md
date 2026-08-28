@@ -15,3 +15,20 @@ Links: [scopes.md](scopes.md) | [report.md](report.md)
 ## Owner Sign-Off
 
 Owner sign-off occurs after delivery evidence exists in [report.md](report.md).
+
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-28
+- method: external-record
+- record: Operator directive in the working session on 2026-08-28, verbatim "authorized, approved, update all user validations as approved".
+
+### Scope of this acceptance, stated precisely
+
+The checklist above describes assistant HTTP transport behaviour as a person
+using it would see it. **No agent exercised those flows interactively**; the
+acceptor is the operator. What automation contributed is the mechanical half:
+the five manifest-required assistant E2E tests and the three no-skip guards were
+re-executed on 2026-08-28 and all passed (see the reconciliation section in
+`report.md`).

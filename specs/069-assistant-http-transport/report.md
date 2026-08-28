@@ -662,6 +662,7 @@ tests/stress/assistant/http_turn_stress_test.go
 
 | Date | Issue | Disposition | Reference |
 |------|-------|-------------|-----------|
+| 2026-08-28 | `report.md:399` records that an unrelated, already-failing test was observed in `internal/config` during the 2026-06-02 test phase: `--- FAIL: TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001`. It was correctly out of this packet's Change Boundary, but it was never given a disposition row, so G095 flagged it as an unfiled deferral. | OWNED ELSEWHERE AND SINCE RESOLVED. The failure belongs to `BUG-051-001-self-hosted-runtime-env-mode`. Re-executed on 2026-08-28: `go test -count=1 -run TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001 ./internal/config/...` -> `ok github.com/smackerel/smackerel/internal/config 13.207s`. The test passes; nothing is outstanding. | `specs/051-deployment-secret-auth-contract/bugs/BUG-051-001-self-hosted-runtime-env-mode` |
 | 2026-06-02 | Wrapper-level Ollama agent E2E skip phrase (`Skipping Ollama agent E2E`) observed in archived SCOPE-5 rerun log | Foreign to spec 069 — belongs to spec 043 real-LLM E2E harness; no spec-069 regression | specs/043-ollama-test-infrastructure |
 | 2026-06-02 | `internal/config/TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001` failure observed during cross-spec regression sweep | Foreign to spec 069; tracked by BUG-051-001 | specs/051-self-hosted-sst-loader/bugs/BUG-051-001 |
 | 2026-06-02 | Historical SCOPE-5 wrapper-driven e2e blocked by `smackerel-test-smackerel-core-1` unhealthy | Resolved by Scope 2 UserID Binding (cmd/core now starts cleanly with shared_user_id SST key) — see Scope 2 evidence block | report.md#scope-2--userid-binding-2026-06-02 |
@@ -781,3 +782,166 @@ exit=0
 
 **Uncertainty Declaration:** the fail-closed window is proven by the new unit tests and by static reading of the wiring order. It was **not** reproduced against a live stack racing a real bind, so this pass does not measure how wide the window was in practice.
 
+
+
+## Security Pass (bubbles.security, 2026-06-02)
+
+**Phase:** security. **Agent:** bubbles.security. **Claim Source:** originally
+interpreted (static code review); **re-verified executed 2026-08-28**.
+
+### Why this section is being written now
+
+`state.json` carried a `security` phase claim whose `evidenceRef` pointed at
+`report.md#security-pass-bubblessecurity-2026-06-02` — **a section that did not
+exist in this file**. The reference was dangling. That is a real artifact defect:
+a phase claim with a detailed summary and no reachable evidence.
+
+Two responses were possible: delete the unbacked claim, or test whether the claim
+is actually true. The claim's assertions are concrete and checkable, so they were
+checked. **This section does not pretend the original 2026-06-02 audit output was
+recovered — it was not.** What follows is an independent re-verification of that
+claim's two central assertions against the code as it stands on 2026-08-28.
+
+### Assertion 1 — assistant HTTP routes are inside the bearer-auth group. TRUE.
+
+```text
+$ sed -n '87,99p' internal/api/router.go
+                // Authenticated API routes
+                r.Group(func(r chi.Router) {
+                        r.Use(deps.bearerAuthMiddleware)
+                        r.Post("/capture", deps.CaptureHandler)
+
+                        // Spec 069 SCOPE-1a — Assistant HTTP transport.
+                        ...
+                        if deps.AssistantTurnHandler != nil {
+                                r.Method(http.MethodPost, "/assistant/turn", deps.AssistantTurnHandler)
+                        }
+```
+
+`POST /api/assistant/turn` is registered inside the `r.Group` whose first
+statement is `r.Use(deps.bearerAuthMiddleware)`. It is not reachable unauthenticated.
+
+### Assertion 2 — identity comes from the auth context, not the body. TRUE.
+
+```text
+$ grep -n 'userID' internal/assistant/httpadapter/adapter.go
+355:    userID := auth.UserIDFromContext(r.Context())
+
+$ sed -n '/type TurnRequest struct/,/^}/p' internal/assistant/httpadapter/schema.go
+type TurnRequest struct {
+        SchemaVersion        string         `json:"schema_version"`
+        TransportMessageID   string         `json:"transport_message_id"`
+        Kind                 string         `json:"kind"`
+        TransportHint        string         `json:"transport_hint"`
+        Text                 string         `json:"text"`
+        ConfirmRef           string         `json:"confirm_ref"`
+        ConfirmChoice        string         `json:"confirm_choice"`
+        DisambiguationRef    string         `json:"disambiguation_ref"`
+        DisambiguationChoice int            `json:"disambiguation_choice"`
+        ClientContext        map[string]any `json:"client_context"`
+}
+```
+
+`TurnRequest` has **no** user, user_id, subject, or actor field. A caller cannot
+name whose conversation to act on. Identity is read from the request context,
+which the bearer middleware populated. The body-identity IDOR class is therefore
+structurally absent, not merely unexercised.
+
+**Independent corroboration.** This property was rediscovered from the opposite
+direction on 2026-08-28 while fixing test hermeticity in
+`tests/e2e/assistant/nothing_captured_ack_e2e_test.go`: the test had to issue an
+explicit `KindReset` turn because every test in the package shares one conversation
+row — precisely *because* there is no user field to vary and identity comes from
+the session token. A security property that shows up as a test constraint is
+better evidence than a security property that only shows up in a review note.
+
+### Scope of this re-verification, stated precisely
+
+Re-verified: the auth-group placement and the absence of body-supplied identity.
+**NOT re-verified in this window:** the CORS/real-IP/request-id composition, the
+schema required-field checks, the no-hardcoded-secrets sweep, or the OWASP
+A01/A03/A05/A07 pass. Those remain as the original claim recorded them and carry
+its original `Claim Source: interpreted`. The verdict below is scoped to what was
+actually re-executed.
+
+**Verdict:** the two load-bearing assertions of the 2026-06-02 security claim hold
+against current code.
+
+
+## Parent Reconciliation — 2026-08-28 (contradicted completion evidence)
+
+`BUG-069-005-required-e2e-false-green` recorded a HIGH-severity observation
+against this spec: *"Parent Spec 069 completion evidence is contradicted; parent
+artifact reconciliation is validate-owned after the fix is proven."* This section
+performs that reconciliation. It is written by `bubbles.goal`.
+
+### What was contradicted
+
+This spec was certified `done` on 2026-06-06. The child bug subsequently proved
+that, at that time, **five manifest-required assistant E2E tests were taking a
+silent-skip path while the lane reported exit 0** — a false green. So the
+completion was certified against a lane that could not have detected failure in
+exactly the behaviours this spec exists to deliver. That is a real evidence
+defect, and it is the reason the child raised the observation.
+
+### What the reconciliation actually found
+
+The false-green has been fixed. Re-executed in this session, the five required
+tests now genuinely run and pass, and the three guards that prevent them from
+silently skipping again also pass:
+
+```text
+$ grep -E '^--- (PASS|SKIP)' /tmp/sm_e2e_v3.log   # lane: ./smackerel.sh test e2e, 2026-08-28
+--- PASS: TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation (0.06s)
+--- PASS: TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation (0.09s)
+--- PASS: TestIntentCompilerE2E_AmbiguousLocationNeverRoutesWeatherLookup (0.06s)
+--- PASS: TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence (0.19s)
+--- PASS: TestAnnotationIntentE2E_SlotsComeFromCompiledIntent (0.17s)
+--- PASS: TestRequiredAssistantE2ETestsNeverSkip (0.00s)
+--- PASS: TestIntentCompilerWeatherProtectedTestHasNoSkipFamilyCall (0.00s)
+--- PASS: TestRequiredNoSkipGuard_AdversarialFinding (0.00s)
+Exit Code: 0
+```
+
+**The distinction that matters:** what was broken was the *evidence*, not the
+*behaviour*. The tests were not failing and being hidden — they were not running
+at all. Now that they run, they pass. The completion claim is therefore
+re-established on genuine evidence rather than withdrawn.
+
+### What is NOT claimed
+
+Seven assistant E2E tests in the capture-fallback family **do still skip** in the
+same run:
+
+```text
+$ grep -E '^--- SKIP: TestAssistantHTTPE2E|^--- SKIP: TestIntentCompilerE2E' /tmp/sm_e2e_v3.log
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackDedupWithinWindow_TP_074_11
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackIsInviolable_TP_074_04
+--- SKIP: TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround
+--- SKIP: TestAssistantHTTPE2E_CaptureProvenanceIsDistinct_TP_074_07
+--- SKIP: TestAssistantHTTPE2E_CaptureRouteInvokesCaptureOnceAndAcknowledges
+--- SKIP: TestAssistantHTTPE2E_CaptureAcknowledgementMatchesTelegramShape
+--- SKIP: TestIntentCompilerE2E_MalformedJSONBlocksRoutingAndCaptures
+Exit Code: 0
+```
+
+None of these is among this spec's five required tests. They are owned by
+`BUG-074-002-noground-e2e-skip-guard-masks-canonical-ack-regression`, which
+remains `blocked`. This reconciliation does **not** clear them and must not be
+read as doing so.
+
+### Ledger defects corrected in the same pass
+
+Auditing this spec surfaced three artifact defects that had been invisible:
+
+1. **Ten phase claims had no `executionHistory` entry** (test, simplify, security,
+   docs, chaos, regression, gaps) or no claim entry at all (validate, audit,
+   harden), despite every one having an agent-attributed evidence section in this
+   file. The ledger was reconstructed from evidence already present here. No new
+   execution was claimed.
+2. **`completedPhaseClaims` timestamps ran backwards** (chaos@07:00 ordered before
+   regression@06:00). Reordered to match the recorded times.
+3. **The `security` claim's `evidenceRef` was dangling** — it pointed at a section
+   that did not exist. Rather than delete the claim or trust it, its two central
+   assertions were re-verified against current code; both hold. See
+   `## Security Pass (bubbles.security, 2026-06-02)`.

@@ -15,7 +15,10 @@
       "statusChanged": false,
       "class": "evidence-provenance-correction",
       "finding": "This spec's certification rested in part on evidence that was a false green. Five of its own regressionRequired linked tests reported a passing package exit while every one of them called a Go skip-family method, so zero of the five required behaviors actually executed. The affected scenarios are SCN-068-A03, SCN-068-A04, SCN-068-A05 (cross-spec, authored in specs/068-structured-intent-compiler, HTTP proof owned here), and SCN-069-A03, SCN-069-A04. The affected tests are TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence, TestAnnotationIntentE2E_SlotsComeFromCompiledIntent, TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation, TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn, and TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce. All five are named in this spec's own scenario-manifest.json linkedTests, scopes.md Test Plan rows, and test-plan.json, so the contradiction is internal to this spec and not an external opinion about it.",
-      "affectedCertifiedPhases": ["test", "validate"],
+      "affectedCertifiedPhases": [
+        "test",
+        "validate"
+      ],
       "resolution": "Sound evidence now exists, but it was produced by BUG-069-005 and NOT by this spec's own 2026-06-02 test run. Under that packet the missing runtime path was implemented, the skip-family bailouts were removed, and the same five tests were executed by bubbles.test on 2026-08-23 reporting 5 PASS / 0 FAIL / 0 SKIP with package exit 0. A denylist guard bound to those five identities, tests/e2e/assistant/required_no_skip_guard_test.go, now fails if any of the five carries a skip-family call in its body or is deleted or renamed, so the specific false-green recurrence is mechanically blocked.",
       "whyStatusUnchanged": "status and certification.status stay 'done' because the behaviors this spec claims are proven to work TODAY, and downgrading would assert the opposite. Invalidation is the instrument for forcing rework that has not happened; here the rework HAS happened, in the bug packet named above. Recording a provenance correction is therefore the honest action and demoting the spec would be a false claim in the other direction. This is a correction to the AUDIT TRAIL, not an assertion that the behavior is broken.",
       "residualCaveat": "Anyone auditing this spec must not treat its 2026-06-02 certification evidence as self-sufficient proof for the five scenarios listed above. For those five, the load-bearing evidence lives in the bug packet's report.md, not in this spec's report.md. The remaining certified phases and the other scenarios in this spec are untouched by this reconciliation and are not re-asserted by it.",
@@ -50,19 +53,51 @@
     "principleAlignmentRequired": true,
     "principleDeviations": [],
     "workflowMode": "full-delivery",
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "off", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "off", "source": "repo-default" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "planningOnlyJustification": "Product-to-planning pass creates planning maturity artifacts only; runtime implementation remains governed by the full-delivery chain after planning maturity.",
   "certification": {
     "status": "done",
     "completedAt": "2026-06-02T08:00:00Z",
     "evidenceRef": "report.md#scope-2--userid-binding-2026-06-02",
-    "certifiedCompletedPhases": ["implement", "test", "stabilize", "spec-review", "simplify", "security", "regression", "docs", "chaos", "validate", "audit", "gaps", "harden"],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "stabilize",
+      "spec-review",
+      "simplify",
+      "security",
+      "regression",
+      "docs",
+      "chaos",
+      "validate",
+      "audit",
+      "gaps",
+      "harden"
+    ],
     "scopeProgress": {
       "total": 7,
       "notStarted": 0,
@@ -110,22 +145,14 @@
         "notes": "Authored SCOPE-5 deliverables: transport-branch policy guard (internal/assistant/intent/policyguard/transport_branch.go + 5 unit tests PASS incl. real-repo cleanliness), transport_hint unit coverage (internal/assistant/httpadapter/transport_hint_test.go PASS, 4 sub-tests), transport parity integration test (tests/integration/assistant/transport_parity_test.go), policy guard integration mirror (tests/integration/policy/transport_branch_guard_test.go), live-stack e2e suite (tests/e2e/assistant/http_live_stack_test.go), hint-neutrality e2e (appended to tests/e2e/assistant/http_turn_test.go), and stress smoke (tests/stress/assistant/http_turn_stress_test.go PASS, p95=40µs under 50ms budget, per-user limiter partition + row-family invariants asserted). go vet -tags e2e and go vet -tags stress clean. Integration parity test + integration policy guard mirror blocked from execution by foreign untracked work in internal/config (assistant_frontend.go/assistant_intent_trace.go/assistant_tools.go — spec 071/072) and internal/assistant/facade_intent_trace.go (spec 071) — same blocker pattern documented under SCOPE-1b/1c/2/3/4 uncertainty declarations. Live e2e GREEN not-run because CORE_EXTERNAL_URL was not exported in this session. Scope status In Progress pending live integration + e2e GREEN once foreign blockers heal."
       },
       {
-        "agent": "bubbles.stabilize",
-        "phase": "stabilize",
-        "completedAt": "2026-06-02T04:35:00Z",
-        "runStartedAt": "2026-06-02T04:33:00Z",
-        "runCompletedAt": "2026-06-02T04:35:00Z",
-        "evidenceRef": "report.md#stabilize-pass-bubblesstabilize-2026-06-02",
-        "summary": "Portfolio stabilize sweep (065/066/067/069/074/075). go build ./... RC=0 + go vet ./... RC=0. Assistant HTTP transport compiles without diagnostics. Pre-existing SCOPE-1d test-infra blocker and 19 remaining delivery-tier guard blockers documented in prior implement claim remain owned by their phases. Planning-tier guard blockers cleared in prior run remain cleared. Verdict: PARTIALLY_STABLE."
-      },
-      {
         "agent": "bubbles.test",
         "phase": "test",
         "claimedAt": "2026-06-02T04:40:00Z",
         "runStartedAt": "2026-06-02T04:38:00Z",
         "runCompletedAt": "2026-06-02T04:40:00Z",
         "evidenceRef": "report.md#test-evidence--bubblestest-2026-06-02",
-        "summary": "Spec-069 unit tests executed at HEAD 3864e385: go test -count=1 ./internal/assistant/httpadapter/... ./internal/assistant/intent/policyguard/... RC=0 (HTTP adapter contract, transport-hint, golden contract, policyguard transport-branch all pass). Note: internal/config also exercised; one unrelated pre-existing failure observed (TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001) owned by BUG-051-001 — foreign to spec 069. Live-stack e2e (tests/e2e/assistant/http_*_test.go) + integration (tests/integration/api/assistant_*_test.go) remain foreign-blocked by F074-04B-CORE-SCENARIO-STARTUP. Claim Source: executed (units RC=0) / not-run (live-stack). No source/test files modified in this pass; HEAD unchanged."      },
+        "summary": "Spec-069 unit tests executed at HEAD 3864e385: go test -count=1 ./internal/assistant/httpadapter/... ./internal/assistant/intent/policyguard/... RC=0 (HTTP adapter contract, transport-hint, golden contract, policyguard transport-branch all pass). Note: internal/config also exercised; one unrelated pre-existing failure observed (TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001) owned by BUG-051-001 — foreign to spec 069. Live-stack e2e (tests/e2e/assistant/http_*_test.go) + integration (tests/integration/api/assistant_*_test.go) remain foreign-blocked by F074-04B-CORE-SCENARIO-STARTUP. Claim Source: executed (units RC=0) / not-run (live-stack). No source/test files modified in this pass; HEAD unchanged."
+      },
       {
         "agent": "bubbles.simplify",
         "phase": "simplify",
@@ -133,7 +160,8 @@
         "runStartedAt": "2026-06-02T05:25:00Z",
         "runCompletedAt": "2026-06-02T05:30:00Z",
         "evidenceRef": "report.md#simplify-pass--bubblessimplify-2026-06-02",
-        "summary": "Portfolio simplify pass (065/066/067/069/074/075). Static scan: go build ./... RC=0 + go vet ./... RC=0 across the full module. Review-only, no behavioral fixes applied \u2014 no trivial duplication, dead code, or efficiency hotspots surfaced inside the scope-isolated change boundaries of the in-flight scopes. Foreign blocker F074-04B-CORE-SCENARIO-STARTUP unchanged. Claim Source: executed (build+vet RC=0)."      },
+        "summary": "Portfolio simplify pass (065/066/067/069/074/075). Static scan: go build ./... RC=0 + go vet ./... RC=0 across the full module. Review-only, no behavioral fixes applied — no trivial duplication, dead code, or efficiency hotspots surfaced inside the scope-isolated change boundaries of the in-flight scopes. Foreign blocker F074-04B-CORE-SCENARIO-STARTUP unchanged. Claim Source: executed (build+vet RC=0)."
+      },
       {
         "agent": "bubbles.security",
         "phase": "security",
@@ -142,6 +170,42 @@
         "runCompletedAt": "2026-06-02T05:45:00Z",
         "evidenceRef": "report.md#security-pass-bubblessecurity-2026-06-02",
         "summary": "Code-inspection security audit of HTTP transport surface (internal/assistant/httpadapter/adapter.go, middleware.go, schema.go). Confirmed: assistant HTTP routes are mounted INSIDE the bearer-auth group (middleware.go comments + adapter.go line 83 sources userID from bearer context); no body-identity IDOR. Schema parses with json tag validation and required-field checks (schema.go). CORS+real-IP+request-id middleware composed correctly. No hardcoded secrets/tokens in adapter code. PASETO session path documented as out-of-scope for this branch. OWASP A01/A03/A05/A07: no findings on changed code. Claim Source: interpreted (static code review; live-stack e2e blocked by F074-04B). Verdict: SECURE."
+      },
+      {
+        "agent": "bubbles.regression",
+        "phase": "regression",
+        "claimedAt": "2026-06-02T06:00:00Z",
+        "runStartedAt": "2026-06-02T05:55:00Z",
+        "runCompletedAt": "2026-06-02T06:00:00Z",
+        "evidenceRef": "report.md#regression-evidence--bubblesregression-2026-06-02",
+        "summary": "Cross-spec regression pass across in-flight specs 074/075/069/065/066/067 at HEAD 3864e385. go build ./... RC=0. Touched assistant packages including internal/assistant/httpadapter all PASS. F061-SCENARIO-MISSING scenario-loader failures are pre-existing foreign-blocker already documented in this spec's prior bubbles.test claim — baseline ≡ HEAD, delta = 0, NO NEW REGRESSION. This spec remains the sink for routed F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA (SCOPE-1d in flight); no new collisions or contract breaks. Design coherent. Coverage stable; no tests deleted/skipped/weakened. No deployment-surface diff. Verdict: REGRESSION_FREE for spec 069. Claim Source: executed (build+go test RC=0; outputs in /tmp/reg-build.log + /tmp/reg-units.log) / not-run (live-stack — pre-existing foreign-blocker baseline). HEAD unchanged."
+      },
+      {
+        "agent": "bubbles.chaos",
+        "phase": "chaos",
+        "claimedAt": "2026-06-02T07:00:00Z",
+        "runStartedAt": "2026-06-02T06:50:00Z",
+        "runCompletedAt": "2026-06-02T07:00:00Z",
+        "evidenceRef": "report.md#chaos-evidence--bubbleschaos-2026-06-02",
+        "summary": "Authored internal/assistant/httpadapter/chaos_069_test.go (TestChaos069): seeded-PRNG (seed=0x6900D5EED069) httptest probe suite firing 150 randomized POSTs at the real HTTPAdapter via an in-process httptest.NewServer with an injected SessionSourceSharedToken. Probe mix spans valid text/confirm/disambig/reset turns, malformed JSON, bad schema_version, unknown transport_hint values, and a 32 KiB giant-body payload; stub facade randomly returns errors 10% of the time to exercise the 500 path. Asserted: no transport-level failures (no panics escape), every response is a valid TurnResponse envelope with schema_version='v1' and transport='web', and every 5xx carries a stable non-empty ErrorCause token with no internals leakage markers (goroutine/panic/runtime error/absolute paths/stack frames). Result: 2xx=122 4xx=16 5xx=12 envelopeFail=0 facadeCalls=134 facadeErrs=12 over 150 probes; RC=0; PASS in 0.19s. No new findings. Claim Source: executed (go test ./internal/assistant/httpadapter/ -run TestChaos069 -count=1 -v RC=0; raw output captured in report.md#chaos-evidence--bubbleschaos-2026-06-02)."
+      },
+      {
+        "agent": "bubbles.gaps",
+        "phase": "gaps",
+        "claimedAt": "2026-08-04T01:30:00Z",
+        "runStartedAt": "2026-08-04T01:05:00Z",
+        "runCompletedAt": "2026-08-04T01:30:00Z",
+        "evidenceRef": "report.md#gaps-evidence--bubblesgaps-2026-08-04",
+        "summary": "Spec/design vs implementation gap audit at HEAD 33f0af7f. Executed ./smackerel.sh test unit --go (145 ok packages, 0 FAIL, EXIT=0; internal/assistant/httpadapter + intent/policyguard + transportconfig all PASS). Verified MATCH: httpadapter package present; route POST /api/assistant/turn wired at internal/api/router.go:99; 8 required assistant.transports.http.* SST keys present in config/smackerel.yaml:1336-1344 AND enforced fail-loud via 9 REQUIRED entries in internal/assistant/transportconfig/http.go (Hard Constraint 3); golden contract test is substantive (exact key-set + reflect.DeepEqual + RenderJSON/Validate round-trip, 3 testdata fixtures); spec-067 transport-branch policy guard present with 3 test mirrors; all 11 SCN-069-A01..A11 IDs trace to >=1 test file; all 11 design-declared test locations exist on disk; 6/7 design error codes emitted. 3 findings: GAP-069-G01 (PARTIAL, -> bubbles.test) tests/e2e/assistant/http_capture_test.go:72,106 bail out via behavior-conditional t.Skipf on !env.CaptureRoute, bypassing every SCN-069-A06 live-stack assertion — degraded not unverified, since the 'exactly once' clause is hard-asserted at internal/assistant/httpadapter/dedup_test.go:202; GAP-069-G02 (MISSING, -> bubbles.implement) all 4 design.md Observability metrics have 0 non-test occurrences and repo metrics use literal Name: strings so absence is genuine, though these metrics are NOT in spec.md §6 acceptance criteria (design-vs-implementation only); GAP-069-G03 (DIVERGENT, -> bubbles.design) design error table declares auth_invalid which appears 0 times repo-wide, adapter.go:365 emits auth_required for both missing and invalid tokens while SCN-069-A02 stays satisfied. Verdict: MINOR_GAPS_REMAIN — no delivered §6 acceptance criterion invalidated. No spec.md/design.md/scopes.md/uservalidation.md or certification field written (gaps is diagnostic). Claim Source: executed (unit RC=0 + verbatim contract greps in report.md) / not-run (live-stack SCN-069-A06 branch — CORE_EXTERNAL_URL unset; G01 established by static control-flow read). No source or test files modified."
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "phase": "stabilize",
+        "completedAt": "2026-06-02T04:35:00Z",
+        "runStartedAt": "2026-06-02T04:33:00Z",
+        "runCompletedAt": "2026-06-02T04:35:00Z",
+        "evidenceRef": "report.md#stabilize-pass-bubblesstabilize-2026-06-02",
+        "summary": "Portfolio stabilize sweep (065/066/067/069/074/075). go build ./... RC=0 + go vet ./... RC=0. Assistant HTTP transport compiles without diagnostics. Pre-existing SCOPE-1d test-infra blocker and 19 remaining delivery-tier guard blockers documented in prior implement claim remain owned by their phases. Planning-tier guard blockers cleared in prior run remain cleared. Verdict: PARTIALLY_STABLE."
       },
       {
         "agent": "bubbles.spec-review",
@@ -160,33 +224,6 @@
         "runCompletedAt": "2026-06-02T06:30:00Z",
         "evidenceRef": "report.md#docs-phase-bubblesdocs-2026-06-02",
         "summary": "Docs phase for spec 069. Scrubbed superseded deferral framing on three routed findings (F-069-ADAPTER-NOT-BOUND, F-069-USERID-BINDING, F074-04B-ASSISTANT-HTTP-LATE-BIND) — all re-annotated CLOSED 2026-06-02 by Scope 2 with pointers to the live TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse PASS proof. Historical narrative inside the Scope 1d block preserved unchanged. One legitimate non-goal (live canary) left intact with the in-process http_adapter_canary_test.go coverage rationale. Managed-doc accuracy verified: docs/Architecture.md, docs/Operations.md, docs/Development.md references to POST /api/assistant/turn are current. Claim Source: executed (in-process re-annotation of 3 finding labels in report.md; grep-verified Scope 2 PASS evidence present below the labels)."
-      },
-      {
-        "agent": "bubbles.chaos",
-        "phase": "chaos",
-        "claimedAt": "2026-06-02T07:00:00Z",
-        "runStartedAt": "2026-06-02T06:50:00Z",
-        "runCompletedAt": "2026-06-02T07:00:00Z",
-        "evidenceRef": "report.md#chaos-evidence--bubbleschaos-2026-06-02",
-        "summary": "Authored internal/assistant/httpadapter/chaos_069_test.go (TestChaos069): seeded-PRNG (seed=0x6900D5EED069) httptest probe suite firing 150 randomized POSTs at the real HTTPAdapter via an in-process httptest.NewServer with an injected SessionSourceSharedToken. Probe mix spans valid text/confirm/disambig/reset turns, malformed JSON, bad schema_version, unknown transport_hint values, and a 32 KiB giant-body payload; stub facade randomly returns errors 10% of the time to exercise the 500 path. Asserted: no transport-level failures (no panics escape), every response is a valid TurnResponse envelope with schema_version='v1' and transport='web', and every 5xx carries a stable non-empty ErrorCause token with no internals leakage markers (goroutine/panic/runtime error/absolute paths/stack frames). Result: 2xx=122 4xx=16 5xx=12 envelopeFail=0 facadeCalls=134 facadeErrs=12 over 150 probes; RC=0; PASS in 0.19s. No new findings. Claim Source: executed (go test ./internal/assistant/httpadapter/ -run TestChaos069 -count=1 -v RC=0; raw output captured in report.md#chaos-evidence--bubbleschaos-2026-06-02)."
-      },
-      {
-        "agent": "bubbles.regression",
-        "phase": "regression",
-        "claimedAt": "2026-06-02T06:00:00Z",
-        "runStartedAt": "2026-06-02T05:55:00Z",
-        "runCompletedAt": "2026-06-02T06:00:00Z",
-        "evidenceRef": "report.md#regression-evidence--bubblesregression-2026-06-02",
-        "summary": "Cross-spec regression pass across in-flight specs 074/075/069/065/066/067 at HEAD 3864e385. go build ./... RC=0. Touched assistant packages including internal/assistant/httpadapter all PASS. F061-SCENARIO-MISSING scenario-loader failures are pre-existing foreign-blocker already documented in this spec's prior bubbles.test claim — baseline ≡ HEAD, delta = 0, NO NEW REGRESSION. This spec remains the sink for routed F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA (SCOPE-1d in flight); no new collisions or contract breaks. Design coherent. Coverage stable; no tests deleted/skipped/weakened. No deployment-surface diff. Verdict: REGRESSION_FREE for spec 069. Claim Source: executed (build+go test RC=0; outputs in /tmp/reg-build.log + /tmp/reg-units.log) / not-run (live-stack — pre-existing foreign-blocker baseline). HEAD unchanged."
-      },
-      {
-        "agent": "bubbles.gaps",
-        "phase": "gaps",
-        "claimedAt": "2026-08-04T01:30:00Z",
-        "runStartedAt": "2026-08-04T01:05:00Z",
-        "runCompletedAt": "2026-08-04T01:30:00Z",
-        "evidenceRef": "report.md#gaps-evidence--bubblesgaps-2026-08-04",
-        "summary": "Spec/design vs implementation gap audit at HEAD 33f0af7f. Executed ./smackerel.sh test unit --go (145 ok packages, 0 FAIL, EXIT=0; internal/assistant/httpadapter + intent/policyguard + transportconfig all PASS). Verified MATCH: httpadapter package present; route POST /api/assistant/turn wired at internal/api/router.go:99; 8 required assistant.transports.http.* SST keys present in config/smackerel.yaml:1336-1344 AND enforced fail-loud via 9 REQUIRED entries in internal/assistant/transportconfig/http.go (Hard Constraint 3); golden contract test is substantive (exact key-set + reflect.DeepEqual + RenderJSON/Validate round-trip, 3 testdata fixtures); spec-067 transport-branch policy guard present with 3 test mirrors; all 11 SCN-069-A01..A11 IDs trace to >=1 test file; all 11 design-declared test locations exist on disk; 6/7 design error codes emitted. 3 findings: GAP-069-G01 (PARTIAL, -> bubbles.test) tests/e2e/assistant/http_capture_test.go:72,106 bail out via behavior-conditional t.Skipf on !env.CaptureRoute, bypassing every SCN-069-A06 live-stack assertion — degraded not unverified, since the 'exactly once' clause is hard-asserted at internal/assistant/httpadapter/dedup_test.go:202; GAP-069-G02 (MISSING, -> bubbles.implement) all 4 design.md Observability metrics have 0 non-test occurrences and repo metrics use literal Name: strings so absence is genuine, though these metrics are NOT in spec.md §6 acceptance criteria (design-vs-implementation only); GAP-069-G03 (DIVERGENT, -> bubbles.design) design error table declares auth_invalid which appears 0 times repo-wide, adapter.go:365 emits auth_required for both missing and invalid tokens while SCN-069-A02 stays satisfied. Verdict: MINOR_GAPS_REMAIN — no delivered §6 acceptance criterion invalidated. No spec.md/design.md/scopes.md/uservalidation.md or certification field written (gaps is diagnostic). Claim Source: executed (unit RC=0 + verbatim contract greps in report.md) / not-run (live-stack SCN-069-A06 branch — CORE_EXTERNAL_URL unset; G01 established by static control-flow read). No source or test files modified."
       }
     ],
     "completedScopes": [
@@ -201,7 +238,10 @@
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
-        "phasesExecuted": ["analyze", "bootstrap"],
+        "phasesExecuted": [
+          "analyze",
+          "bootstrap"
+        ],
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-05-31T00:00:00Z",
@@ -210,7 +250,10 @@
       },
       {
         "agent": "bubbles.design",
-        "phasesExecuted": ["bootstrap", "design"],
+        "phasesExecuted": [
+          "bootstrap",
+          "design"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-05-31T17:40:14Z",
@@ -219,7 +262,10 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["bootstrap", "plan"],
+        "phasesExecuted": [
+          "bootstrap",
+          "plan"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-05-31T00:30:00Z",
@@ -228,7 +274,9 @@
       },
       {
         "agent": "bubbles.analyst",
-        "phasesExecuted": ["reconcile"],
+        "phasesExecuted": [
+          "reconcile"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-05-31T22:00:00Z",
@@ -237,7 +285,9 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["plan"],
+        "phasesExecuted": [
+          "plan"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-05-31T23:30:00Z",
@@ -246,7 +296,9 @@
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-06-01T20:00:00Z",
@@ -255,16 +307,20 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["plan"],
+        "phasesExecuted": [
+          "plan"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-06-01T23:30:00Z",
         "runCompletedAt": "2026-06-01T23:45:00Z",
-        "summary": "Rework planning: added SCOPE-1d 'HTTPAdapter Construction and LateBound Binding' for finding F-069-ADAPTER-NOT-BOUND. Root cause: cmd/core/wiring_assistant_facade.go::wireAssistantFacade only constructs the Telegram assistant_adapter and never calls httpadapter.NewHTTPAdapter or svc.assistantHTTPHandler.SetAdapter/SetMiddleware, so every live POST /api/assistant/turn returns HTTP 503. This blocks every live-stack e2e/integration row in Scopes 1\u20135 (surfaced as spec 074 F074-04B-ASSISTANT-HTTP-LATE-BIND test-infra finding). Planning artifacts updated: scopes.md (new Scope 1d detail, scope inventory row, validation checkpoint, Scope 2 dependency bumped to include 1d), scenario-manifest.json (SCN-069-A12 traceability + scenarios entry with findingRefs to F-069-ADAPTER-NOT-BOUND and F074-04B-ASSISTANT-HTTP-LATE-BIND auto-resolution), test-plan.json (SCOPE-1d test rows incl. canary + regression re-assertion), uservalidation.md baseline extended, currentScope set to SCOPE-1d. No source, tests, or docs touched. Returning route_required to dispatch bubbles.implement for SCOPE-1d execution."
+        "summary": "Rework planning: added SCOPE-1d 'HTTPAdapter Construction and LateBound Binding' for finding F-069-ADAPTER-NOT-BOUND. Root cause: cmd/core/wiring_assistant_facade.go::wireAssistantFacade only constructs the Telegram assistant_adapter and never calls httpadapter.NewHTTPAdapter or svc.assistantHTTPHandler.SetAdapter/SetMiddleware, so every live POST /api/assistant/turn returns HTTP 503. This blocks every live-stack e2e/integration row in Scopes 1–5 (surfaced as spec 074 F074-04B-ASSISTANT-HTTP-LATE-BIND test-infra finding). Planning artifacts updated: scopes.md (new Scope 1d detail, scope inventory row, validation checkpoint, Scope 2 dependency bumped to include 1d), scenario-manifest.json (SCN-069-A12 traceability + scenarios entry with findingRefs to F-069-ADAPTER-NOT-BOUND and F074-04B-ASSISTANT-HTTP-LATE-BIND auto-resolution), test-plan.json (SCOPE-1d test rows incl. canary + regression re-assertion), uservalidation.md baseline extended, currentScope set to SCOPE-1d. No source, tests, or docs touched. Returning route_required to dispatch bubbles.implement for SCOPE-1d execution."
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["plan"],
+        "phasesExecuted": [
+          "plan"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-06-01T23:55:00Z",
@@ -273,7 +329,9 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["plan"],
+        "phasesExecuted": [
+          "plan"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-06-02T04:15:00Z",
@@ -282,7 +340,9 @@
       },
       {
         "agent": "bubbles.stabilize",
-        "phasesExecuted": ["stabilize"],
+        "phasesExecuted": [
+          "stabilize"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-06-02T04:33:00Z",
@@ -291,13 +351,129 @@
       },
       {
         "agent": "bubbles.spec-review",
-        "phasesExecuted": ["spec-review"],
+        "phasesExecuted": [
+          "spec-review"
+        ],
         "reviewStatus": "CURRENT",
         "statusBefore": "done",
         "statusAfter": "done",
         "runStartedAt": "2026-06-06T17:00:00Z",
         "runEndedAt": "2026-06-06T17:00:00Z",
         "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits to THIS spec: 7ffa38fd (2026-06-02T14:05Z convergence-cleanup close-out; faithful cert ts 08:00Z was recorded earlier than this close-out commit; the diff flipped all 7 scopes from Not Started/In Progress to Done and flipped previously-blocked DoD from [ ] to [x] with report.md evidence; the HTTP-200 success-path obligation F-069-USERID-BINDING was re-homed to SCOPE-2 which landed in the same close-out; category a). No post-promotion requirement/scenario/DoD semantic change; current scopes.md has 0 non-Done scopes and 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": [
+          "test"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T04:38:00Z",
+        "runCompletedAt": "2026-06-02T04:40:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.test and its evidence is recorded at report.md#test-evidence--bubblestest-2026-06-02, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Spec-069 unit tests executed at HEAD 3864e385: go test -count=1 ./internal/assistant/httpadapter/... ./internal/assistant/intent/policyguard/... RC=0 (HTTP adapter contract, transport-hint, golden contract, policyguard transport-branch all pass). Note: internal/config also exercised; one unrelated pre-existing failure observed (TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001) owned by "
+      },
+      {
+        "agent": "bubbles.simplify",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T05:25:00Z",
+        "runCompletedAt": "2026-06-02T05:30:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.simplify and its evidence is recorded at report.md#simplify-pass--bubblessimplify-2026-06-02, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Portfolio simplify pass (065/066/067/069/074/075). Static scan: go build ./... RC=0 + go vet ./... RC=0 across the full module. Review-only, no behavioral fixes applied — no trivial duplication, dead code, or efficiency hotspots surfaced inside the scope-isolated change boundaries of the in-flight scopes. Foreign blocker F074-04B-CORE-SCENARIO-STARTUP unchanged. Claim Source: executed (build+vet R"
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": [
+          "security"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T05:40:00Z",
+        "runCompletedAt": "2026-06-02T05:45:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.security and its evidence is recorded at report.md#security-pass-bubblessecurity-2026-06-02, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Code-inspection security audit of HTTP transport surface (internal/assistant/httpadapter/adapter.go, middleware.go, schema.go). Confirmed: assistant HTTP routes are mounted INSIDE the bearer-auth group (middleware.go comments + adapter.go line 83 sources userID from bearer context); no body-identity IDOR. Schema parses with json tag validation and required-field checks (schema.go). CORS+real-IP+re"
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": [
+          "docs"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T06:20:00Z",
+        "runCompletedAt": "2026-06-02T06:30:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.docs and its evidence is recorded at report.md#docs-phase-bubblesdocs-2026-06-02, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Docs phase for spec 069. Scrubbed superseded deferral framing on three routed findings (F-069-ADAPTER-NOT-BOUND, F-069-USERID-BINDING, F074-04B-ASSISTANT-HTTP-LATE-BIND) — all re-annotated CLOSED 2026-06-02 by Scope 2 with pointers to the live TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse PASS proof. Historical narrative inside the Scope 1d block preserved unchanged. One legitimate non-g"
+      },
+      {
+        "agent": "bubbles.chaos",
+        "phasesExecuted": [
+          "chaos"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T06:50:00Z",
+        "runCompletedAt": "2026-06-02T07:00:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.chaos and its evidence is recorded at report.md#chaos-evidence--bubbleschaos-2026-06-02, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Authored internal/assistant/httpadapter/chaos_069_test.go (TestChaos069): seeded-PRNG (seed=0x6900D5EED069) httptest probe suite firing 150 randomized POSTs at the real HTTPAdapter via an in-process httptest.NewServer with an injected SessionSourceSharedToken. Probe mix spans valid text/confirm/disambig/reset turns, malformed JSON, bad schema_version, unknown transport_hint values, and a 32 KiB gi"
+      },
+      {
+        "agent": "bubbles.regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T05:55:00Z",
+        "runCompletedAt": "2026-06-02T06:00:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.regression and its evidence is recorded at report.md#regression-evidence--bubblesregression-2026-06-02, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Cross-spec regression pass across in-flight specs 074/075/069/065/066/067 at HEAD 3864e385. go build ./... RC=0. Touched assistant packages including internal/assistant/httpadapter all PASS. F061-SCENARIO-MISSING scenario-loader failures are pre-existing foreign-blocker already documented in this spec's prior bubbles.test claim — baseline ≡ HEAD, delta = 0, NO NEW REGRESSION. This spec remains the"
+      },
+      {
+        "agent": "bubbles.gaps",
+        "phasesExecuted": [
+          "gaps"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-08-04T01:05:00Z",
+        "runCompletedAt": "2026-08-04T01:30:00Z",
+        "summary": "Ledger reconciliation 2026-08-28: this phase was executed by bubbles.gaps and its evidence is recorded at report.md#gaps-evidence--bubblesgaps-2026-08-04, but executionHistory never carried the matching entry. The entry is reconstructed from the phase claim already present in this same file (agent, timestamps, evidenceRef) and from the named report section. No new execution is claimed. Original summary: Spec/design vs implementation gap audit at HEAD 33f0af7f. Executed ./smackerel.sh test unit --go (145 ok packages, 0 FAIL, EXIT=0; internal/assistant/httpadapter + intent/policyguard + transportconfig all PASS). Verified MATCH: httpadapter package present; route POST /api/assistant/turn wired at internal/api/router.go:99; 8 required assistant.transports.http.* SST keys present in config/smackerel."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Ledger reconciliation 2026-08-28: 'validate' appears in certification.certifiedCompletedPhases and has an agent-attributed evidence section in report.md (line 581, '## Validation Evidence (bubbles.validate, 2026-06-02)'), but neither execution.completedPhaseClaims nor executionHistory carried an entry for it. This entry mirrors the existing report evidence. No new execution is claimed; evidenceRef=report.md#validation-evidence-bubblesvalidate-2026-06-02 Exact run start/end times are NOT recoverable from the evidence section - only the date - so no duration is asserted here rather than inventing one."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Ledger reconciliation 2026-08-28: 'audit' appears in certification.certifiedCompletedPhases and has an agent-attributed evidence section in report.md (line 608, '### Audit Evidence' with 'Phase Agent: bubbles.audit'), but neither execution.completedPhaseClaims nor executionHistory carried an entry for it. This entry mirrors the existing report evidence. No new execution is claimed; evidenceRef=report.md#audit-evidence Exact run start/end times are NOT recoverable from the evidence section - only the date - so no duration is asserted here rather than inventing one."
+      },
+      {
+        "agent": "bubbles.harden",
+        "phasesExecuted": [
+          "harden"
+        ],
+        "provenanceMode": "specialist",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Ledger reconciliation 2026-08-28: 'harden' appears in certification.certifiedCompletedPhases and has an agent-attributed evidence section in report.md (line 748, '## Harden Evidence — bubbles.harden (2026-08-04)'), but neither execution.completedPhaseClaims nor executionHistory carried an entry for it. This entry mirrors the existing report evidence. No new execution is claimed; evidenceRef=report.md#harden-evidence--bubblesharden-2026-08-04 Exact run start/end times are NOT recoverable from the evidence section - only the date - so no duration is asserted here rather than inventing one."
       }
     ]
   }
