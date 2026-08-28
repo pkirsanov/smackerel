@@ -73,6 +73,7 @@ Scenario: adding a scenario yields a new capability entry with no hand edit
 - [x] Auto-derived facets require zero hand-maintenance (adding a scenario/command/recipe updates the corpus) → derivation reads the live SSTs, no hardcoded list (Evidence: report.md#scope-2)
 - [x] Malformed SST fails loud at derive time (no silent empty corpus) → `LoadSkillsManifest` is fail-loud; `TestDerive_NilManifest` covers the nil guard (Evidence: report.md#scope-2)
 - [x] Unit tests pass against the real committed SSTs → `ok .../internal/assistant/selfknowledge 0.017s` (loads real `config/assistant/scenarios.yaml`) (Evidence: report.md#scope-2)
+- [x] Adding a scenario yields a new capability entry with no hand edit — `TestDerive_FromRealScenariosYAML` derives `CapabilityEntry{kind:scenario, id:"scenario:open_knowledge"}` from the live `config/assistant/scenarios.yaml`, carrying its `user_facing_label`, `description` and `slash_shortcut`; no hand-maintained list is consulted, so a newly-added scenario appears without editing this spec's code (Evidence: report.md#scope-2)
 - [x] Build Quality Gate clean → module compiles; `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-2)
 
 ---
@@ -167,6 +168,7 @@ Scenario: the "how does smackerel work" overview is ingested and answerable
 - [x] Bounded, config-declared doc-section allow-list → chunked capability entries → `curatedDocSections` + embedded `corpus/product_overview.md` → `DocCorpus.Entries()` (Evidence: report.md#scope-5)
 - [x] Missing/renamed anchor fails loud (no silent drop) → `TestExtractDocSection_MissingAnchorFailsLoud` + `TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud` (Evidence: report.md#scope-5)
 - [x] Tests pass → `ok .../internal/assistant/selfknowledge 0.012s` (Evidence: report.md#scope-5)
+- [x] The "how does smackerel work" overview is ingested and answerable — `TestDocCorpus_Entries_FromEmbeddedOverview` proves the embedded `corpus/product_overview.md` yields corpus entries, and `TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud` proves a declared anchor missing from the markdown fails loud rather than silently answering from an empty overview (Evidence: report.md#scope-5)
 - [x] Build Quality Gate clean → embedded (docs-less image safe); `gofmt -l` empty; 0 warnings (Evidence: report.md#scope-5)
 
 ---
@@ -258,4 +260,5 @@ Scenario: live /ask about smackerel answers with citations
 - [x] E2E meta-question flow passes on the ephemeral stack (cited answer) → `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` + `_AskUngroundable_RefusesHonestly_E2E` PASS (Evidence: report.md#scope-8)
 - [x] Built + signed with the cosign identity managed by `<operator>` + deployed through `<target>` on `<deploy-host>`; running digests healthy; corpus ingested (verified) → core sha256:3b6261a9… + ml sha256:25f36dc5… running/healthy/0-restarts; 13 smackerel_self artifacts ingested (Evidence: report.md#scope-8)
 - [x] `<operator>` behavioral smoke test recorded (or noted operator-only) → noted operator-only (agent cannot send Telegram; the deployed HTTP surface needs PASETO); behavior e2e-proven + deploy-verified (Evidence: report.md#scope-8)
+- [x] Live `/ask` about smackerel answers with citations — `TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E` drives a meta-question through the running ephemeral stack and asserts the answer carries `smackerel_self` sources; its sibling `TestSelfKnowledge_AskUngroundable_RefusesHonestly_E2E` pins the negative half, so a refusal cannot be mistaken for a cited answer (Evidence: report.md#scope-8)
 - [x] Build Quality Gate clean → module compiles; format clean; Trivy gate passed in the signed build (Evidence: report.md#scope-8)
