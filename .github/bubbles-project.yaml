@@ -89,3 +89,21 @@ traceContracts:
 # is gitignored. Onboarding + reversal: docs/CodeIndex-Onboarding.md
 codeIndex:
   adapter: codegraph
+
+# Test-leaf receipts (IMP-040). Turned ON with the framework-shipped `jsonl`
+# adapter, which EARNS a receipt by running the leaf and recording the observed
+# exit code and output hash — no project harness is required for this adapter.
+#
+# Enabled because this repository has scenario-bearing packets whose completion
+# basis is REQUIRED SCENARIO STATES. With `adapter: none` every scenario stays
+# PLANNED regardless of how much real testing happened, so the scenario-state
+# resolver cannot distinguish "tested and green" from "never run" — which is
+# exactly the unearned-confidence condition the receipt model exists to remove.
+#
+# This does NOT enable mutation receipts. `mutationExecution` stays absent, so
+# it resolves to the neutral `none` adapter and reports `unmeasured` rather than
+# a survival count of zero. That is the honest state: smackerel ships no
+# project-owned mutation harness, and claiming a measured zero without a runner
+# would be the precise fabrication the neutral adapter was designed to prevent.
+testLeafReceipts:
+  adapter: jsonl
