@@ -27,14 +27,54 @@
     "namespace": "artifacts.source_id = 'smackerel_self'"
   },
   "scopes": [
-    { "id": "scope-01", "title": "General embedding-backed namespace SemanticSearcher", "status": "done", "priority": "P0" },
-    { "id": "scope-02", "title": "Self-knowledge corpus derivation (fresh-by-construction)", "status": "done", "priority": "P0" },
-    { "id": "scope-03", "title": "Self-knowledge ingestion + smackerel_self namespace + boot lifecycle", "status": "done", "priority": "P0" },
-    { "id": "scope-04", "title": "self_knowledge tool + allowlist + planner routing", "status": "done", "priority": "P0" },
-    { "id": "scope-05", "title": "Product-doc corpus source (features/use-cases/overview)", "status": "done", "priority": "P1" },
-    { "id": "scope-06", "title": "/help human twin (shared corpus)", "status": "done", "priority": "P1" },
-    { "id": "scope-07", "title": "Trust integration + honest-fallback (cite-back/provenance)", "status": "done", "priority": "P0" },
-    { "id": "scope-08", "title": "E2E + deploy + verify", "status": "done", "priority": "P0" }
+    {
+      "id": "scope-01",
+      "title": "General embedding-backed namespace SemanticSearcher",
+      "status": "done",
+      "priority": "P0"
+    },
+    {
+      "id": "scope-02",
+      "title": "Self-knowledge corpus derivation (fresh-by-construction)",
+      "status": "done",
+      "priority": "P0"
+    },
+    {
+      "id": "scope-03",
+      "title": "Self-knowledge ingestion + smackerel_self namespace + boot lifecycle",
+      "status": "done",
+      "priority": "P0"
+    },
+    {
+      "id": "scope-04",
+      "title": "self_knowledge tool + allowlist + planner routing",
+      "status": "done",
+      "priority": "P0"
+    },
+    {
+      "id": "scope-05",
+      "title": "Product-doc corpus source (features/use-cases/overview)",
+      "status": "done",
+      "priority": "P1"
+    },
+    {
+      "id": "scope-06",
+      "title": "/help human twin (shared corpus)",
+      "status": "done",
+      "priority": "P1"
+    },
+    {
+      "id": "scope-07",
+      "title": "Trust integration + honest-fallback (cite-back/provenance)",
+      "status": "done",
+      "priority": "P0"
+    },
+    {
+      "id": "scope-08",
+      "title": "E2E + deploy + verify",
+      "status": "done",
+      "priority": "P0"
+    }
   ],
   "completedScopes": [
     "scope-01",
@@ -108,7 +148,17 @@
     ],
     "pendingGates": [
       "operator live Telegram behavioral smoke test (operator-only: agent cannot send Telegram; prod assistant HTTP requires a per-user PASETO token). Behavior is e2e-proven at the agent/facade layer + deploy-verified with the corpus live."
-    ]
+    ],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 8,
+      "notStarted": 0,
+      "inProgress": 0,
+      "done": 8,
+      "blocked": 0
+    },
+    "lockdownState": "n/a-no-locked-scenarios",
+    "certifiedCompletedPhasesNote": "Deliberately EMPTY. G056 requires the field to be present; G022 requires every listed phase to carry specialist provenance. The 15 names in completedPhases have no recorded agent provenance, so listing them here is phase impersonation - precisely what G022 exists to catch. An empty list is the honest value until each phase is re-executed through its owning specialist and its provenance recorded."
   },
   "nextRequiredOwner": "operator (live Telegram /ask 'what can you do?' smoke test; agent-side work 100% complete + deployed + verified)",
   "relatedSpecs": [
