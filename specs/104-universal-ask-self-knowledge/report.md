@@ -21,6 +21,59 @@ Planning complete (analyze + design + plan). Implementation pending: scopes 1–
 dependency order (searcher → corpus → ingest → tool → doc source → /help twin →
 trust integration → e2e + deploy).
 
+### RED→GREEN mutation proof (Gate G060)
+
+The delivery commits predate this record, so rather than assert an unwitnessed
+red phase, the red was produced NOW by mutation — which proves the stronger
+claim the gate is actually after: that the test binds the behaviour and would
+fail if the behaviour regressed.
+
+RED: ran `go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher` before restoring the guard
+test result: FAILED. 0 passed; 2 failed
+
+**RED** — the namespace guard in `semantic_searcher.go` replaced with a silent
+default (`namespace = "smackerel_self"`), i.e. exactly the fallback the design
+forbids:
+
+```text
+$ go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher
+--- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit (0.00s)
+    --- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_namespace (0.00s)
+        semantic_searcher_test.go:35: pool.Query must not be reached on a validation/embed-error path
+    --- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/blank_namespace (0.00s)
+        semantic_searcher_test.go:35: pool.Query must not be reached on a validation/embed-error path
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/assistant/openknowledge/tools    0.022s
+Exit Code: 1
+```
+
+GREEN: ran `go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher` after restoring the guard
+test result: ok. 11 passed; 0 failed
+
+**GREEN** — guard restored, source byte-identical to HEAD
+(`git diff --stat` on the file is empty):
+
+```text
+$ go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher -v
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_namespace
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/blank_namespace
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_query
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/blank_query
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/k_zero
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/k_negative
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/k_over_max
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/embedder_error
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/nil_embedding
+=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_embedding_slice
+--- PASS: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit (0.00s)
+Exit Code: 0
+```
+
+The mutation is not committed; it existed only between the two runs above.
+
+---
+
 ## Test Evidence
 
 ### Scope 1 — general embedding-backed namespace SemanticSearcher {#scope-1}
@@ -279,59 +332,6 @@ remaining operator item is narrowed to a final live-prod confirmation on the
 deployed bot.
 
 ---
-
----
-
-### RED→GREEN mutation proof (Gate G060)
-
-The delivery commits predate this record, so rather than assert an unwitnessed
-red phase, the red was produced NOW by mutation — which proves the stronger
-claim the gate is actually after: that the test binds the behaviour and would
-fail if the behaviour regressed.
-
-RED: ran `go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher` before restoring the guard
-test result: FAILED. 0 passed; 2 failed
-
-**RED** — the namespace guard in `semantic_searcher.go` replaced with a silent
-default (`namespace = "smackerel_self"`), i.e. exactly the fallback the design
-forbids:
-
-```text
-$ go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher
---- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit (0.00s)
-    --- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_namespace (0.00s)
-        semantic_searcher_test.go:35: pool.Query must not be reached on a validation/embed-error path
-    --- FAIL: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/blank_namespace (0.00s)
-        semantic_searcher_test.go:35: pool.Query must not be reached on a validation/embed-error path
-FAIL
-FAIL    github.com/smackerel/smackerel/internal/assistant/openknowledge/tools    0.022s
-Exit Code: 1
-```
-
-GREEN: ran `go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher` after restoring the guard
-test result: ok. 11 passed; 0 failed
-
-**GREEN** — guard restored, source byte-identical to HEAD
-(`git diff --stat` on the file is empty):
-
-```text
-$ go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher -v
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_namespace
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/blank_namespace
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_query
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/blank_query
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/k_zero
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/k_negative
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/k_over_max
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/embedder_error
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/nil_embedding
-=== RUN   TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit/empty_embedding_slice
---- PASS: TestPgxSemanticSearcher_ValidationAndEmbedShortCircuit (0.00s)
-Exit Code: 0
-```
-
-The mutation is not committed; it existed only between the two runs above.
 
 ## Post-Delivery Verification Phases (Gate G022 remediation, 2026-08-28) {#g022-verification}
 
