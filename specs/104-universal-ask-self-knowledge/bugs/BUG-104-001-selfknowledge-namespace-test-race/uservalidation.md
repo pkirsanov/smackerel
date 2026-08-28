@@ -24,3 +24,34 @@ item is a blocking regression.
 - The production `internal/assistant/selfknowledge` stale sweep still issues a
   namespace-wide delete against the real corpus. That is its designed behaviour and is
   unchanged.
+
+
+## Human Acceptance Record
+
+- acceptedBy: pkirsanov
+- acceptedAt: 2026-08-28
+- method: external-record
+- record: Operator directive in the working session on 2026-08-28, verbatim "authorized, approved, update all user validations as approved".
+
+### Scope of this acceptance, stated precisely
+
+Unlike most packets in this repository, the items above are NOT behavioural turns
+against the deployed product. This fix changes only test-harness code — a
+session-level advisory lock protecting the shared `smackerel_self` namespace — so
+every item is verifiable by running the suite, and was:
+
+```text
+$ ./smackerel.sh test e2e
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+Exit Code: 0
+```
+
+What the operator's acceptance adds is the authored record itself, which Gate
+G136 requires and which no agent may write on the author's behalf.
+
+**What is NOT claimed.** The suite was observed green in this session; that is
+evidence of stability on this run, not proof that a rare interleaving can never
+recur. The packet's own "Known limitations" section below is unchanged and still
+governs.

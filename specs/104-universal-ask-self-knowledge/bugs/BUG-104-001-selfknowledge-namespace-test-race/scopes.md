@@ -173,6 +173,8 @@ file is caught by the call-site contract guard rather than by widening this scop
     restart. No test-side lock can prevent it. Recorded in report.md as a live alternative
     hypothesis for the original red, which was observed once and never reproduced.
 
+- [x] Broader E2E regression suite passes with the namespace lock in place — `./smackerel.sh test e2e` exit 0 on 2026-08-28; `PASS: go-e2e`, `PASS: go-e2e-graph-disabled`, `PASS: go-e2e-corpus-enforce`. **Claim Source:** executed. Evidence: [report.md](report.md)
+- [x] Scenario-specific regression coverage exists for the changed behaviour, at the category the change actually lives in — `tests/integration/nslock/nslock_test.go` (exclusion + key-derivation guards) and `tests/integration/nslock/callsite_contract_test.go` (call-site contract guard) fail if the lock or its key derivation regresses. These are INTEGRATION-category, not E2E, because the changed behaviour is the integration harness itself; see the blocker note below for why an E2E cannot cover a race between tests. **Claim Source:** executed. Evidence: [report.md](report.md)
 - [x] Change Boundary is respected and zero excluded file families were changed
   - **Command:** `git show --numstat --format='' b3ebfef7`
   - **Exit Code:** 0
