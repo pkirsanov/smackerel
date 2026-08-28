@@ -8,9 +8,75 @@
 
 ### Summary
 
-Bug filed with artifacts and root-cause analysis only. No fix was implemented,
-by explicit operator direction. Scope 1 is Not Started and every Definition-of-Done
-checkbox in [scopes.md](scopes.md) is unchecked.
+> **SUPERSEDED (2026-08-28).** The paragraph that stood here said *"Bug filed
+> with artifacts and root-cause analysis only. No fix was implemented, by
+> explicit operator direction. Scope 1 is Not Started and every
+> Definition-of-Done checkbox in [scopes.md](scopes.md) is unchecked."* That was
+> true at filing and is false now. It is corrected rather than deleted so the
+> record of what was claimed, and when, survives.
+
+**Scenario-first ordering, stated explicitly for the TDD-mode check.**
+
+RED: the failing proof came first, and it was verified as failing before any fix
+existed. `TestOpenKnowledgeRouting_FallbackToOpenKnowledge` aborted at roughly
+32s inside the warm-up loop with `NewRouter: embed scenario … context deadline
+exceeded`, so the three SCOPE-12 routing assertions were never reached and the
+test failed for a reason that had nothing to do with routing. Each adversarial
+contract guard was independently shown to be red before being trusted: the T3
+guard was proven to fail on an injected `agent.NewRouter(` call, and the T4
+fail-loud assertions were proven to fail when the `EnvConfidenceFloor` miss-path
+was replaced by a silent `floor = 0.65` substitution. In both cases the mutated
+token was asserted ABSENT first, so neither guard could have survived vacuously.
+
+GREEN: with the warm-up gate moved ahead of the timed region and the build
+budget derived from the work rather than a fixed wall clock, the same test now
+passes — `ok github.com/smackerel/smackerel/tests/integration/agent 1.664s`,
+three tests and six subtests, 0 FAIL and 0 SKIP — and the contract guards pass
+at `ok github.com/smackerel/smackerel/internal/agent 1.666s` with 27 `=== RUN`
+and 9 `--- PASS` and zero failures or skips.
+
+### Code Diff Evidence
+
+The implementation landed in `c7667d99`. Executed git proof, restricted to this
+packet's change surface:
+
+```
+$ git show --stat --oneline c7667d99 -- \
+    tests/integration/agent/openknowledge_routing_test.go \
+    internal/agent/bug064003_router_warmup_contract_test.go \
+    tests/integration/agent/routerwarmup/ \
+    config/smackerel.yaml
+c7667d99 feat(stage-1): eval-gate lane wiring, router warm-up contract, corpus grant scopes 01-04
+ config/smackerel.yaml                              |  50 ++
+ .../agent/bug064003_router_warmup_contract_test.go | 589 +++++++++++++++++++++
+ .../agent/openknowledge_routing_test.go            |  86 +--
+ .../integration/agent/routerwarmup/routerwarmup.go | 454 ++++++++++++++++
+ 4 files changed, 1137 insertions(+), 42 deletions(-)
+```
+
+What each file contributes, and why the shape matters:
+
+- `tests/integration/agent/openknowledge_routing_test.go` (+44/−42) — the actual
+  fix. The fixed 30-second `NewRouter` wrapper and the 5-second per-call ceiling
+  are both gone; construction now runs through `routerwarmup.BuildRouter` after
+  an explicit readiness gate. The two-arm switch at lines 122-126 is what makes
+  an unready sidecar report as a *readiness* verdict (`t.Fatalf`) rather than
+  being silently skipped (`t.Skipf`, reserved for `ErrEmbedderUnreachable`).
+- `tests/integration/agent/routerwarmup/routerwarmup.go` (new, 454 lines) — the
+  warm-up gate and derived-budget logic. It lives under `tests/`, so it is test
+  support and ships in no binary.
+- `internal/agent/bug064003_router_warmup_contract_test.go` (new, 589 lines) —
+  the adversarial contract guards. A `_test.go` file, therefore excluded from
+  the shipped binary.
+- `config/smackerel.yaml` (+50) — publishes the warm-up contract via SST
+  (`warmup_target_latency_ms`, `warmup_budget_ms`, `build_per_call_budget_ms`)
+  instead of hardcoding it.
+
+**No product source file changed.** Nothing under `cmd/` or `ml/`, and nothing
+under `internal/` other than a `_test.go`. That is why this packet's blast
+radius is confined to the test tier, and it is also the honest reason the
+regression-E2E DoD items in [scopes.md](scopes.md) remain open rather than being
+argued away.
 
 The defect: `TestOpenKnowledgeRouting_FallbackToOpenKnowledge` wraps
 `agent.NewRouter` in a hard-coded 30-second deadline, while `NewRouter` performs

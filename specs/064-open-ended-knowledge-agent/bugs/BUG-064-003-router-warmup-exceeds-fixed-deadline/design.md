@@ -390,3 +390,50 @@ routed back for re-scoping.
 3. **Is `weather_query` intended to carry 19 intent examples?** It is 24% of the
    total embed cost by itself. Not a defect, but it is the single largest
    contributor to warm-up time and worth a deliberate confirmation.
+
+## 6. Capability Foundation
+
+The capability is **embedder-readiness-gated router construction**: prove the ML
+sidecar's embedder has reached a warm latency target BEFORE entering any timed
+region, then size the construction budget from the amount of work rather than a
+fixed wall clock.
+
+The seam is `routerwarmup.BuildRouter`. It is deliberately narrow, and the
+narrowness is enforced rather than merely intended: the T3 contract guard FAILS
+the build if any caller reaches `agent.NewRouter` directly, which is what stops
+the warm-up gate from being quietly bypassed later. That guard was proven
+load-bearing by mutation - injecting a direct `agent.NewRouter(` call killed it
+with its own message.
+
+This is a single-capability foundation by deliberate choice; the reasoning is
+recorded in [spec.md](spec.md) under `### Single-Capability Justification`.
+
+## 7. Concrete Implementations
+
+Exactly one implementation exists today. It is listed rather than omitted so the
+count is explicit and a future second entry is an obvious diff.
+
+| # | Implementation | Location | Consumer | Status |
+|---|----------------|----------|----------|--------|
+| 1 | `routerwarmup.BuildRouter` - probes embedder latency until it qualifies against the SST warm target or the budget expires, then builds the router under a work-derived budget | `tests/integration/agent/routerwarmup/routerwarmup.go` | `tests/integration/agent/openknowledge_routing_test.go` (SCOPE-12 routing test) | Implemented, integration-verified |
+
+No second implementation is planned in this packet. A production readiness probe
+is the most plausible future second consumer, and is explicitly out of scope.
+
+### Variation Axes
+
+Variation is expressed as CONFIGURATION VALUES through SST, not as alternative
+implementations. That distinction is the reason this stays one capability.
+
+| Axis | Mechanism | SST key | Varies by |
+|------|-----------|---------|-----------|
+| Warm-latency target | value | `assistant.routing.warmup_target_latency_ms` | sidecar hardware and model size |
+| Warm-up budget | value | `assistant.routing.warmup_budget_ms` | lane time budget (dev vs CI) |
+| Per-call build budget | value | `assistant.routing.build_per_call_budget_ms` | embed-call count, which scales with `intent_examples` |
+| Readiness outcome | branch, not axis | `ErrEmbedderNotWarm` vs `ErrEmbedderUnreachable` | whether the sidecar is reachable but slow, or absent |
+
+The last row is the only true branch and the one that matters for correctness:
+an unreachable sidecar is an environment problem and skips, whereas a
+reachable-but-never-warm sidecar is a readiness verdict and fails. Collapsing
+those two into one path is precisely the defect SCN-064-003-02 guards against,
+and the distinction was proven live by fault injection rather than asserted.

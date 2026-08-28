@@ -100,3 +100,33 @@ exercises.
 AC-1 and AC-3. See [design.md](design.md) § "Option C" for the arithmetic: the
 observed runs would have required ≈79 s and ≈197 s respectively, and neither
 figure is an upper bound on cold-start cost.
+
+## 6. Capability model
+
+### Single-Capability Justification
+
+This packet introduces ONE capability - gating router construction on a measured
+embedder-readiness signal, with a build budget derived from the work rather than
+a fixed wall clock. Proportionality applies and a domain capability model is not
+warranted, for reasons that are structural rather than convenience:
+
+1. **There is one implementation and no second caller.** `routerwarmup` is
+   consumed by exactly one path, the SCOPE-12 routing test. The
+   capability-foundation pattern earns its cost at the SECOND provider or
+   variant; inventing an abstraction for a single call site would be
+   speculative generality.
+2. **No product source changed.** The change surface is one integration test,
+   one `_test.go` contract guard, one `tests/`-scoped support package, and three
+   SST keys. A capability foundation describes a shipped product seam; there is
+   no shipped seam here, because nothing under `cmd/`, `ml/`, or non-test
+   `internal/` was touched.
+3. **The variation that exists is parameterised, not branched.** Warm-up target
+   latency, warm-up budget, and per-call build budget vary by configuration
+   through SST. Varying behaviour by VALUE is what a single capability with
+   configuration looks like; it is not a set of alternative implementations
+   needing a common interface.
+
+If a second consumer appears - for example a production readiness probe needing
+the same warm-latency verdict - that is when this becomes a foundation with real
+variation axes, and the abstraction should be introduced then, against two known
+callers rather than one imagined one.

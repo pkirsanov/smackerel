@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "spec": "specs/064-open-ended-knowledge-agent/bugs/BUG-064-003-router-warmup-exceeds-fixed-deadline",
+  "generatedAt": "2026-08-28T00:00:00Z",
+  "note": "Scenario ids are recorded exactly as scopes.md declares them (SCN-064-003-NN). That four-segment form is wider than the schema's ^SCN-[A-Z0-9]+-[0-9]+$ pattern, which admits three segments. The scope's ids are kept deliberately: the DoD-to-scenario mapping that Gate G068 resolves is keyed on these literal strings, so renaming them here to satisfy the pattern would silently break the traceability this manifest exists to record. Flagged rather than quietly reconciled.",
+  "scenarios": [
+    {
+      "id": "SCN-064-003-01",
+      "scenarioId": "SCN-064-003-01",
+      "title": "cold sidecar no longer fails the routing assertions",
+      "requiredTestType": "integration",
+      "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
+      "linkedTests": [
+        "tests/integration/agent/openknowledge_routing_test.go::TestOpenKnowledgeRouting_FallbackToOpenKnowledge"
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence — T1: ok github.com/smackerel/smackerel/tests/integration/agent 1.664s, 3 tests + 6 subtests, 0 FAIL / 0 SKIP"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "riskTier": "medium"
+    },
+    {
+      "id": "SCN-064-003-02",
+      "scenarioId": "SCN-064-003-02",
+      "title": "an unready embedder reports itself as such",
+      "requiredTestType": "integration",
+      "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
+      "linkedTests": [
+        "tests/integration/agent/openknowledge_routing_test.go:125",
+        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting"
+      ],
+      "evidenceRefs": [
+        "report.md#self-correction — proven at the integration tier by fault injection: zeroing the warm-up budget at routerwarmup.go:304 produced the explicit readiness verdict via the ErrEmbedderNotWarm branch with no --- SKIP; tree restored diff_vs_HEAD=0"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "riskTier": "high"
+    },
+    {
+      "id": "SCN-064-003-03",
+      "scenarioId": "SCN-064-003-03",
+      "title": "adversarial — a reintroduced fixed wall-clock literal is rejected",
+      "requiredTestType": "unit",
+      "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
+      "linkedTests": [
+        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_RoutingTestCarriesNoWallClockLiteral"
+      ],
+      "evidenceRefs": [
+        "report.md#red-green-ordering — mutation KILLED: injecting `agent.NewRouter(` failed the guard with its own message 'calls agent.NewRouter directly; it must go through routerwarmup.BuildRouter'. Token asserted ABSENT before injection, so vacuous survival was impossible."
+      ],
+      "lockdown": { "state": "unlocked" },
+      "riskTier": "high"
+    },
+    {
+      "id": "SCN-064-003-04",
+      "scenarioId": "SCN-064-003-04",
+      "title": "adversarial — a missing SST routing value fails loud",
+      "requiredTestType": "unit",
+      "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
+      "linkedTests": [
+        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_RoutingValuesFailLoudWithoutFallback"
+      ],
+      "evidenceRefs": [
+        "report.md#red-green-ordering — mutation KILLED DISCRIMINATINGLY: replacing the EnvConfidenceFloor miss-append with `floor = 0.65` failed exactly confidence_floor_absent and confidence_floor_empty (2 of 8) while confidence_floor_unparseable, every consider_top_n_* and fallback_scenario_id_absent still passed."
+      ],
+      "lockdown": { "state": "unlocked" },
+      "riskTier": "high"
+    },
+    {
+      "id": "SCN-064-003-05",
+      "scenarioId": "SCN-064-003-05",
+      "title": "the per-call embed timeout is not stricter than SST",
+      "requiredTestType": "unit",
+      "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
+      "linkedTests": [
+        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST"
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence — T4: 6 subtests including the adversarial build_unit_above_the_sst_per_call_ceiling_is_rejected"
+      ],
+      "lockdown": { "state": "unlocked" },
+      "riskTier": "medium"
+    }
+  ]
+}

@@ -77,8 +77,9 @@ tautological and cannot detect regression.
 
 ### Test Plan
 
-Four rows. The "Test DoD items" group below contains exactly four checkboxes,
-mapping 1:1 to these rows in order.
+Five rows. The "Test DoD items" group below contains four checkboxes mapping
+1:1 to rows T1-T4 in order; T5 is a planning row whose DoD items sit in the
+"Regression E2E coverage" group and are deliberately still open.
 
 | # | Test Type | Category | File / Location | Description | Command | Live System |
 |---|-----------|----------|-----------------|-------------|---------|-------------|
@@ -86,6 +87,7 @@ mapping 1:1 to these rows in order.
 | T2 | Integration | `integration` | `tests/integration/agent/openknowledge_routing_test.go` | An embedder that never becomes ready produces an explicit readiness failure, not a routing failure (SCN-064-003-02) | `./smackerel.sh test integration --go-run 'TestOpenKnowledgeRouting'` | Yes |
 | T3 | Unit (adversarial contract guard) | `unit` | new `*_bug064003_test.go` under `internal/agent/` | Source-shape guard: FAILS if a fixed wall-clock literal wraps `agent.NewRouter` in the SCOPE-12 integration test, or if a local env-fallback helper is reintroduced (SCN-064-003-03) | `./smackerel.sh test unit --go --go-run BUG064003` | No |
 | T4 | Unit (adversarial) | `unit` | new `*_bug064003_test.go` under `internal/agent/` | Absent/unparseable `AGENT_ROUTING_CONFIDENCE_FLOOR` or `AGENT_ROUTING_CONSIDER_TOP_N` fails loud rather than substituting `0.65` / `5`; per-call embed timeout is not stricter than the SST value (SCN-064-003-04, SCN-064-003-05) | `./smackerel.sh test unit --go --go-run BUG064003` | No |
+| T5 | Regression E2E | `e2e-api` | NOT YET AUTHORED - see the "Regression E2E coverage" DoD group | Regression: a full-stack run re-proves SCN-064-003-01 and SCN-064-003-02 end to end, so the warm-up contract is protected above the integration tier as well | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
@@ -188,6 +190,25 @@ mapping 1:1 to these rows in order.
     118:    --- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST/absent_AGENT_ROUTING_BUILD_PER_CALL_BUDGET_MS (0.00s)
     ```
   - Both halves of the row are covered: the `*_absent` / `*_empty` / `*_unparseable` subtests are the adversarial cases that fail if the deleted `0.65` / `5` fallbacks are ever reintroduced, and `build_unit_above_the_sst_per_call_ceiling_is_rejected` is the adversarial case for a per-call unit exceeding `embed_timeout_ms`.
+
+#### Scenario traceability items (one per Gherkin scenario)
+
+Each item cites its scenario id so the mapping is explicit rather than inferred
+from word overlap.
+
+- [x] **SCN-064-003-01** cold sidecar no longer fails the routing assertions - the cold-stack run reaches and evaluates all three SCOPE-12 routing assertions. Evidence: T1, `ok github.com/smackerel/smackerel/tests/integration/agent 1.664s`, 3 tests + 6 subtests, 0 FAIL / 0 SKIP.
+- [x] **SCN-064-003-02** an unready embedder reports itself as such - proven at the `integration` tier by fault injection, not merely asserted. Zeroing the warm-up budget at `routerwarmup.go:304` produced the explicit readiness verdict at `openknowledge_routing_test.go:125` via the `ErrEmbedderNotWarm` branch, with no `--- SKIP`. Tree restored, `diff_vs_HEAD=0`.
+- [x] **SCN-064-003-03** adversarial - a reintroduced fixed wall-clock literal is rejected. Evidence: T3 mutation kill. Injecting `agent.NewRouter(` caused the guard to fail with its own message, *"calls agent.NewRouter directly; it must go through routerwarmup.BuildRouter"*. The token was asserted ABSENT before injection, so a vacuous survival was impossible.
+- [x] **SCN-064-003-04** adversarial - a missing SST routing value fails loud. Evidence: T4 mutation kill, and the kill was DISCRIMINATING: replacing the `EnvConfidenceFloor` miss-append with `floor = 0.65` failed exactly `confidence_floor_absent` and `confidence_floor_empty` (2 of 8) while `confidence_floor_unparseable`, every `consider_top_n_*` and `fallback_scenario_id_absent` still passed.
+- [x] **SCN-064-003-05** the per-call embed timeout is not stricter than SST - evidence: T4, `TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST`, 6 subtests including the adversarial `build_unit_above_the_sst_per_call_ceiling_is_rejected`.
+
+#### Regression E2E coverage
+
+Both items are deliberately UNCHECKED. They are real outstanding work, not a
+formality, and they are the only reason this scope is not Done.
+
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior - T5 is not authored yet. Honest position: this fix changed NO product source (only an integration test, a new `_test.go` contract guard, a `tests/`-scoped support package, and 3 SST keys), so the integration tier is currently the highest tier that exercises it. That is an argument for E2E being low-value here, NOT evidence that it exists, so the box stays open rather than being talked shut.
+- [ ] Broader E2E regression suite passes - not runnable as a clean signal today. The e2e lane has two recorded defects of its own: the ollama model pull runs AFTER the block that needs it (R-010) and `go-e2e-stack-start` was SIGKILLed at exit 137 (R-011), both in `.specify/memory/open-work.md`. Claiming a green broader suite before those are fixed would be a false green.
 
 #### Regression-integrity items
 
