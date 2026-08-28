@@ -2029,3 +2029,43 @@ deployed to the running self-hosted bot. The deployed bot carries the Telegram-a
 fix only. The two `Live-stack validation` DoD items are checked on the operator's
 recorded approval and are scoped to that Telegram surface; the agent performed no
 Telegram turn.
+
+### Correction — the PASS above was not reproducible in the full suite
+
+The isolated PASS recorded above is REAL but was NOT sufficient to certify. The
+authoritative full `./smackerel.sh test e2e` run, whose `go-e2e` phase image was built
+from HEAD `6c28a12f` — containing BOTH fix commits `98c453cf` and `89edaeee` — then
+failed the same test with the original defect:
+
+```text
+nothing_captured_ack_e2e_test.go:93: live envelope: status="saved_as_idea"
+    error_cause="" capture_route=true sources=0 body="saved as an idea — i'll surface it later."
+--- FAIL: TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved (0.12s)
+FAIL    github.com/smackerel/smackerel/tests/e2e/assistant      21.411s
+FAIL: go-e2e (exit=1)
+```
+
+Certification was WITHDRAWN rather than left standing (`state.json` →
+`certificationWithdrawnReason`).
+
+**Root cause of the isolated-vs-suite discrepancy** — established by reading `Handle`,
+not by re-running until green. `httpadapter.TurnRequest` carries NO user field; identity
+comes from the session token, so every test in `tests/e2e/assistant` writes to ONE shared
+conversation row. A neighbouring test's pending confirm or disambiguation is consumed by
+`Handle`'s Step-1 resume branches, which return before the Step-2 shortcut guard this
+test exists to pin — the bare `/ask` was answered as a reply to another test's question.
+
+The facade fix itself is CORRECT. Verified directly:
+
+```text
+MissingSlotPrompt("/ask")     => ok=true prompt="what would you like to know? try `/ask <your question>`."
+MissingSlotPrompt("/remind")  => ok=true prompt="what should i remind you about? try `/remind <what> <when>`."
+MissingSlotPrompt("/recipe")  => ok=true prompt="what would you like to cook? try `/recipe <dish or ingredients>`."
+LookupShortcut("/ask")        => sid="open_knowledge" isReset=false ok=true
+--- PASS: TestTmpMissingSlotPromptAsk (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant       0.201s
+```
+
+The TEST was non-hermetic. It now issues a `KindReset` turn first to establish
+known-clean state, so it measures the shortcut path rather than whatever a neighbour
+left behind. Re-promotion requires a green FULL suite, not another isolated run.

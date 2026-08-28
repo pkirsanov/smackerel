@@ -3,8 +3,7 @@
   "title": "Telegram assistant emits duplicate and contradictory capture acknowledgements",
   "spec": "specs/061-conversational-assistant",
   "severity": "S2",
-  "status": "done",
-  "certifiedAt": "2026-08-28T00:29:45Z",
+  "status": "in_progress",
   "timestampProvenance": "certifiedAt read from `date -u +%Y-%m-%dT%H:%M:%SZ` AFTER commit 89edaeee landed the packet edits, so no tracked planning file is edited after certification; not inferred.",
   "blockedReasonDischargedAt": "2026-08-28T00:25:54Z",
   "blockedReasonDischarge": "All three recorded blockers are discharged. (1) OPERATOR HUMAN ACCEPTANCE (G136) — the operator recorded approval of the human gates; uservalidation.md carries that approval and the guard reports G136 satisfied. (2) LIVE TELEGRAM BEHAVIORAL SMOKE TEST — accepted on that same recorded approval; the agent did NOT perform a Telegram turn, and the exact scope of what is and is not claimed is stated in uservalidation.md -> 'Transport-scope correction recorded 2026-08-27'. (3) E2E COVERAGE GAP — CLOSED, not waived. The gap was that the existing e2e tests SKIP when the provider is unavailable and so cannot distinguish a capture-fallback turn from a provider-unavailable one. A new live test, TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved in tests/e2e/assistant/nothing_captured_ack_e2e_test.go, asserts status, error_cause and capture_route on the wire and therefore CAN make that distinction. It earned its keep on first run by FAILING with DEFECT 2 verbatim over the HTTP transport (status=saved_as_idea, capture_route=true, body='saved as an idea'), proving the original fix had been made in the Telegram adapter only. The facade was fixed generically (an argument-less slash shortcut is a missing slot, not an idea) and the test now PASSES with status=unavailable, error_cause=slot_missing, capture_route=false. NOT CLAIMED: that facade fix is committed but not yet built, signed or deployed to the running bot.",
@@ -42,8 +41,16 @@
     "internal/telegram/capture_ack_bug061006_test.go (new)"
   ],
   "scopes": [
-    { "id": "scope-01", "title": "Single, silent acknowledgement on the capture-as-fallback path", "status": "done" },
-    { "id": "scope-02", "title": "Honest acknowledgement when nothing was saved", "status": "done" }
+    {
+      "id": "scope-01",
+      "title": "Single, silent acknowledgement on the capture-as-fallback path",
+      "status": "done"
+    },
+    {
+      "id": "scope-02",
+      "title": "Honest acknowledgement when nothing was saved",
+      "status": "done"
+    }
   ],
   "completedScopes": [
     "scope-01",
@@ -192,7 +199,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
     "certifiedCompletedPhases": [
       "regression",
@@ -208,7 +215,13 @@
       "lastCleanRound": null,
       "note": "No lockdown round has run. bubbles.validate has now executed and certified 6 phases, but it opened no remediation round: the residual findings are not agent-remediable defects in the delivered code — they are operator-owned human acceptance (G136), an operator-owned live Telegram observation turn, and an e2e harness gap outside this bug's three-file fix surface. Opening a lockdown round would misroute a fix cycle onto code that is not at fault."
     },
-    "scopeProgress": { "total": 2, "done": 2, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "scopeProgress": {
+      "total": 2,
+      "done": 2,
+      "inProgress": 0,
+      "notStarted": 0,
+      "blocked": 0
+    },
     "gatesPassed": [
       "test unit --go --go-run BUG061006: 4 BUG-061-006 adversarial tests GREEN; internal/telegram ok, internal/telegram/assistant_adapter ok; go test ./... (compile+vet, filtered) zero FAILs",
       "regression-quality-guard.sh --bugfix: PASS on both new *_bug061006_test.go files",
@@ -217,7 +230,7 @@
       "deploy via knb-owned Smackerel adapter: recreate rollout applied; cosign release-proof verified; running core+ml digests match the fix build and are healthy; Telegram assistant adapter wired and bound"
     ],
     "pendingGates": [
-      "scenario-specific regression E2E for THIS BUG's scenarios does not exist. CORRECTED 2026-08-20 by the regression phase: an earlier wording of this gate said './smackerel.sh test e2e --go-package assistant has NOT been run for this packet'. That is now FALSE \u2014 the lane WAS run this session (exit 0, sha256 e34ed293b05c5eeddfb661c83a92b327a42d75a7eb10e3fc8dcfcef3bdedbbc1, ok tests/e2e/assistant 59.289s, 50 PASSED / 12 SKIPPED / 0 FAILED), and tests/e2e/assistant/ holds 47 compiled test files. What remains genuinely open is narrower: no e2e test binds THIS bug's capture-fallback outcome. The planned file tests/e2e/assistant/capture_ack_bug061006_e2e_test.go was never written (git log --all: zero commits for that path), and the three existing e2e tests that would bind the outcome all SKIPPED on status=\"unavailable\" / capture_route=false. Owner: a harness change providing a provider-enabled assistant e2e phase \u2014 outside this bug's three-file fix surface.",
+      "scenario-specific regression E2E for THIS BUG's scenarios does not exist. CORRECTED 2026-08-20 by the regression phase: an earlier wording of this gate said './smackerel.sh test e2e --go-package assistant has NOT been run for this packet'. That is now FALSE — the lane WAS run this session (exit 0, sha256 e34ed293b05c5eeddfb661c83a92b327a42d75a7eb10e3fc8dcfcef3bdedbbc1, ok tests/e2e/assistant 59.289s, 50 PASSED / 12 SKIPPED / 0 FAILED), and tests/e2e/assistant/ holds 47 compiled test files. What remains genuinely open is narrower: no e2e test binds THIS bug's capture-fallback outcome. The planned file tests/e2e/assistant/capture_ack_bug061006_e2e_test.go was never written (git log --all: zero commits for that path), and the three existing e2e tests that would bind the outcome all SKIPPED on status=\"unavailable\" / capture_route=false. Owner: a harness change providing a provider-enabled assistant e2e phase — outside this bug's three-file fix surface.",
       "operator live Telegram behavioral smoke test (human turn): /ask <question> -> exactly ONE ack; bare /ask -> ONE honest line, never '? Failed to save' + 'saved as an idea'"
     ]
   },
@@ -232,5 +245,7 @@
     "specs/061-conversational-assistant",
     "specs/074-assistant-capture-as-fallback-policy",
     "specs/064-open-ended-knowledge-agent"
-  ]
+  ],
+  "certificationWithdrawnAt": "2026-08-28T00:55:00Z",
+  "certificationWithdrawnReason": "SELF-CORRECTION. This packet was promoted to 'done' on an ISOLATED run of TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved. The authoritative FULL e2e suite, built from HEAD 6c28a12f (which contains both fix commits 98c453cf and 89edaeee), then FAILED that same test with the original defect: status=saved_as_idea, capture_route=true, body='saved as an idea'. Promotion is withdrawn rather than left standing on a superseded result. ROOT CAUSE of the discrepancy, established by reading Handle rather than re-running until green: httpadapter.TurnRequest carries NO user field - identity comes from the session token, so every test in tests/e2e/assistant shares ONE conversation row. A neighbouring test's pending confirm or disambiguation is consumed by Handle's Step-1 resume branches, which return before the Step-2 shortcut guard this test pins; the bare /ask was answered as a reply to another test's question. The facade fix itself is CORRECT - MissingSlotPrompt and LookupShortcut were verified directly and behave as intended for /ask, /remind and /recipe. The TEST was non-hermetic; it now issues a KindReset turn first to establish known-clean state. Re-promotion requires a green FULL suite, not another isolated run."
 }

@@ -16,7 +16,7 @@ machine is resource-constrained — do NOT build there).
 **Depends On:** —
 **FR:** FR-4, NFR-4
 
-Lands the embedding-backed searcher deferred by 064 SCOPE-06 as a general,
+Lands the embedding-backed searcher that 064 SCOPE-06 left open, as a general,
 namespace-parameterised capability. `internal/assistant/openknowledge/tools/semantic_searcher.go`:
 `SemanticSearcher.Search(ctx, namespace, query, k)` → embed query via the ML
 sidecar embedder, `SELECT … FROM artifacts WHERE source_id=$namespace ORDER BY
@@ -33,7 +33,7 @@ Scenario: namespace-scoped cosine search returns only in-namespace artifacts
 ### Test Plan
 | Test Type | Category | File | Description | Command | Live |
 |---|---|---|---|---|---|
-| Unit | `unit` | `.../tools/semantic_searcher_test.go` | param validation; embedder-error → typed error (no fallback) | `./smackerel.sh test unit --go` | No |
+| Unit | `unit` | `internal/assistant/openknowledge/tools/semantic_searcher_test.go` | param validation; embedder-error → typed error (no fallback) | `./smackerel.sh test unit --go` | No |
 | Integration | `integration` | `tests/integration/openknowledge/semantic_searcher_test.go` | real pgvector: seed 2 namespaces + embeddings, assert scoped ordering | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
@@ -127,7 +127,7 @@ Scenario: the tool returns only cited smackerel_self sources
 ### Test Plan
 | Test Type | Category | File | Description | Command | Live |
 |---|---|---|---|---|---|
-| Unit | `unit` | `.../tools/self_knowledge_test.go` | contract: name/description/schema; Execute maps hits → Sources; namespace isolation | `./smackerel.sh test unit --go` | No |
+| Unit | `unit` | `internal/assistant/openknowledge/tools/self_knowledge_test.go` | contract: name/description/schema; Execute maps hits → Sources; namespace isolation | `./smackerel.sh test unit --go` | No |
 | Integration | `integration` | `tests/integration/openknowledge/self_knowledge_tool_test.go` | tool over real pg+embeddings returns cited self sources | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
@@ -250,7 +250,7 @@ Scenario: live /ask about smackerel answers with citations
 ### Test Plan
 | Test Type | Category | File | Description | Command | Live |
 |---|---|---|---|---|---|
-| E2E | `e2e-api`/`e2e-ui` | `tests/e2e/openknowledge/self_knowledge_ask_test.go` | full-stack /ask meta-question → cited answer | `./smackerel.sh test e2e` | Yes |
+| E2E | `e2e-api`/`e2e-ui` | `tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go` | full-stack /ask meta-question → cited answer | `./smackerel.sh test e2e` | Yes |
 | Stress | `stress` | (extend openknowledge p95) | self_knowledge search within budget | per existing | Yes |
 
 ### Definition of Done

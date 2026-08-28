@@ -58,6 +58,26 @@ func TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved(t *testing.T) {
 	// nothing to capture, so the only honest replies are a prompt for
 	// the missing question or a typed refusal. "saved as an idea" is a
 	// lie in either case, because no idea was saved.
+	//
+	// The /reset preamble is load-bearing, not politeness. TurnRequest
+	// carries no user field — identity comes from the session token, so
+	// every test in this package writes to the SAME conversation row. A
+	// neighbour's pending confirm or disambiguation is consumed by
+	// Handle's Step-1 resume branches, which return long before the
+	// Step-2 shortcut guard this test exists to pin: the `/ask` is
+	// answered as a reply to someone else's question. That is precisely
+	// how this test passed alone and failed in the full suite. /reset
+	// drops that pending state, so the turn below is a first turn.
+	resetReq := httpadapter.TurnRequest{
+		SchemaVersion:      httpadapter.SchemaVersionV1,
+		TransportMessageID: "e2e-bug061006-reset-" + timestamp(),
+		Kind:               string(contracts.KindReset),
+		TransportHint:      "web",
+	}
+	if rr, _ := postAssistantTurn(t, stack, resetReq); rr != nil {
+		_ = rr.Body.Close()
+	}
+
 	req := httpadapter.TurnRequest{
 		SchemaVersion:      httpadapter.SchemaVersionV1,
 		TransportMessageID: "e2e-bug061006-nothing-captured-" + timestamp(),

@@ -13,7 +13,7 @@ no product docs, and the local LLM has no training data on a private product).
 Design decision (operator: best for long term, no shortcuts): self-knowledge is a
 dedicated `smackerel_self` pgvector namespace, ingested via the existing pipeline
 (real embeddings), searched by a new **general** embedding-backed namespace
-searcher (resolving the 064 SCOPE-06 deferral) — NOT an in-memory keyword bolt-on.
+searcher (closing the gap 064 SCOPE-06 left open) — NOT an in-memory keyword bolt-on.
 
 ## Completion Statement
 
@@ -263,7 +263,7 @@ token. The behavior is proven end-to-end at the agent/facade layer by the scope-
 e2e tests + the scope-7 trust-perimeter integration test, and deploy-verified with
 the corpus live.
 
-**Connector-only smoke — automates the operator RENDER step (2026-07-23 follow-up):**
+**Connector-only smoke — automates the operator RENDER step (added 2026-07-23):**
 to avoid needing a real Telegram client for that final check,
 `internal/telegram/assistant_connector_smoke_test.go` (commit 4a7c545d) injects a
 synthetic inbound `/ask` update through the REAL Telegram connector (bot dispatch
@@ -277,3 +277,391 @@ agent grounding over pgvector (scope-8 e2e), facade honesty decision
 (`facade_execution_error_honesty_test.go`), and connector render (this smoke). The
 remaining operator item is narrowed to a final live-prod confirmation on the
 deployed bot.
+
+---
+
+## Post-Delivery Verification Phases (Gate G022 remediation, 2026-08-28) {#g022-verification}
+
+Gate G022 reported that 9 specialist phases were never executed against this
+spec. This section records the phases that were **actually executed** on
+2026-08-28, with the real commands and their real output.
+
+### Execution environment and its limits (read this before trusting any claim below)
+
+A full `./smackerel.sh test e2e` stack lane was running in another terminal for
+the entire duration of this work (`pgrep -af 'smackerel.sh test'` →
+`3502193 timeout 4200 ./smackerel.sh test e2e`). Starting a second stack lane
+would have corrupted both runs. Therefore **no container lane was started or
+stopped**: no `test e2e`, no `test integration`, no `test stress`, no `up`, no
+`down`, no DB access.
+
+Consequences, stated plainly:
+
+- The `integration`- and `e2e`-tagged tests for this spec were **NOT re-executed**
+  in this session. Their prior green results are recorded above in the scope
+  sections; nothing in this section re-proves them.
+- No `EXPLAIN`, no live query, and no live fault injection were performed. Where
+  a finding below rests on reading code and SQL rather than on observed runtime
+  behavior, it is labelled **static reasoning** and MUST NOT be read as a runtime
+  observation.
+- Unit-level Go commands were run with the host toolchain (`go1.25.10`) rather
+  than through `./smackerel.sh`, because the repo CLI lane was occupied. This is
+  a deliberate, disclosed deviation from the repo-CLI rule for read-only,
+  container-free commands.
+
+### Phases executed
+
+`security`, `regression`, `simplify`, `gaps`, `harden`, `stabilize`, `chaos`,
+`audit`.
+
+### Phase NOT executed: `validate`
+
+`validate` is the certifying phase. Certification requires executing the
+integration and e2e lanes that prove FR-1…FR-9 end to end, which the environment
+constraint forbade. Additionally, findings **F-1** and **F-2** below are open
+gaps against FR-8 and FR-6. Recording `validate` as complete would assert a
+certification that was not performed, so it is deliberately omitted.
+
+---
+
+### regression {#g022-regression}
+
+Command and full output:
+
+```
+$ go test ./internal/assistant/openknowledge/...
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge 0.045s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent   0.047s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool       0.036s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog 0.177s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback 0.015s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore       0.026s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault       0.035s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/llm     0.989s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics 0.027s
+?       github.com/smackerel/smackerel/internal/assistant/openknowledge/modelpref       [no test files]
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch     0.005s
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/tools   0.018s
+?       github.com/smackerel/smackerel/internal/assistant/openknowledge/tracewriter     [no test files]
+?       github.com/smackerel/smackerel/internal/assistant/openknowledge/usageledger     [no test files]
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/web     0.041s
+GO_TEST_EXIT=0
+```
+
+```
+$ go test -run 'TestDocCorpus|TestDerive' -v ./internal/assistant/selfknowledge/
+=== RUN   TestDerive_FromRealScenariosYAML
+--- PASS: TestDerive_FromRealScenariosYAML (0.00s)
+=== RUN   TestDerive_Deterministic
+--- PASS: TestDerive_Deterministic (0.00s)
+=== RUN   TestDerive_NilManifest
+--- PASS: TestDerive_NilManifest (0.00s)
+=== RUN   TestDocCorpus_Entries_FromEmbeddedOverview
+=== PAUSE TestDocCorpus_Entries_FromEmbeddedOverview
+=== RUN   TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud
+=== PAUSE TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud
+=== CONT  TestDocCorpus_Entries_FromEmbeddedOverview
+--- PASS: TestDocCorpus_Entries_FromEmbeddedOverview (0.00s)
+=== CONT  TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud
+--- PASS: TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant/selfknowledge 0.031s
+SELFK_TEST_EXIT=0
+```
+
+`modelpref` reporting `[no test files]` is **not** a coverage gap: its
+`store_test.go:1` carries `//go:build integration` and belongs to spec 089, not
+this spec. Verified by reading the file header.
+
+Do the existing tests actually bind this spec's behavior? Largely yes, and they
+are adversarial rather than tautological:
+
+- `semantic_searcher_test.go:31-36` installs a `queryGuard` rowQuerier whose
+  `Query` calls `t.Fatalf`. Every validation and embed-failure case therefore
+  proves the short-circuit happens **before** any DB access — the test fails if
+  the guard is ever reached.
+- `tests/integration/openknowledge/semantic_searcher_test.go:90` seeds a
+  different-namespace row that is the **closest overall** match to the query and
+  asserts it is absent from the result. That is a genuine FR-5 isolation test.
+
+One binding gap: no test covers the searcher returning **zero** rows, so the
+empty-corpus honesty path is unexercised at the tool layer.
+
+### security {#g022-security}
+
+Inspected: `semantic_searcher.go`, `self_knowledge.go`, `ingestor.go`,
+`citeback/verifier.go`, and the agent's tool-result rendering path.
+
+**No SQL injection.** Both statements are fully parameterised —
+`semantic_searcher.go:107-113` binds namespace, query vector and limit as `$1`,
+`$2`, `$3`; `ingestor.go:136-139` binds `$1`, `$2`. No string concatenation
+reaches either statement. `k` is additionally range-checked to
+`0 < k <= MaxInternalRetrievalK` (=25) at `semantic_searcher.go:94` before use,
+and the vector literal is produced by `db.FormatEmbedding` (`internal/db/pgvec.go:11-29`),
+which emits only digits, `.`, `-`, `,` and brackets from `[]float32` — it cannot
+carry attacker-controlled text.
+
+**No credential handling** occurs in the delivered surface; the pool is injected.
+
+**FINDING F-3 (MEDIUM) — raw backend error text is propagated into the LLM
+context and the persisted trace.**
+
+`self_knowledge.go:112-116` builds the tool error by concatenating the driver
+error verbatim:
+
+```go
+Message: ErrSelfKnowledgeBackend.Message + ": " + err.Error(),
+```
+
+`agent/agent.go:845-854` (`renderToolResult`) then serialises that message into
+the tool-result message appended to the LLM conversation:
+
+```go
+return fmt.Sprintf(`{"error":{"code":%q,"message":%q}}`, res.Error.Code, res.Error.Message)
+```
+
+For a pgx connection-class failure the driver error text embeds connection
+identifiers (host, user, database name). Those therefore reach the model context
+and the agent trace. If the configured provider is a cloud LLM, that is
+transmission of internal infrastructure detail to a third party.
+
+Scope was checked rather than assumed. The **user-facing** refusal path at
+`agent/agent.go:745` is gated on `entry.Result.Error.Code == ToolErrorCodeCircuitOpen`,
+so it is **not** reachable from `self_knowledge`'s `backend_failure` code. The
+blast radius is the LLM context and the persisted trace, not direct user-visible
+text.
+
+Not exclusively a spec-104 defect: the identical pattern pre-exists at
+`internal_retrieval.go:126-131` (spec 064). Spec 104 propagated it to a second
+tool.
+
+Caveat: the exact leaked string was **not** captured, because provoking a live DB
+failure was forbidden this session.
+
+### gaps {#g022-gaps}
+
+Compared each functional requirement in `spec.md` against the delivered code.
+FR-1, FR-2, FR-3, FR-4, FR-5, FR-7 and FR-9 are implemented as specified. Two
+requirements are not met.
+
+**FINDING F-1 (HIGH) — FR-8 / Acceptance Scenario 5 is not enforceable: the
+searcher applies no relevance threshold and discards the distance.**
+
+The query at `semantic_searcher.go:107-113` is:
+
+```sql
+SELECT id, title, COALESCE(summary, '')
+FROM artifacts
+WHERE source_id = $1 AND embedding IS NOT NULL
+ORDER BY embedding <=> $2::vector
+LIMIT $3
+```
+
+It orders by cosine distance but never filters on it, and never selects it.
+`GraphArtifact` (`internal_retrieval.go:47-51`) has only `ID`, `Title`, `Summary`
+— no score field — so the distance Postgres computed is discarded and **no
+caller can recover it**. `self_knowledge.go:118-141` then maps 100% of the
+returned rows into `Sources` with no filtering.
+
+Net effect: for **any** non-empty query against a populated namespace,
+`self_knowledge` returns `min(k, |namespace|)` cited sources, however
+semantically unrelated. The "no grounded self-knowledge match" precondition that
+Scenario 5 and FR-8 depend on cannot arise at the retrieval layer.
+
+The cite-back verifier does not compensate. Its rejection sentinels
+(`citeback/verifier.go:17-25`) are `ReasonNotInTrace`, `ReasonHashMismatch`,
+`ReasonMalformedCitation`, `ReasonKindMismatch` — all **provenance** checks. A
+citation to a genuinely-returned but irrelevant artifact passes all four,
+because the tool really did return it.
+
+This is not speculation; the delivered integration test **codifies** the
+behavior. `tests/integration/openknowledge/semantic_searcher_test.go:89` seeds an
+artifact titled `"unrelated"` with an embedding orthogonal to the query
+(`vec384(0, 1, 0)` against a query of `vec384(1, 0, 0)` — maximum cosine
+distance), and line 115 fails the test unless that orthogonal row **is**
+returned.
+
+The repository already establishes the opposite pattern elsewhere:
+`internal/graph/linker.go:303` applies a real threshold
+(`AND a1.embedding <=> a2.embedding < 0.8`), and `internal/api/search.go:524`
+selects `1 - (a.embedding <=> $1::vector) AS similarity` so callers can rank.
+`PgxSemanticSearcher` is the only vector-search path in the codebase that does
+neither.
+
+**FINDING F-2 (MEDIUM) — FR-6 is not implemented; the two corpora provably
+diverge, and a code comment asserts otherwise.**
+
+FR-6 requires the human `/help` surface to read the **same** SST-derived corpus
+`self_knowledge` searches, "so the menu a user sees and the answers `/ask` gives
+can never diverge". Scope-06 is recorded `done` in `state.json`.
+
+What the code actually wires:
+
+- `/help` is fed `selfknowledge.Derive(manifest)` at
+  `cmd/core/wiring_assistant_facade.go:255` (consumed by
+  `internal/telegram/bot.go:105,1098` and `legacy_aliases.go:241`).
+- The ingested corpus is `Ingestor.Corpus()` (`ingestor.go:81-91`), which is
+  `Derive(manifest)` **plus** `NewDocCorpus().Entries()`, wired at
+  `cmd/core/wiring_selfknowledge.go:60-62`.
+
+`Derive` emits only `KindScenario` and `KindCommand` (`derive.go:66,81`). The
+curated doc facet emits the feature/use-case kinds (`docsource.go:69`) and is
+non-empty — proven by the passing `TestDocCorpus_Entries_FromEmbeddedOverview`
+recorded above. So `/ask` can ground answers in curated feature and use-case
+entries that `/help` never shows. That is exactly the divergence FR-6 forbids.
+
+Compounding it, `Corpus()`'s own doc comment at `ingestor.go:79-81` claims it is
+"Shared by Ingest and the /help human twin (SCOPE-06) so the two never drift."
+`Corpus()` has exactly **one** caller in non-test code: `ingestor.go:97`, inside
+`Ingest`. The comment is false and would mislead the next maintainer.
+
+### harden {#g022-harden}
+
+Error paths, nil handling, context propagation and resource cleanup were read
+line by line.
+
+Correct and worth recording: constructors fail loudly rather than degrading —
+`NewPgxSemanticSearcher` panics on a nil pool or nil embedder
+(`semantic_searcher.go:70-79`) and `NewSelfKnowledge` panics on a nil searcher or
+blank namespace (`self_knowledge.go:64-72`). `ctx` is threaded into `pool.Query`,
+so cancellation propagates. `defer rows.Close()` is present and `rows.Err()` is
+checked after iteration (`semantic_searcher.go:117,127-129`) — the commonly
+missed pgx cleanup pair is handled. Result capacity is bounded by `k <= 25`, so
+there is no unbounded allocation. On every error path the searcher returns
+`nil` results rather than a partial slice.
+
+**FINDING F-4 (LOW, latent) — the stale sweep deletes the entire namespace when
+the corpus is empty.**
+
+`ingestor.go:135-142`:
+
+```sql
+DELETE FROM artifacts
+WHERE source_id = $1 AND content_hash <> ALL($2::text[])
+```
+
+In PostgreSQL, `x <> ALL('{}')` is vacuously TRUE, so an empty `keepHashes`
+matches **every** row in the namespace and wipes the whole self-knowledge
+corpus. `keepHashes` is empty exactly when `entries` is empty
+(`ingestor.go:102`), and there is no guard: the only occurrences of
+`len(entries)` in the file are the slice capacity hint at line 102 and the result
+count at line 128.
+
+Honest severity: **not currently reachable.** `Derive` always emits one entry per
+entry in `assistant.SlashShortcuts`, a compile-time map literal
+(`internal/assistant/shortcuts.go:41`) with 11 entries, so a shipped binary
+cannot produce an empty corpus. This is a missing defensive guard on a
+destructive statement, not an active bug. A `if len(keepHashes) == 0 { return 0, error }`
+guard before the sweep would close it.
+
+Related and correct: a mid-loop publish failure returns before `sweepStale` runs
+(`ingestor.go:113-115`), so a partial ingest cannot trigger a partial wipe.
+
+### stabilize {#g022-stabilize}
+
+Race detector plus repeat runs, full output:
+
+```
+$ go test -race -count=5 ./internal/assistant/openknowledge/tools/ ./internal/assistant/selfknowledge/...
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/tools   1.137s
+ok      github.com/smackerel/smackerel/internal/assistant/selfknowledge 1.117s
+RACE_EXIT=0
+```
+
+No races, no flakiness across 5 consecutive runs. The parallel subtests
+(`t.Parallel()` throughout both test files) share no mutable state; each
+constructs its own searcher.
+
+**FINDING F-6 (LOW, informational — static reasoning, not observed) — filtered
+ANN recall is plan-dependent and may change as the table grows.**
+
+`001_initial_schema.sql:72` creates an `ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100)` index; line 68 creates a btree on `(source_id, source_ref)`.
+The searcher's query filters on `source_id` and orders by vector distance. If the
+planner chooses the ivfflat path, the `source_id` predicate is applied **after**
+ANN candidate selection, and with the default `ivfflat.probes = 1` a small
+namespace inside a large `artifacts` table can yield fewer than `k` rows — or
+none — even though matching rows exist. If the planner chooses the btree path it
+filters first and sorts exactly, which is correct. Which plan is chosen depends
+on table statistics, so retrieval behavior can shift as the personal graph grows
+without any code change.
+
+Explicitly labelled static reasoning: `EXPLAIN` was **not** run, because DB
+access was forbidden this session. This needs runtime confirmation before being
+treated as fact.
+
+### simplify {#g022-simplify}
+
+**FINDING F-5 (LOW) — ~50 lines duplicated between the two tool implementations.**
+
+`SelfKnowledge.Execute` (`self_knowledge.go:91-141`) and
+`InternalRetrieval.Execute` (`internal_retrieval.go:107-157`) are structurally
+identical: same `DisallowUnknownFields` decode, same nil-field check, same query
+trim, same `k` bound check, same search call, same artifact→snippet→source
+mapping loop with the same `canonicalSnippetText`/`snippetHash` pair. They differ
+only in the params struct type, the error sentinels, the extra namespace argument
+to `Search`, and the literal `Kind: "capability"` versus `Kind: "artifact"`.
+
+This cuts against FR-7, which asks the code to demonstrate "the uniform pattern
+for wiring any future command/surface as an `openknowledge.Tool` answer source".
+The pattern was copy-pasted rather than extracted, so the third such tool will
+copy it again, and a fix to the mapping loop must now be made in two places —
+which is precisely how F-3 came to exist in two tools instead of one.
+
+No dead code was found in the delivered surface; `go vet` is clean (below).
+
+### chaos {#g022-chaos}
+
+Failure modes reasoned about from the code. **No live fault injection was
+performed** — the environment constraint forbade touching the stack. These are
+code-reading conclusions.
+
+| Failure mode | Behavior | Honest? |
+|---|---|---|
+| Embedder / ML sidecar down | `semantic_searcher.go:99-101` wraps the failure as `ErrSemanticSearchEmbed` and returns. There is deliberately **no keyword fallback** (documented at `semantic_searcher.go:14-18`). `self_knowledge.go:111-116` maps it to `backend_failure`. | **Yes.** Degrades to a typed error, not a lower-fidelity guess. |
+| Embedder returns an empty vector | `semantic_searcher.go:102-104` returns `ErrSemanticSearchEmptyVec` before any DB call. | **Yes.** |
+| `smackerel_self` namespace empty | Search returns an empty slice and `nil` error; `self_knowledge.go:118-141` produces a `ToolResult` with zero snippets and zero sources. With no citations the agent has nothing to cite, so the BUG-061-009 refusal is the remaining path. | **Yes** — though untested (see regression, above). |
+| Namespace populated, query unrelated | Returns `min(k, |ns|)` sources regardless of distance. | **No** — this is finding **F-1**. |
+| Namespace collision (a connector writing `source_id='smackerel_self'`) | Nothing reserves the value. A grep of `internal/connector/` and `internal/pipeline/` for a reservation returned no such logic. Isolation rests on every connector choosing a different `source_id` by convention. | **Convention, not enforcement.** No path was found where `source_id` is user-controlled, so this is a latent weakness in FR-5's defence-in-depth rather than a demonstrated leak. |
+| Boot-time ingestion failure | `cmd/core/wiring_selfknowledge.go` returns a wrapped error for manifest-load and ingest failure — fails loud rather than booting with a stale or empty corpus. | **Yes.** |
+
+### audit {#g022-audit}
+
+Static checks, full output:
+
+```
+$ go vet ./internal/assistant/openknowledge/... ./internal/assistant/selfknowledge/...
+VET_EXIT=0
+
+$ go build ./...
+BUILD_EXIT=0
+```
+
+Overall read. The delivered code is of good quality: fail-loud constructors, no
+silent fallbacks, correct pgx resource handling, fully parameterised SQL,
+deterministic corpus derivation, and tests that are adversarial rather than
+tautological (the `queryGuard` and the cross-namespace isolation seed are both
+real traps that would fail on regression). FR-1, FR-2, FR-3, FR-4, FR-5, FR-7 and
+FR-9 are met.
+
+Two requirements are not met. **F-1** means FR-8's honest-refusal guarantee has no
+mechanism at the retrieval layer, and the spec's own integration test locks in the
+behavior that prevents it. **F-2** means FR-6 is unimplemented while scope-06 is
+recorded `done` and a code comment claims the opposite. Both are spec-compliance
+defects, not style issues, and both should be resolved before this spec is
+certified.
+
+### Findings summary
+
+| ID | Severity | Phase | Location | Summary |
+|---|---|---|---|---|
+| F-1 | HIGH | gaps / chaos | `semantic_searcher.go:107-113`, `internal_retrieval.go:47-51` | No relevance threshold and distance discarded → FR-8 / Scenario 5 unenforceable |
+| F-2 | MEDIUM | gaps | `wiring_assistant_facade.go:255` vs `ingestor.go:81-91` | `/help` and `self_knowledge` corpora diverge → FR-6 unimplemented; false comment at `ingestor.go:79-81` |
+| F-3 | MEDIUM | security | `self_knowledge.go:112-116`, `agent/agent.go:845-854` | Raw driver error text reaches LLM context and trace |
+| F-4 | LOW (latent) | harden | `ingestor.go:135-142` | `<> ALL('{}')` wipes namespace on empty corpus; unreachable today |
+| F-5 | LOW | simplify | `self_knowledge.go:91-141` vs `internal_retrieval.go:107-157` | ~50 duplicated lines; works against FR-7 |
+| F-6 | LOW (unverified) | stabilize | `001_initial_schema.sql:68,72` | Filtered-ANN recall is plan-dependent; needs `EXPLAIN` to confirm |
+
+None of these findings were remediated in this session — the task was to execute
+the verification phases and report truthfully, not to change delivered code.
+Status remains `blocked`.
