@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "featureDir": "specs/104-universal-ask-self-knowledge",
+  "featureName": "Universal /ask + Self-Knowledge Grounding",
+  "generatedBy": "bubbles.goal",
+  "generatedAt": "2026-08-28T01:20:00Z",
+  "traceabilityGuardScenarioIds": [
+    {
+      "scenarioId": "SCN-104-A01"
+    },
+    {
+      "scenarioId": "SCN-104-A02"
+    },
+    {
+      "scenarioId": "SCN-104-A03"
+    },
+    {
+      "scenarioId": "SCN-104-A04"
+    },
+    {
+      "scenarioId": "SCN-104-A05"
+    },
+    {
+      "scenarioId": "SCN-104-A06"
+    },
+    {
+      "scenarioId": "SCN-104-A07"
+    },
+    {
+      "scenarioId": "SCN-104-A08"
+    }
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "SCN-104-A01",
+      "scopeId": "SCOPE-1",
+      "title": "namespace-scoped cosine search returns only in-namespace artifacts",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "unit",
+        "integration"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "internal/assistant/openknowledge/tools/semantic_searcher_test.go",
+          "testId": "TestPgxSemanticSearcher",
+          "category": "unit"
+        },
+        {
+          "file": "tests/integration/openknowledge/semantic_searcher_test.go",
+          "testId": "TestPgxSemanticSearcher_NamespaceScopedCosine",
+          "category": "integration"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A02",
+      "scopeId": "SCOPE-2",
+      "title": "adding a scenario yields a new capability entry with no hand edit",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "unit"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "internal/assistant/selfknowledge/derive_test.go",
+          "testId": "TestDerive_FromRealScenariosYAML",
+          "category": "unit"
+        },
+        {
+          "file": "internal/assistant/selfknowledge/derive_test.go",
+          "testId": "TestDerive_Deterministic",
+          "category": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A03",
+      "scopeId": "SCOPE-3",
+      "title": "idempotent ingestion with stale sweep",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "integration"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "tests/integration/selfknowledge/ingest_test.go",
+          "testId": "TestIngestor_IdempotentWithStaleSweep",
+          "category": "integration"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A04",
+      "scopeId": "SCOPE-4",
+      "title": "the tool returns only cited smackerel_self sources",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "unit",
+        "integration"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "internal/assistant/openknowledge/tools/self_knowledge_test.go",
+          "testId": "TestSelfKnowledge_ExecuteMapsCitedSources",
+          "category": "unit"
+        },
+        {
+          "file": "tests/integration/openknowledge/self_knowledge_tool_test.go",
+          "testId": "TestSelfKnowledgeTool_CitesOnlySmackerelSelf",
+          "category": "integration"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-4"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A05",
+      "scopeId": "SCOPE-5",
+      "title": "the \"how does smackerel work\" overview is ingested and answerable",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "unit"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "internal/assistant/selfknowledge/docsource_test.go",
+          "testId": "TestDocCorpus_Entries_FromEmbeddedOverview",
+          "category": "unit"
+        },
+        {
+          "file": "internal/assistant/selfknowledge/docsource_test.go",
+          "testId": "TestDocCorpus_DeclaredAnchorMissingFromMarkdownFailsLoud",
+          "category": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-5"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A06",
+      "scopeId": "SCOPE-6",
+      "title": "/help lists capabilities from the SST-derived corpus",
+      "behaviorClass": "api",
+      "changeType": "changed",
+      "requiredTestType": [
+        "unit"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "internal/telegram/help_test.go",
+          "testId": "TestHelp_RendersCapabilitiesFromSharedCorpus",
+          "category": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-6"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A07",
+      "scopeId": "SCOPE-7",
+      "title": "grounded meta-answer is cited; ungroundable refuses honestly",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "integration"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "tests/integration/openknowledge/self_knowledge_provenance_test.go",
+          "testId": "TestSelfKnowledge_TrustPerimeter",
+          "category": "integration"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-7"
+      ]
+    },
+    {
+      "scenarioId": "SCN-104-A08",
+      "scopeId": "SCOPE-8",
+      "title": "live /ask about smackerel answers with citations",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": [
+        "e2e-api"
+      ],
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/openknowledge/self_knowledge_ask_e2e_test.go",
+          "testId": "TestSelfKnowledge_AskMetaQuestion_GroundedCitedAnswer_E2E",
+          "category": "e2e-api"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-8"
+      ]
+    }
+  ]
+}
