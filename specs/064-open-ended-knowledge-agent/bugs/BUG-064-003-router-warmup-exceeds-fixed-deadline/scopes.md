@@ -20,6 +20,16 @@
 ## Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start
 
 **Status:** In Progress
+
+**foundation: true** — this scope establishes the `routerwarmup.BuildRouter`
+seam described under `## Capability Foundation` in [design.md](design.md). It is
+tagged foundation because it is the scope that CREATES the seam, not because a
+family of implementations is planned: [design.md](design.md) records exactly one
+concrete implementation and [spec.md](spec.md) records why one is correct under
+`### Single-Capability Justification`. There are therefore no overlay scopes, and
+none is owed a `Depends On` back-reference.
+
+**Depends On:** nothing — this IS the foundation scope, so no overlay scope declares a Depends On against the foundation scope in this packet.
 **Depends On:** none
 
 ### Gherkin Scenarios (regression contract)

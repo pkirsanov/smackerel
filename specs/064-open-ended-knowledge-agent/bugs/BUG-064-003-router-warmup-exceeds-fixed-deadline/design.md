@@ -391,7 +391,7 @@ routed back for re-scoping.
    total embed cost by itself. Not a defect, but it is the single largest
    contributor to warm-up time and worth a deliberate confirmation.
 
-## 6. Capability Foundation
+## Capability Foundation
 
 The capability is **embedder-readiness-gated router construction**: prove the ML
 sidecar's embedder has reached a warm latency target BEFORE entering any timed
@@ -408,7 +408,7 @@ with its own message.
 This is a single-capability foundation by deliberate choice; the reasoning is
 recorded in [spec.md](spec.md) under `### Single-Capability Justification`.
 
-## 7. Concrete Implementations
+## Concrete Implementations
 
 Exactly one implementation exists today. It is listed rather than omitted so the
 count is explicit and a future second entry is an obvious diff.
