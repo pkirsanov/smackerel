@@ -596,6 +596,37 @@ reports 463G available at 52% use. The 33G figure that triggers the preflight is
 `/mnt/c`, where Docker does not write. The unit lane needs no stack, so it does
 not contend with wanderaide's running integration lane.
 
+**RESOLVED 2026-08-28 — the full lane was run, and this packet passes under
+enforcement.** After the sibling repositories' validations went idle, a safe
+Docker reclaim (volumes 105 -> 26, build cache 16.62GB -> 3.01GB, `/` free
+463G -> 494G, all labeled-persistent stores untouched) made the lane runnable.
+The FULL lane was then run with NO `--go-run` selector:
+
+```
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test integration
+ok      github.com/smackerel/smackerel/tests/integration/agent  16.335s
+```
+
+Two things make this materially stronger than the earlier focused evidence.
+First, the acceptance-gate bypass notice is ABSENT from this run (0 occurrences
+of `NOT ENFORCED`), so the executed-assertion assertion WAS enforced. Second,
+`tests/integration/agent` reports a real 16.335s duration with no
+`[no tests to run]` suffix, so the package genuinely executed. The R-014 caveat
+therefore no longer applies to this packet's T1 evidence.
+
+**The lane's overall exit is 1, and that failure is NOT this packet's.** Exactly
+one test failed across the whole lane:
+
+```
+--- FAIL: TestSearxNGIntegration_Smoke (0.81s)
+FAIL    github.com/smackerel/smackerel/tests/integration        71.830s
+FAIL: go-integration (exit=1)
+PASS: python-integration
+```
+
+See the `## Discovered Issues` row below for why this is not attributable to
+BUG-064-003 and where it is tracked instead.
+
 **A focused green is weaker than a full-lane green, and the lane says so itself.**
 The integration lane prints, verbatim:
 
@@ -617,6 +648,73 @@ equivalent to a full-lane pass and is not claimed as one. Filed as R-014.
 invocation. One captured lane log shows no `tests/integration/agent` package line
 alongside that notice, which would suggest it did not, but that capture may be
 truncated at the head, so the stronger claim is not made on that evidence.
+
+<!-- bubbles:g040-skip-begin -->
+<!--
+  G040 skip rationale. The two sections below are DISPOSITION prose for an issue
+  discovered while running this packet's tests, not deferral of this packet's
+  own work. They necessarily contain the words "out of scope", which Gate G040
+  scans for - and Gate G084's own remediation text instructs authors to file
+  exactly such material under an "## Out of Scope" heading. These markers are
+  the framework's documented mechanism for that case: "letting governance docs /
+  post-mortems quote follow-up narrative inline without flipping spec status."
+  The issue itself is NOT dropped - it carries a Discovered Issues row with a
+  concrete owner and artifact references, plus R-015 in open-work.md.
+-->
+
+## Discovered Issues
+
+| Date | Issue | Where it surfaced | Disposition | Tracked at |
+|------|-------|-------------------|-------------|------------|
+| 2026-08-28 | `TestSearxNGIntegration_Smoke` asserts on live third-party search results and fails with `expected at least one snippet from live SearxNG; got 0` while its `/healthz` probe passes | Full integration lane run for this packet (`tests/integration`, ROOT package) | Routed to the owner of `specs/064-open-ended-knowledge-agent` SCOPE-07 (web search). Not altered from this packet, because the credible fix changes that test's assertion semantics and a careless relaxation would mask a genuine SearxNG regression | `.specify/memory/open-work.md` row **R-015**; test at `tests/integration/openknowledge_searxng_test.go:56`; settings at `config/searxng/settings.yml` |
+
+## Out of Scope
+
+### TestSearxNGIntegration_Smoke
+
+`TestSearxNGIntegration_Smoke` fails on the full integration lane. It belongs to
+`specs/064-open-ended-knowledge-agent` SCOPE-07 (web search), is recorded in
+`.specify/memory/open-work.md` row **R-015**, and its disposition is the
+`## Discovered Issues` row above. Its test lives at
+`tests/integration/openknowledge_searxng_test.go:56` and its engine
+configuration at `config/searxng/settings.yml`.
+
+Why it is not this packet's to resolve, per
+`agents/bubbles_shared/operating-baseline.md` artifact ownership:
+
+- **Different package.** It lives in the ROOT `tests/integration` package. This
+  packet's package is `tests/integration/agent`, which PASSED at 16.335s in the
+  same run.
+- **Different subject.** SearxNG is web search for spec 064 SCOPE-07. This
+  packet changed router warm-up gating and touched no web-search code. The
+  change surface was one integration test, one `_test.go` guard, a `tests/`-only
+  support package, and 3 SST keys.
+- **Different failure mode.** The assertion is
+  `openknowledge_searxng_test.go:56: expected at least one snippet from live
+  SearxNG; got 0`. The `/healthz` probe PASSED, so the container was reachable
+  and responding; the search returned zero results. SearxNG proxies to live
+  third-party engines, which commonly rate-limit or block datacenter addresses,
+  so a zero-result response is an upstream-availability condition rather than
+  evidence that the integration is broken.
+
+**Why this packet did not change that test, stated so the choice is auditable.**
+The credible fix is to make `tests/integration/openknowledge_searxng_test.go`
+distinguish *"SearxNG returned a well-formed response containing no upstream
+hits"* from *"the SearxNG integration is broken"* - today it conflates them,
+which is why an upstream block reads as a product failure. That changes another
+spec's test SEMANTICS, and relaxing the assertion on a hypothesis is exactly how
+a real breakage slips through. Routed to `specs/064-open-ended-knowledge-agent`
+SCOPE-07 with the evidence attached, per the `## Discovered Issues` row above.
+
+**NOT claimed:** a root cause. The failure was observed and attributed to a
+package and a subject; the SearxNG service was NOT investigated beyond reading
+`config/searxng/settings.yml`, which shows `json` correctly present in `formats`
+(so the API is enabled) and only `duckduckgo` plus `wikipedia` active, with
+`bing` and `google` disabled. A passing health probe plus zero results is most
+consistent with those upstream engines refusing datacenter traffic - that is a
+hypothesis, NOT a diagnosis, and it is recorded as one.
+
+<!-- bubbles:g040-skip-end -->
 
 ### Uncertainty Declarations
 
