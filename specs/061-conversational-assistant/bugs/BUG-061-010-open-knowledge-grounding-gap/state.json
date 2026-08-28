@@ -80,6 +80,6 @@
     }
   ],
   "blockedReasonDischarge": "Closed by supersession. The recorded blocker was that the implementing spec (104) was still open, so the routed obligations had no certifying owner and an operator live smoke had not been recorded. Both are now discharged: spec 104 is certified done with failedGateIds [] and failureCount 0, and the operator granted acceptance in writing. This packet still wrote no code and certifies no delivery of its own - every routed DoD item names spec 104 as its claim source. NOT CLAIMED: no agent performed a Telegram turn against the deployed bot.",
-  "certifiedAt": "2026-08-28T02:36:55Z",
+  "certifiedAt": "2026-08-28T02:38:08Z",
   "timestampProvenance": "certifiedAt read from date -u AFTER the packet commit; not inferred."
 }
