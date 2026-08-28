@@ -2076,6 +2076,7 @@ The diagnosis held. The same test, in the same full-suite position that failed
 before, now passes:
 
 ```text
+$ ./smackerel.sh test e2e
 === RUN   TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved
     nothing_captured_ack_e2e_test.go:113: live envelope: status="unavailable"
         error_cause="slot_missing" capture_route=false sources=0
@@ -2084,6 +2085,7 @@ before, now passes:
 ...
 PASS: go-e2e
 PASS: go-e2e-graph-disabled
+Exit Code: 0
 ```
 
 The envelope is the honest one on the wire: `unavailable` / `slot_missing` /
