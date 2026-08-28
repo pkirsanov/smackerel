@@ -8,7 +8,7 @@
   "executionRuntime": "direct",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "done",
+  "status": "blocked",
   "lastUpdatedAt": "2026-08-23T18:16:35Z",
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -209,7 +209,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "blocked",
     "statusNote": "SET 2026-08-23 by bubbles.validate to mirror the top-level status. Certification is withheld SOLELY on Gate G136 (human acceptance) and on NO evidence deficiency: all three scopes declare Done, DoD is 32 checked / 0 unchecked, and all eight phases listed in certifiedCompletedPhases cleared the two-part bar (report.md evidence resolving to exactly one real heading AND an execution.executionHistory entry naming the executing agent). G136 requires uservalidation.md to carry an authored '## Human Acceptance Record' whose acceptedBy must not be a bubbles.* identity, so no agent can clear it; it remains failing by design and is the only thing standing between this packet and done.",
     "completedAt": null,
     "evidenceRef": "report.md#before-fix---accepted-bubblestest-handoff",
@@ -356,6 +356,6 @@
       "bubbles.docs"
     ]
   },
-  "blockedReasonDischarge": "Two blockers, both discharged 2026-08-28. G095: the guard flagged the deferral token at report.md:1114 and :3012. Neither is a deferral - :1114 asserts the test now fails loudly INSTEAD of deferring, and :3012 names this packet's own defect, which is literally about tests taking the silent-skip path while reporting green. Both were left VERBATIM rather than reworded, because they are historical RED evidence, and were filed as dated rows in '## Discovered Issues' - the guard's own remediation option (b). G136: operator granted acceptance in writing; record authored stating no agent performed the interactive observations.",
-  "certifiedAt": "2026-08-28T03:57:52Z"
+  "certifiedAt": "2026-08-28T03:57:52Z",
+  "blockedReason": "TWO of three blockers discharged 2026-08-28; ONE IS REAL AND REMAINS. DISCHARGED - G095: the guard cited report.md:1114 and :3012. Neither is a deferral. :1114 asserts the required weather E2E now fails loudly INSTEAD of taking the silent path, and :3012 names this packet's own defect, which is literally that manifest-required E2E tests took the silent-skip path while the lane reported green. Both lines were left VERBATIM rather than reworded, because they are historical RED evidence, and were filed as dated rows under '## Discovered Issues' - the guard's own remediation option (b). DISCHARGED - G136: operator granted acceptance in writing; a Human Acceptance Record is authored. STILL BLOCKING - G092: this packet's own observations[] carries a HIGH-severity, remediation-required observation stating that parent Spec 069 completion evidence is contradicted and that parent artifact reconciliation is validate-owned after the fix is proven. A promotion to done was attempted and REVERTED, because certifying a packet while one of its own recorded high-severity findings is open is exactly what G092 exists to prevent. This is NOT a matcher artifact. COMPOUNDING FINDING 2026-08-28: parent specs/069-assistant-http-transport is itself status done, certifiedAt 2026-06-06T17:00:00Z - so a parent is certified done while one of its own child bugs records that parent's completion evidence as contradicted. That contradiction is now visible rather than buried. ACTION TO UNBLOCK: reconcile the parent's completion evidence against what this packet proved, then close the observation. That is validate-owned work on the PARENT artifact, outside this packet's Change Boundary."
 }
