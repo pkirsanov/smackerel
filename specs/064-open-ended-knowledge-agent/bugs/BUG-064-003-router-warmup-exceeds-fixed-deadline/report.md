@@ -784,3 +784,62 @@ this spec carry `uservalidation.md` (all three) and `scenario-manifest.json`
 six artifacts, so the omission is deliberate and is flagged here rather than
 silently absorbed; it will need closing before this bug can pass artifact lint
 or reach a terminal status.
+
+## Scenario Receipt Campaign
+
+All five scenarios in `scenario-manifest.json` were driven to `REGRESSION_GREEN`
+by earning real execution receipts, not by asserting the states. Each scenario's
+`red` phase was produced by injecting a genuine fault, observing a **failing**
+run, and then restoring the tree under a `trap ... EXIT INT TERM` guard that was
+verified to leave `git diff --stat` empty every time.
+
+The `red` faults were chosen to be *discriminating* — each one had to fail for
+the scenario's own reason, not merely fail. Two of them are worth naming because
+they prove the packet's central distinction:
+
+- **SCN-064-003-02** zeroed the warm-up budget so the embedder can never qualify
+  as warm. The run failed with
+  `embedder readiness gate failed (this is an ML sidecar readiness verdict, NOT a routing failure)`
+  — exactly the verdict this bug exists to introduce.
+- **SCN-064-003-01** handed `BuildRouter` a zero-value cold `WarmResult` instead
+  of the awaited warm one, reproducing the pre-fix cold-start path. It failed at
+  router construction, which is a *routing* failure — distinct from the readiness
+  verdict above. The two reds therefore discriminate between the two failure
+  modes rather than collapsing into one.
+
+| Scenario | Fault injected for `red` | `red` exit | Tree restored |
+|---|---|---|---|
+| SCN-064-003-01 | zero-value cold `WarmResult` passed to `BuildRouter` | 1 | `restored=0` |
+| SCN-064-003-02 | warm-up budget zeroed (`deadline := started`) | 1 | `restored=0` |
+| SCN-064-003-03 | `agent.NewRouter(` token injected into the routing test (asserted ABSENT first, so survival cannot be vacuous) | 1 | `restored=0` |
+| SCN-064-003-04 | `missing = append(missing, EnvConfidenceFloor)` replaced by a silent `floor = 0.65` substitution | 1 | `restored=0` |
+| SCN-064-003-05 | `BuildPerCallBudget < WarmTargetLatency` ceiling guard neutralised | 1 | `restored=0` |
+
+Every scenario then ran `implement` (`./smackerel.sh check`), `green`, and
+`regression`, each exiting `0`. Resolver output after the campaign:
+
+```
+$ bash .github/bubbles/scripts/scenario-state-resolve.sh --spec-dir "$B"
+  SCN-064-003-01  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+  SCN-064-003-02  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+  SCN-064-003-03  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+  SCN-064-003-04  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+  SCN-064-003-05  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+
+$ ... --require RED_VERIFIED --require IMPLEMENTED --require GREEN_TARGETED --require REGRESSION_GREEN --certifiable
+0
+```
+
+`0` is the count of `UNSATISFIED` lines: every scenario satisfies every state
+this packet's tier can earn. `GREEN_LIVE` and `OBSERVED` are not applicable —
+they describe production-observed behaviour, and this fix is confined to the
+integration tier.
+
+### Durability limit of these receipts
+
+The receipt store `.specify/runtime/tool-calls.jsonl` is **gitignored**, and each
+receipt is bound to the source revision it ran against. A later commit therefore
+raises `SCS-REVISION-DRIFT` against every receipt above, and the campaign has to
+be re-earned at whatever revision the packet finally closes on. That property is
+recorded as **R-017** in `.specify/memory/open-work.md`. The table above is the
+durable record; the receipts are the perishable proof.
