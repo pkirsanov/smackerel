@@ -732,5 +732,7 @@
     "specs/061-conversational-assistant",
     "specs/074-assistant-capture-as-fallback-policy"
   ],
-  "blockedReasonDischarge": "The sole remaining blocker was the broader E2E regression suite, which had been deliberately left unchecked rather than inferred from the focused lane. It has now been run: ./smackerel.sh test e2e exited 0, this packet's own TestAssistantHTTPE2E_ExecutionErrorSurfacesHonestly PASSED inside that suite (log line 3577), and all three go phases are green (go-e2e, go-e2e-graph-disabled, go-e2e-corpus-enforce). The single 'FAIL:' string in the log is the expected output of a negative scenario that stops postgres on purpose, immediately followed by PASS: SCN-002-BUG-002-001."
+  "blockedReasonDischarge": "The sole remaining blocker was the broader E2E regression suite, which had been deliberately left unchecked rather than inferred from the focused lane. It has now been run: ./smackerel.sh test e2e exited 0, this packet's own TestAssistantHTTPE2E_ExecutionErrorSurfacesHonestly PASSED inside that suite (log line 3577), and all three go phases are green (go-e2e, go-e2e-graph-disabled, go-e2e-corpus-enforce). The single 'FAIL:' string in the log is the expected output of a negative scenario that stops postgres on purpose, immediately followed by PASS: SCN-002-BUG-002-001.",
+  "certifiedAt": "2026-08-28T01:51:31Z",
+  "timestampProvenance": "certifiedAt read from date -u AFTER the packet commit; not inferred."
 }
