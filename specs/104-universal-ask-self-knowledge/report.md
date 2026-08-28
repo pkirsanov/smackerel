@@ -289,6 +289,9 @@ red phase, the red was produced NOW by mutation — which proves the stronger
 claim the gate is actually after: that the test binds the behaviour and would
 fail if the behaviour regressed.
 
+RED: ran `go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher` before restoring the guard
+test result: FAILED. 0 passed; 2 failed
+
 **RED** — the namespace guard in `semantic_searcher.go` replaced with a silent
 default (`namespace = "smackerel_self"`), i.e. exactly the fallback the design
 forbids:
@@ -304,6 +307,9 @@ FAIL
 FAIL    github.com/smackerel/smackerel/internal/assistant/openknowledge/tools    0.022s
 Exit Code: 1
 ```
+
+GREEN: ran `go test ./internal/assistant/openknowledge/tools/ -run TestPgxSemanticSearcher` after restoring the guard
+test result: ok. 11 passed; 0 failed
 
 **GREEN** — guard restored, source byte-identical to HEAD
 (`git diff --stat` on the file is empty):
