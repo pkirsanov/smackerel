@@ -288,14 +288,78 @@ edit set, so they are flagged here rather than edited.
 
 ### Test Evidence
 
-No tests were executed in this session. The operator captured the failure
-evidence in a prior session and directed that
-`./smackerel.sh test integration` (~20 minutes) not be re-run. All failure
-output below is quoted verbatim from the operator's preserved logs.
+This section was originally written before any test in this packet existed, and
+said so. That is no longer true and the stale wording has been replaced rather
+than left to contradict the artifacts below. T1–T6 now all exist and have all
+been executed. The preserved operator logs from the original reproduction are
+retained further down, clearly labelled as prior-session material.
 
-**Claim Source: not-run** — for every test in the [scopes.md](scopes.md) Test
-Plan (T1–T4). None of T1–T4 exists yet; they are planned regression coverage for
-a fix that has not been written.
+**T6 — SLA stress** (`tests/stress/bug064003_router_warmup_sla_stress_test.go`):
+
+```
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test stress --go-run 'BUG064003'
+=== RUN   TestBUG064003_SLABudgetsArePresentAndOrdered
+    BUG-064-003 T6 SST budgets: target=1s budget=1m0s per-call=2s embed-timeout=30s
+--- PASS: TestBUG064003_SLABudgetsArePresentAndOrdered (0.00s)
+=== RUN   TestBUG064003_WarmupBudgetBoundsRepeatedNeverWarmWaits
+    BUG-064-003 T6 sequential never-warm: 25 iterations, budget=300ms,
+    worst observed=301.794713ms
+--- PASS: TestBUG064003_WarmupBudgetBoundsRepeatedNeverWarmWaits (7.52s)
+=== RUN   TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters
+    BUG-064-003 T6 concurrent never-warm: 32 waiters, budget=300ms,
+    worst observed=301.346458ms
+--- PASS: TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters (0.30s)
+=== RUN   TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad
+    BUG-064-003 T6 concurrent warm path: 32 waiters, budget=300ms,
+    worst observed=1.430401ms
+--- PASS: TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad (0.00s)
+ok      github.com/smackerel/smackerel/tests/stress     8.008s
+T6_STRESS_EXIT=0
+```
+
+T6 is proven adversarial, not merely green. Stretching the deadline to
+`WarmupBudget * 4` drove the lane to exit 1 while the SST-shape and warm-path
+tests correctly kept passing — the selectivity that separates a discriminating
+test from one that reddens whenever anything moves:
+
+```
+$ (mutation: deadline := started.Add(t.WarmupBudget * 4))
+    iteration 0: warm-up overran its declared budget — this is BUG-064-003
+    reappearing. budget=300ms observed=1.200s
+--- FAIL: TestBUG064003_WarmupBudgetBoundsRepeatedNeverWarmWaits (1.20s)
+    waiter 0: warm-up overran its declared budget under contention —
+    budget=300ms observed=1.201104848s probes=24
+--- FAIL: TestBUG064003_WarmupBudgetHoldsUnderConcurrentWaiters (1.20s)
+--- PASS: TestBUG064003_SLABudgetsArePresentAndOrdered (0.00s)
+--- PASS: TestBUG064003_WarmEmbedderQualifiesWellInsideBudgetUnderLoad (0.00s)
+T6_MUTATED_EXIT=1   restored=0
+```
+
+**T5 — E2E regression** (`tests/e2e/agent/bug064003_router_warmup_e2e_test.go`):
+
+```
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test e2e
+=== RUN   TestBUG064003_E2E_T5a_WarmupBudgetContractHoldsInLiveStack
+    BUG-064-003 T5a live-stack warm-up contract: target=1s budget=1m0s
+    per-call=2s embed-timeout=30s
+--- PASS: TestBUG064003_E2E_T5a_WarmupBudgetContractHoldsInLiveStack (0.00s)
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+PASS: go-e2e-corpus-enforce
+E2E5_EXIT=0
+setup failed count: 0
+oom-preflight: OK — 36446 MB available (need 6000 MB; swap used 1798 MB)
+```
+
+Full narrative for T5 — including the two defects of my own that running it
+exposed, and why it ships one test rather than two — is in the
+"T5 — E2E regression" section below.
+
+#### Preserved evidence — original reproduction (prior session)
+
+The material below is quoted verbatim from the operator's preserved logs of the
+original failure. It is prior-session evidence for the REPRODUCTION, not a claim
+about this session's execution.
 
 #### Preserved evidence — Run A, full lane (`~/bug011-integration-a9.log`)
 
