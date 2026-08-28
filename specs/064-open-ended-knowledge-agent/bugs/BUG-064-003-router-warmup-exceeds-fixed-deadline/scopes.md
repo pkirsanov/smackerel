@@ -19,7 +19,7 @@
 
 ## Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start
 
-**Status:** [ ] In Progress
+**Status:** In Progress
 **Depends On:** none
 
 ### Gherkin Scenarios (regression contract)
@@ -113,11 +113,29 @@ mapping 1:1 to these rows in order.
     3594:ok      github.com/smackerel/smackerel/tests/integration/agent  20.238s
     ```
   - SCN-064-003-01 is discharged: the gate qualified on probe #1 at 464 ms, construction then ran under a 2m38s budget derived from `embed_calls=79`, and the test spent 11.99 s reaching a routing verdict rather than dying at ~32 s inside the warm-up loop.
-- [ ] **T2** integration: unready embedder produces an explicit readiness failure
-  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
-  - The Test Plan declares T2 in the `integration` category, in `tests/integration/agent/openknowledge_routing_test.go`, under `./smackerel.sh test integration`. That lane ran green, which means the embedder **was** ready — `probes=1 ... qualifying=464ms` (log line 3552). A run in which the gate passes cannot exercise the branch that fires when it does not, so this row's declared tier produced no evidence for it.
-  - The branch **exists** in the declared file and is distinguishable by construction — `openknowledge_routing_test.go:125` fails with `"integration: embedder readiness gate failed (this is an ML sidecar readiness verdict, NOT a routing failure)"` — and the behaviour **is** proven, but at the `unit` tier only: `TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting` PASS with subtests `responds_but_never_reaches_warm_latency` and `every_probe_times_out` (`~/s064-unit.log` lines 84–86).
-  - Checking this row would claim `integration`-tier evidence that does not exist. Discharging it requires either a fault-injected integration run against a deliberately-unready sidecar, or an owner decision to reclassify the row to `unit`. Neither is in this pass's edit set.
+- [x] **T2** integration: unready embedder produces an explicit readiness failure
+  - **Claim Source:** executed 2026-08-28 via **fault-injected integration run** — the first of the two discharge routes this row itself named. The row is discharged at its DECLARED `integration` tier; it was NOT reclassified to `unit`.
+  - **Why a green run could never discharge this.** The branch is a guard clause, not a subtest: it fires only when the embedder fails to warm. The healthy lane passes the gate (`probes=1 ... qualifying=464ms`), so it structurally cannot exercise the branch. Fault injection is the only way to reach it.
+  - **Fault injected, and chosen to hit the right branch.** `tests/integration/agent/routerwarmup/routerwarmup.go:304` `deadline := started.Add(t.WarmupBudget)` → `deadline := started`, zeroing the warm-up budget. This matters for correctness of the proof: the switch at `openknowledge_routing_test.go:122-126` has TWO arms, and only one is T2 — `errors.Is(err, ErrEmbedderUnreachable)` takes a `t.Skipf`, while any other error takes the `t.Fatalf` readiness verdict. Pointing at a dead URL would have hit the SKIP arm and proven nothing. A zero budget yields `ErrEmbedderNotWarm` — reachable, but never warm — which is precisely the condition the row describes.
+  - **Command:** `./smackerel.sh test integration --go-run TestOpenKnowledgeRouting_FallbackToOpenKnowledge` · **Exit Code:** 1
+
+    ```
+    === RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge
+        openknowledge_routing_test.go:125: integration: embedder readiness gate failed
+        (this is an ML sidecar readiness verdict, NOT a routing failure): routerwarmup:
+        ML sidecar embedder did not reach warm latency within 1m0s (1s target from
+        AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS, budget from AGENT_ROUTING_WARMUP_BUDGET_MS):
+        probes=0 latencies=[] qualifying=0s elapsed=0s: routerwarmup: ML sidecar
+        embedder did not reach warm latency
+    --- FAIL: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (0.00s)
+    FAIL
+    FAIL    github.com/smackerel/smackerel/tests/integration/agent  0.195s
+    T2_FAULT_EXIT=1
+    ```
+
+  - **Four independent details confirm this is T2 and not something adjacent.** (1) The failure originates at `openknowledge_routing_test.go:125`, the exact assertion line the row cites. (2) The verdict text is the readiness-versus-routing sentence verbatim, so the distinction the row is about is the one that fired. (3) The wrapped cause is `ML sidecar embedder did not reach warm latency` — `ErrEmbedderNotWarm`, NOT `ErrEmbedderUnreachable` — so the SKIP arm was not taken; there is no `--- SKIP` anywhere in the run. (4) `probes=0 ... elapsed=0s` shows the zeroed budget took effect, and the message names its SST sources (`AGENT_ROUTING_WARMUP_TARGET_LATENCY_MS`, `AGENT_ROUTING_WARMUP_BUDGET_MS`), confirming the timings are SST-derived rather than literals.
+  - **Isolation verified.** `dirty_before=0`; after `git restore`, `dirty=0` and `diff_vs_HEAD=0`. The injection never entered a commit.
+  - The `unit`-tier corroboration still stands and is now the second of two tiers rather than a substitute: `TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting` PASS, subtests `responds_but_never_reaches_warm_latency` and `every_probe_times_out`.
 - [x] **T3** unit: contract guard rejects a reintroduced fixed wall-clock literal
   - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Terminal marker:** `[go-unit] go test ./... finished OK`
   - **Command:** `./smackerel.sh test unit --go --go-run 'BUG064003|RouterWarmup|Warmup' --verbose` — preserved at `~/s064-unit.log` (564 lines), read this session.
@@ -228,12 +246,13 @@ mapping 1:1 to these rows in order.
     The kill is discriminating, not blanket: `confidence_floor_unparseable` still PASSED, because `"not-a-float"` fails parsing regardless of the substituted default. Exactly the two subtests the mutation could affect failed, and no others. A guard that failed everything would not have demonstrated this.
   - **Isolation verified.** `dirty_before=0` in both cases; after `git restore`, `dirty_after_restore=0`, `diff_vs_HEAD=0`, and the injected token count returned to `0`. No mutant escaped into the committed tree.
   - Why this was not produced as a mechanical receipt: `.github/bubbles/scripts/mutation-receipt.sh` is present and was invoked first, but returned `adapter=none  receipts=skipped  records=0` — the default-OFF switch. Earning machine-checkable receipts needs a project-owned `mutationExecution.command` executable, which is a new capability outside this bug's Change Boundary rather than a config flip.
-- [ ] Post-fix state: T1–T4 PASS
-  - **Claim Source:** interpreted · **Uncertainty Declaration.** Left unchecked deliberately — **3 of 4**, not 4 of 4.
-  - T1, T3 and T4 are checked above on executed evidence, and all three were independently RE-VERIFIED on 2026-08-28: T1's three routing tests ran and passed (`ok tests/integration/agent 1.664s`, 6 subtests, 0 FAIL / 0 SKIP), and the nine `TestBUG064003_*` contract tests ran and passed (`27 === RUN`, `9 --- PASS`, `0 FAIL`, `0 SKIP`, `ok internal/agent 1.666s`).
-  - T2 is still not discharged, for the reason stated in its own entry: the green lane never exercised the unready-embedder branch at the `integration` tier the row declares. A composite "T1–T4 PASS" tick would silently promote a 3-of-4 result to 4-of-4.
-  - Note on what the unit tier DOES cover, so the gap is not overstated: `TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting` passes, so the readiness-versus-routing DISTINCTION is proven as logic. What remains unproven is that distinction surfacing at the integration tier, which is what the T2 row specifies. Substituting the unit result would be a test-category substitution, which this repository's test-type integrity policy forbids.
-  - This item becomes checkable the moment T2 is discharged; nothing else is outstanding.
+- [x] Post-fix state: T1–T4 PASS
+  - **Claim Source:** executed 2026-08-28. **4 of 4**, not 3 of 4 — the composite is checked only because T2 was discharged at its declared tier, which the previous revision of this entry set as the precondition.
+  - **T1** — `ok github.com/smackerel/smackerel/tests/integration/agent 1.664s`. Three tests, six subtests, 0 FAIL / 0 SKIP: `TestOpenKnowledgeRouting_FallbackToOpenKnowledge` (1.44s; weather-domain-query, open-ended-knowledge, deterministic-tool-query), `_ScenarioHealthProbe` (0.02s), `_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot` (3 subtests).
+  - **T2** — discharged by fault-injected integration run; see its own entry above for the readiness-verdict evidence and the four confirmations that the correct branch fired.
+  - **T3 / T4** — part of `27 === RUN / 9 --- PASS / 0 FAIL / 0 SKIP` across the nine `TestBUG064003_*` contract tests, `ok github.com/smackerel/smackerel/internal/agent 1.666s`. Both additionally carry mutation kills with matching signatures (see the pre-fix entry).
+  - **Execution was verified, not inferred from a green exit code.** `go test -run` exits 0 when its selector matches nothing, so an exit code alone cannot distinguish "passed" from "never ran". The distinguishing evidence is that the two packages carrying these tests report a real duration with NO `[no tests to run]` suffix, while every other package in the same run carries that suffix. That asymmetry is what makes these results real.
+
 - [x] Regression tests contain no silent-pass bailout patterns
   - **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02 · **Exit codes:** `0` (both modes)
   - **Command:** `bash .github/bubbles/scripts/regression-quality-guard.sh <files>` and the same with `--bugfix`, run live this session against both regression files.

@@ -85,7 +85,62 @@ That failure is in the ROOT `tests/integration` package, where
 session: every commit in it touched only `specs/` and `.specify/`, verified with
 `git diff --name-only`. Recording it here because a red lane changes what any
 later "integration passes" claim on this packet can mean.
+### RED → GREEN ordering (scenario-first TDD evidence)
 
+The order below is the order the commands were run. Each RED was produced by
+deliberately reintroducing the defect the guard exists to catch; each GREEN is
+the same guard on the restored tree. The tree was verified byte-identical to
+HEAD (`diff_vs_HEAD=0`) after every restore, so no mutant reached a commit.
+
+**RED 1 — T3 guard, mutant killed.** Injected `agent.NewRouter(` into the file
+T3 protects:
+
+```
+--- FAIL: TestBUG064003_RoutingTestCarriesNoWallClockLiteral (0.00s)
+    openknowledge_routing_test.go calls agent.NewRouter directly; it must go
+    through routerwarmup.BuildRouter
+FAIL    github.com/smackerel/smackerel/internal/agent   0.091s
+```
+
+**RED 2 — T4 guard, mutant killed and discriminating.** Replaced the fail-loud
+`missing = append(missing, EnvConfidenceFloor)` with a silent `floor = 0.65`:
+
+```
+--- FAIL: TestBUG064003_RoutingValuesFailLoudWithoutFallback (0.00s)
+    --- FAIL: .../confidence_floor_absent
+    --- FAIL: .../confidence_floor_empty
+    --- PASS: .../confidence_floor_unparseable
+    --- PASS: .../consider_top_n_absent
+FAIL    github.com/smackerel/smackerel/internal/agent   0.033s
+```
+
+**RED 3 — T2 readiness branch, at the integration tier.** Zeroed the warm-up
+budget so the embedder is reachable but never warms:
+
+```
+--- FAIL: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (0.00s)
+    openknowledge_routing_test.go:125: integration: embedder readiness gate
+    failed (this is an ML sidecar readiness verdict, NOT a routing failure):
+    routerwarmup: ML sidecar embedder did not reach warm latency
+FAIL    github.com/smackerel/smackerel/tests/integration/agent  0.195s
+```
+
+**GREEN — every guard passing on the restored tree.** Same commands, no mutation:
+
+```
+--- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (1.44s)
+--- PASS: TestOpenKnowledgeRouting_ScenarioHealthProbe (0.02s)
+--- PASS: TestOpenKnowledgeRouting_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot
+ok      github.com/smackerel/smackerel/tests/integration/agent  1.664s
+27 === RUN / 9 --- PASS / 0 FAIL / 0 SKIP  (TestBUG064003_*)
+ok      github.com/smackerel/smackerel/internal/agent   1.666s
+```
+
+Why the GREEN block is real rather than a vacuous selector match: `go test -run`
+exits 0 when nothing matches, so the exit code alone proves nothing. The two
+packages above report real durations with NO `[no tests to run]` suffix, while
+every other package in the same runs carries that suffix. That asymmetry is the
+evidence of execution.
 **Claim Source: executed** — both lanes were executed in a prior pass and
 preserved to logs. The line numbers and quoted text below were read in this
 documentation pass from the recorded evidence blocks in [scopes.md](scopes.md);
