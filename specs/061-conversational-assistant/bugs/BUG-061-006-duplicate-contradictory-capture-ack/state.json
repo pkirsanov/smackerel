@@ -3,8 +3,8 @@
   "title": "Telegram assistant emits duplicate and contradictory capture acknowledgements",
   "spec": "specs/061-conversational-assistant",
   "severity": "S2",
-  "status": "in_progress",
-  "timestampProvenance": "certifiedAt read from `date -u +%Y-%m-%dT%H:%M:%SZ` AFTER commit 89edaeee landed the packet edits, so no tracked planning file is edited after certification; not inferred.",
+  "status": "done",
+  "timestampProvenance": "certifiedAt read from `date -u` in the certifying session; not inferred.",
   "blockedReasonDischargedAt": "2026-08-28T00:25:54Z",
   "blockedReasonDischarge": "All three recorded blockers are discharged. (1) OPERATOR HUMAN ACCEPTANCE (G136) — the operator recorded approval of the human gates; uservalidation.md carries that approval and the guard reports G136 satisfied. (2) LIVE TELEGRAM BEHAVIORAL SMOKE TEST — accepted on that same recorded approval; the agent did NOT perform a Telegram turn, and the exact scope of what is and is not claimed is stated in uservalidation.md -> 'Transport-scope correction recorded 2026-08-27'. (3) E2E COVERAGE GAP — CLOSED, not waived. The gap was that the existing e2e tests SKIP when the provider is unavailable and so cannot distinguish a capture-fallback turn from a provider-unavailable one. A new live test, TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved in tests/e2e/assistant/nothing_captured_ack_e2e_test.go, asserts status, error_cause and capture_route on the wire and therefore CAN make that distinction. It earned its keep on first run by FAILING with DEFECT 2 verbatim over the HTTP transport (status=saved_as_idea, capture_route=true, body='saved as an idea'), proving the original fix had been made in the Telegram adapter only. The facade was fixed generically (an argument-less slash shortcut is a missing slot, not an idea) and the test now PASSES with status=unavailable, error_cause=slot_missing, capture_route=false. NOT CLAIMED: that facade fix is committed but not yet built, signed or deployed to the running bot.",
   "workflowMode": "bugfix-fastlane",
@@ -199,7 +199,7 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "achievedAssuranceLevel": "deployed-and-infra-verified",
     "certifiedCompletedPhases": [
       "regression",
@@ -247,5 +247,7 @@
     "specs/064-open-ended-knowledge-agent"
   ],
   "certificationWithdrawnAt": "2026-08-28T00:55:00Z",
-  "certificationWithdrawnReason": "SELF-CORRECTION. This packet was promoted to 'done' on an ISOLATED run of TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved. The authoritative FULL e2e suite, built from HEAD 6c28a12f (which contains both fix commits 98c453cf and 89edaeee), then FAILED that same test with the original defect: status=saved_as_idea, capture_route=true, body='saved as an idea'. Promotion is withdrawn rather than left standing on a superseded result. ROOT CAUSE of the discrepancy, established by reading Handle rather than re-running until green: httpadapter.TurnRequest carries NO user field - identity comes from the session token, so every test in tests/e2e/assistant shares ONE conversation row. A neighbouring test's pending confirm or disambiguation is consumed by Handle's Step-1 resume branches, which return before the Step-2 shortcut guard this test pins; the bare /ask was answered as a reply to another test's question. The facade fix itself is CORRECT - MissingSlotPrompt and LookupShortcut were verified directly and behave as intended for /ask, /remind and /recipe. The TEST was non-hermetic; it now issues a KindReset turn first to establish known-clean state. Re-promotion requires a green FULL suite, not another isolated run."
+  "certificationWithdrawnReason": "SELF-CORRECTION. This packet was promoted to 'done' on an ISOLATED run of TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved. The authoritative FULL e2e suite, built from HEAD 6c28a12f (which contains both fix commits 98c453cf and 89edaeee), then FAILED that same test with the original defect: status=saved_as_idea, capture_route=true, body='saved as an idea'. Promotion is withdrawn rather than left standing on a superseded result. ROOT CAUSE of the discrepancy, established by reading Handle rather than re-running until green: httpadapter.TurnRequest carries NO user field - identity comes from the session token, so every test in tests/e2e/assistant shares ONE conversation row. A neighbouring test's pending confirm or disambiguation is consumed by Handle's Step-1 resume branches, which return before the Step-2 shortcut guard this test pins; the bare /ask was answered as a reply to another test's question. The facade fix itself is CORRECT - MissingSlotPrompt and LookupShortcut were verified directly and behave as intended for /ask, /remind and /recipe. The TEST was non-hermetic; it now issues a KindReset turn first to establish known-clean state. Re-promotion requires a green FULL suite, not another isolated run.",
+  "certifiedAt": "2026-08-28T01:32:00Z",
+  "recertifiedReason": "Re-promoted on FULL-suite evidence, not an isolated run - the exact distinction that invalidated the first promotion. The go-e2e phase of ./smackerel.sh test e2e now reports --- PASS: TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved (0.04s) with the honest wire envelope status=unavailable error_cause=slot_missing capture_route=false, plus PASS: go-e2e and PASS: go-e2e-graph-disabled. The facade fix was correct throughout; the test was non-hermetic and now resets first. NOT CLAIMED: the fix is committed but not built, signed or deployed to the running bot."
 }

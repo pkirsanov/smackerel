@@ -2069,3 +2069,26 @@ ok      github.com/smackerel/smackerel/internal/assistant       0.201s
 The TEST was non-hermetic. It now issues a `KindReset` turn first to establish
 known-clean state, so it measures the shortcut path rather than whatever a neighbour
 left behind. Re-promotion requires a green FULL suite, not another isolated run.
+
+### Re-verification — green in the FULL suite
+
+The diagnosis held. The same test, in the same full-suite position that failed
+before, now passes:
+
+```text
+=== RUN   TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved
+    nothing_captured_ack_e2e_test.go:113: live envelope: status="unavailable"
+        error_cause="slot_missing" capture_route=false sources=0
+        body="what would you like to know? try `/ask <your question>`."
+--- PASS: TestAssistantHTTPE2E_NothingCapturedIsNeverClaimedSaved (0.04s)
+...
+PASS: go-e2e
+PASS: go-e2e-graph-disabled
+```
+
+The envelope is the honest one on the wire: `unavailable` / `slot_missing` /
+`capture_route=false`, and a prompt for the missing question instead of a claim
+that an idea was saved. DEFECT 2 is closed on the HTTP transport.
+
+This is the FULL-suite `go-e2e` phase, not an isolated run — the exact
+distinction that invalidated the first promotion.
