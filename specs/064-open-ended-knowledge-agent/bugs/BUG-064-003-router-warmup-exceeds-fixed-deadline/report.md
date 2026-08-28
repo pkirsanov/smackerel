@@ -43,7 +43,48 @@ false; they are left in place as the historical record and corrected here.
 |-----------------|------------------|
 | "No fix was implemented" | A fix landed: an embedder-readiness gate ahead of the timed region, a router-construction budget derived from the embed-call count, fail-loud SST routing reads, and three new SST keys. |
 | "Scope 1 is Not Started" | Scope 1 is **In Progress**. Implementation has landed; certification has not. |
-| "every Definition-of-Done checkbox in scopes.md is unchecked" | **10 of 15** DoD checkboxes are checked, each carrying its own inline raw-output evidence. |
+| "every Definition-of-Done checkbox in scopes.md is unchecked" | **11 of 15** DoD checkboxes are checked, each carrying its own inline raw-output evidence. Was 10 of 15; the owner-decision item was recorded and checked on 2026-08-28 (see the session block below). |
+
+### Session 2026-08-28 — lanes executed, and what they do NOT establish
+
+Four commands were run against this tree state. Each block below is a verifiable
+`evidence-capture.sh` receipt: the hash is re-derivable with `--verify`, which a
+pasted transcript could never be.
+
+| Command | Exit | sha256 (full output) |
+|---|---|---|
+| `./smackerel.sh test unit` | 0 | `bfb8433f35b5412a330f8b6863625bb66b3671144c2a457d1c4e7ee799d0fcee` |
+| `./smackerel.sh test integration --go-run TestOpenKnowledgeRouting` | 0 | `750215b878a8fd8a09bd5b1a49c6943ce3030efd4748e9a2198cc5565a30b277` |
+| `./smackerel.sh test integration --go-run TestOpenKnowledgeRouting` (re-run, wider window) | 0 | `fe9a9ee312a8c7cc5736cd137b5d04e10bdef6d5f908cc56bfa2c42ed2d2f39c` |
+| `./smackerel.sh check && ./smackerel.sh lint && ./smackerel.sh format --check` | 0 | `769a440c8916a474cf29ca238cf9e8d512eb37af35006f81937fe1fd31b568e6` |
+
+`artifact-lint.sh` on this packet also exits 0.
+
+**What these receipts do NOT establish, stated plainly rather than left to be
+inferred from a green exit code.** The focused integration runs exit 0, but exit
+0 does NOT prove the three `TestOpenKnowledgeRouting_*` functions EXECUTED:
+`go test -run` also exits 0 when the selector matches nothing. Both receipts
+bound their output, and the go-integration section fell inside the omitted
+region in each, so the `=== RUN` / `--- PASS` lines were never observed. T1 and
+T2 are therefore recorded as **not proven**, not as passing. They are also not
+failing: no failure-shaped line appeared in either receipt.
+
+To close that gap, a future run should escalate to
+`bash .github/bubbles/scripts/evidence-capture.sh --diagnostic -- ./smackerel.sh test integration --go-run 'TestOpenKnowledgeRouting'`,
+which is the sanctioned full-transcript escalation and stamps the block so the
+escalation is visible to a reviewer.
+
+**Separate finding from the same session, applying to the whole repository.** The
+UNFOCUSED lane fails: `./smackerel.sh test integration` exits 1 with
+`ERROR: config-generate-time validation failed for env=test` and
+`FAIL github.com/smackerel/smackerel/tests/integration 66.335s`
+(receipt `7680fb96f151c091193a358de5ed76f9b5f97f6266d76afc0a4cdf1c3b38abae`).
+That failure is in the ROOT `tests/integration` package, where
+`tests/integration/config_validate_test.go` lives — a DIFFERENT package from
+`tests/integration/agent`, which holds T1/T2. It is not attributable to this
+session: every commit in it touched only `specs/` and `.specify/`, verified with
+`git diff --name-only`. Recording it here because a red lane changes what any
+later "integration passes" claim on this packet can mean.
 
 **Claim Source: executed** — both lanes were executed in a prior pass and
 preserved to logs. The line numbers and quoted text below were read in this
@@ -345,6 +386,18 @@ internal/config/sst_grep_guard_test.go:82:    if strings.Contains(path, string(f
    The prose has no carve-out; the guard has an explicit one. This report states
    both and declines to resolve it. See [design.md](design.md) § 5 question 1.
 
+   **RESOLVED 2026-08-28 under operator delegation.** The answer recorded in
+   [design.md](design.md) § 5 item 1 is YES with a distinction: the policy binds
+   test code, but forbids the fallback FORM, not explicit test values. The
+   guard's own rationale supports the narrow reading — `sst_grep_guard_test.go:13`
+   exempts *"test fixtures with explicit intent to use deterministic test
+   values"* — while its mechanism (a `_test.go` suffix skip at line 75, pinned by
+   a meta-test at 285-310) is broader than that rationale and also exempts silent
+   substitution. The residual gap is filed as **R-012** in
+   [.specify/memory/open-work.md](../../../../.specify/memory/open-work.md),
+   owner `bubbles.design`. The sentence above is left standing as the historical
+   record rather than deleted.
+
 ---
 
 ### Invocation Audit
@@ -370,7 +423,7 @@ owners' review.
 | `bug.md` | complete |
 | `spec.md` | complete |
 | `design.md` | complete |
-| `scopes.md` | complete — Scope 1 Not Started, all DoD unchecked |
+| `scopes.md` | complete — as authored, Scope 1 Not Started with all DoD unchecked. SUPERSEDED: Scope 1 is now In Progress with 11 of 15 DoD checked (see the correction table above); this row records the artifact's state at creation, not its state today |
 | `report.md` | this file |
 | `state.json` | complete — `in_progress`, phase `analysis` |
 

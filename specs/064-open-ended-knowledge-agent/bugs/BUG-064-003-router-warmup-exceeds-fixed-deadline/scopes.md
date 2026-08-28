@@ -356,11 +356,33 @@ mapping 1:1 to these rows in order.
 
 #### Build Quality Gate (grouped)
 
-- [ ] `./smackerel.sh check`, `lint`, and `format --check` clean; zero warnings; zero deferrals; artifact lint clean; docs aligned
-  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
+- [x] `./smackerel.sh check`, `lint`, and `format --check` clean; zero warnings; zero deferrals; artifact lint clean; docs aligned
+  - **Claim Source:** executed 2026-08-28 against this tree state. The earlier note below is superseded and left standing as the historical record.
+  - `bash .github/bubbles/scripts/evidence-capture.sh --label "BUG-064-003 check + lint + format --check" -- bash -lc './smackerel.sh check && ./smackerel.sh lint && ./smackerel.sh format --check'` → **exit 0**, 299 lines, sha256 `769a440c8916a474cf29ca238cf9e8d512eb37af35006f81937fe1fd31b568e6`. The chain is `&&`, so exit 0 requires all three to pass. Terminal line: `78 files already formatted`. Head shows `config-validate: ... OK`, `Config is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK` (17 scenarios registered, 0 rejected).
+  - `bash .github/bubbles/scripts/artifact-lint.sh <this packet>` → **exit 0**, `Artifact lint PASSED.`, including the anti-fabrication block: all checked DoD items carry evidence, no unfilled template placeholders in `scopes.md` or `report.md`, no repo-CLI bypass in report command evidence.
+  - Docs aligned: the three stale claims this item previously blocked on were corrected in [report.md](report.md) in the same pass — the DoD count (10→11 of 15), the Artifacts-Created row that still read "Scope 1 Not Started, all DoD unchecked", and uncertainty item 4 which declared the no-defaults question unresolved. Each is marked SUPERSEDED rather than deleted, so the historical record survives.
+  - Disk note, recorded because it changes how the receipts should be read: these lanes ran with `DISK_PREFLIGHT_OVERRIDE=1`. It was NOT a blind bypass. The clean reclaim was attempted first — `docker-safe-prune.sh --apply` removed 42 dangling volumes (67→25, 176.6→140.3 GB) and 3.12 GB of images while never touching the 21 protected persistent stores. That freed space INSIDE ext4 (524 GB free, against a 15 GB requirement) but did not shrink the `ext4.vhdx` high-water mark on C:, which is what the gate measures and which only an operator-side `wsl --shutdown` + elevated `Optimize-VHD` can reclaim. The guard's own text scopes the override to the "you KNOW it fits" case; the reclaim is what made that knowable.
+  - **Claim Source:** not-run · **Uncertainty Declaration.** SUPERSEDED by the executed evidence above; retained verbatim as the historical record.
   - None of `check`, `lint`, `format --check`, or `artifact-lint.sh` was executed against this tree state, and no preserved log for them exists for this bug. `ls ~/*.log` this session shows `bug011-lint.log` and `bug011-format.log`, but those were captured for BUG-061-011 at an earlier tree state that predates `routerwarmup/` and `bug064003_router_warmup_contract_test.go` entirely; citing them here would be evidence laundering.
   - "Docs aligned" is additionally **not** satisfied: [report.md](report.md) still states "No fix was implemented" and "every Definition-of-Done checkbox in scopes.md is unchecked", both of which this file now contradicts. `report.md` was outside this pass's permitted edit set.
-- [ ] Owner decision recorded for design.md § "Open questions" item 1 (does the no-defaults policy bind test code?)
-  - **Claim Source:** not-run · **Uncertainty Declaration.** Left unchecked deliberately.
-  - [design.md](design.md) § 5 question 1 is still stated as an open question with no recorded answer: *"Does the no-defaults policy bind test code? ... This bug does not presume the answer."* No owner decision has been recorded anywhere in this packet.
-  - The fix made the question **non-blocking** but did not answer it: the forbidden helper shape was deleted outright, so this bug no longer depends on the ruling. The ruling still matters beyond this bug — if the answer is "yes", the SST guard's own `_test.go` / `tests/` exclusions (`internal/config/sst_grep_guard_test.go:75,82`) are a gap warranting a separate bug against spec 020. That is an owner call, not an agent call.
+- [x] Owner decision recorded for design.md § "Open questions" item 1 (does the no-defaults policy bind test code?)
+  - **Claim Source:** executed 2026-08-28 (artifact inspection) under explicit operator delegation ("MAKE YOUR DECISION, YOU APPROVED TO TAKE BEST PATH FORWARD").
+  - **Command:** `grep -c 'DECISION (recorded 2026-08-28, owner-delegated): YES' design.md` then `grep -n ...` · **Exit Code:** 0
+
+    ```
+    $ grep -c 'DECISION (recorded 2026-08-28, owner-delegated): YES' design.md
+    1
+    $ grep -n 'DECISION (recorded 2026-08-28, owner-delegated)' design.md
+    345:   **DECISION (recorded 2026-08-28, owner-delegated): YES — the policy binds
+    GREP_EXIT=0
+    ```
+
+    The item asks that a decision be RECORDED. The evidence above is that it is
+    recorded, at [design.md](design.md) line 345, exactly once. The decision's
+    correctness is argued in design.md and summarised below; this block proves
+    only presence, which is what the DoD item requires.
+  - **Decision: YES — the policy binds test code, but what it forbids is the fallback FORM, not explicit test values.** Recorded in full at [design.md](design.md) § 5 item 1, which previously read *"This bug does not presume the answer."*
+  - The operative distinction: `os.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.7")` is an EXPLICIT value and always was permitted; a helper shaped like `getenvOr("AGENT_ROUTING_CONFIDENCE_FLOOR", 0.65)` inside test code is a SILENT SUBSTITUTION and is forbidden, because it lets a test pass under a configuration production would reject.
+  - Grounded in the guard's own words rather than inference. `internal/config/sst_grep_guard_test.go:13` justifies the exemption as *"test fixtures with explicit intent to use deterministic test values"* — explicit is the operative word. Its MECHANISM is broader than that rationale: line 75 skips whole files via `strings.HasSuffix(path, "_test.go")`, and the meta-test at lines 285-310 pins that file-level skip deliberately.
+  - Why the ruling matters to THIS bug even though the forbidden helper was deleted: T4 asserts those two knobs fail loud rather than substituting `0.65` / `5`. If test code may substitute defaults, a future helper could satisfy T4's setup while quietly restoring the behaviour T4 forbids — the same false-green class already filed as BUG-069-005.
+  - Consequence filed, not silently absorbed: the `_test.go` exclusion IS a gap, recorded as residue **R-012** in [.specify/memory/open-work.md](../../../../.specify/memory/open-work.md) with `bubbles.design` as next owner. NOT fixed here — it is the guard owner's surface and narrowing a file-level skip to a form-level one has blast radius across every existing test. NOT claimed: that any current test exploits the gap; no audit for live violations was run.
