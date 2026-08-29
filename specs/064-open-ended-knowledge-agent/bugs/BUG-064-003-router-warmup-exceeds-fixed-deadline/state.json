@@ -141,7 +141,8 @@
     "implement",
     "test",
     "regression",
-    "simplify"
+    "simplify",
+    "stabilize"
   ],
   "artifacts": {
     "present": ["bug.md", "spec.md", "design.md", "scopes.md", "report.md", "state.json"],
