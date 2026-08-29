@@ -974,8 +974,81 @@ guarded by `SMACKEREL_TEST_OLLAMA`, unset in the default lane, so its tests emit
 an explicit opt-in skip rather than a masked failure. It stays owned by
 `bubbles.devops`.
 
-### Durability limit of these receipts
+## Security Review (security phase)
 
+Reviewed surface: the five files this packet touched, plus the three SST keys it
+added. Verdict: **no security issues found.** That is the expected outcome for a
+change that adds no product code, and it is recorded with the evidence checked
+rather than asserted.
+
+| Area | Verdict | Evidence |
+|---|---|---|
+| Secret handling | Clean | `grep -nE 'SMACKEREL_AUTH_TOKEN\|_TOKEN\|_KEY\|_PASSWORD\|_SECRET\|api_key\|auth_token'` over all three non-generated files exits 1 (no match). The five `t.Logf` calls emit only durations and counts — `target=%s budget=%s per-call=%s`, iteration/waiter counts, observed latencies. No secret-bearing value is logged. |
+| SST no-defaults | Clean | `grep` for `${VAR:-`, two-arg `os.Getenv`, `unwrap_or`, and `\|\| "` exits 1 (no match). Fail-loud paths instead: 3 `t.Fatalf` in the e2e file, 15 in the stress file. Both `requiredDurationMs` helpers refuse an absent, empty, unparseable, or non-positive value rather than substituting one. |
+| Injection | Clean | `grep` for `exec.Command`, `os/exec`, `database/sql`, `text/template`, `html/template`, and `fmt.Sprintf("http` exits 1. The e2e file builds one URL from `CORE_EXTERNAL_URL` with a fixed literal path; the stress file reaches no network at all. |
+| Denial of service | Clean | T6 spawns 32 concurrent waiters, but every one of its four tests calls `requireDisposableStack(t)` (lines 167, 212, 252, 280), which refuses to run when any of `CORE_EXTERNAL_URL`, `DATABASE_URL`, `NATS_URL`, `ML_SIDECAR_URL`, `ML_BASE_URL` carries a dev/prod marker. The waiters target an in-process `slaEmbedder`, not a shared endpoint. |
+| Dependencies | Clean for this packet | This packet added no third-party dependency; its files import stdlib plus the in-repo `routerwarmup` and `agent` packages. `go.mod`/`go.sum` DO change in the commit range, but by `41d3e669` — a separate `golang.org/x/text` bump to v0.39.0 for CVE-2026-56852 — which is unrelated to this packet and is noted here only so the churn is not mistaken for ours. |
+
+Note on the R-012 interaction: the repo's SST guard skips `*_test.go` by suffix,
+so these new test files COULD have used a silent fallback without the guard
+objecting. They do not — they fail loud by construction, which is the behaviour
+the policy intends rather than merely the behaviour the guard can currently
+enforce.
+
+## Validate And Audit Phases
+
+Validation surface, all green:
+
+```
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh check          CHECK_EXIT=0
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh lint           LINT_EXIT=0
+    OK: Extension versions match (1.0.0)
+    Web validation passed
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh format --check FORMAT_EXIT=0
+    78 files already formatted
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test unit --go UNIT_EXIT=0
+    FAIL lines: 0
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh <spec>   IRS_EXIT=0
+    PASSED with 1 warning
+$ bash .github/bubbles/scripts/artifact-lint.sh <spec>     ARTIFACT_LINT=0
+```
+
+### Audit found a real defect: the manifest's linked tests did not resolve
+
+The traceability guard initially FAILED with 6 failures, all of the shape
+`scenario-manifest.json references missing linked test file: <path>::<TestName>`.
+The files were not missing — both had been executing all session. The guard
+passes each `linkedTests` entry straight to a path check with no suffix
+stripping, so a `path::TestName` string is read as a literal filename and never
+resolves.
+
+Two conventions exist in this repo. The string-with-`::` form this packet used,
+and a structured `{file, testId, category}` form used by specs 066, 067 and 068.
+Only the structured form gives the guard a clean path. The fix was to convert all
+five scenarios to the structured form — the framework guard is framework-managed
+and correctly out of bounds to edit.
+
+One entry also improved in accuracy: SCN-064-003-02 carried
+`openknowledge_routing_test.go:125`, a bare LINE reference, which named a
+location rather than a test. It now names the test that contains that line.
+
+```
+$ bash .github/bubbles/scripts/traceability-guard.sh <spec>
+BEFORE: RESULT: FAILED (6 failures, 0 warnings)   TRACE_EXIT=1
+AFTER:  RESULT: PASSED (0 warnings)               TRACE_EXIT=0   ❌ count: 0
+
+$ bash .github/bubbles/scripts/scenario-state-resolve.sh --spec-dir <spec>
+  all 5 scenarios still parse; id + scenarioId keys intact   RESOLVER_EXIT=0
+```
+
+This is worth naming plainly: the packet had been carrying a broken
+traceability link for its whole life, and every scenario receipt earned earlier
+was earned against a manifest whose linked tests the guard could not resolve. The
+receipts themselves were sound — the tests they ran are real and were verified
+executing — but the manifest could not prove the connection. The audit phase is
+what surfaced it.
+
+### Durability limit of these receipts
 The receipt store `.specify/runtime/tool-calls.jsonl` is **gitignored**, and each
 receipt is bound to the source revision it ran against. A later commit therefore
 raises `SCS-REVISION-DRIFT` against every receipt above, and the campaign has to

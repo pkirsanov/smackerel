@@ -142,7 +142,10 @@
     "test",
     "regression",
     "simplify",
-    "stabilize"
+    "stabilize",
+    "security",
+    "validate",
+    "audit"
   ],
   "artifacts": {
     "present": ["bug.md", "spec.md", "design.md", "scopes.md", "report.md", "state.json"],

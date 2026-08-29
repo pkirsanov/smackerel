@@ -11,7 +11,11 @@
       "requiredTestType": "integration",
       "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
       "linkedTests": [
-        "tests/integration/agent/openknowledge_routing_test.go::TestOpenKnowledgeRouting_FallbackToOpenKnowledge"
+        {
+          "file": "tests/integration/agent/openknowledge_routing_test.go",
+          "testId": "TestOpenKnowledgeRouting_FallbackToOpenKnowledge",
+          "category": "integration"
+        }
       ],
       "evidenceRefs": [
         "report.md#test-evidence — T1: ok github.com/smackerel/smackerel/tests/integration/agent 1.664s, 3 tests + 6 subtests, 0 FAIL / 0 SKIP"
@@ -26,8 +30,16 @@
       "requiredTestType": "integration",
       "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
       "linkedTests": [
-        "tests/integration/agent/openknowledge_routing_test.go:125",
-        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting"
+        {
+          "file": "tests/integration/agent/openknowledge_routing_test.go",
+          "testId": "TestOpenKnowledgeRouting_FallbackToOpenKnowledge",
+          "category": "integration"
+        },
+        {
+          "file": "internal/agent/bug064003_router_warmup_contract_test.go",
+          "testId": "TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting",
+          "category": "unit"
+        }
       ],
       "evidenceRefs": [
         "report.md#self-correction — proven at the integration tier by fault injection: zeroing the warm-up budget at routerwarmup.go:304 produced the explicit readiness verdict via the ErrEmbedderNotWarm branch with no --- SKIP; tree restored diff_vs_HEAD=0"
@@ -42,7 +54,11 @@
       "requiredTestType": "unit",
       "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
       "linkedTests": [
-        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_RoutingTestCarriesNoWallClockLiteral"
+        {
+          "file": "internal/agent/bug064003_router_warmup_contract_test.go",
+          "testId": "TestBUG064003_RoutingTestCarriesNoWallClockLiteral",
+          "category": "unit"
+        }
       ],
       "evidenceRefs": [
         "report.md#red-green-ordering — mutation KILLED: injecting `agent.NewRouter(` failed the guard with its own message 'calls agent.NewRouter directly; it must go through routerwarmup.BuildRouter'. Token asserted ABSENT before injection, so vacuous survival was impossible."
@@ -57,7 +73,11 @@
       "requiredTestType": "unit",
       "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
       "linkedTests": [
-        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_RoutingValuesFailLoudWithoutFallback"
+        {
+          "file": "internal/agent/bug064003_router_warmup_contract_test.go",
+          "testId": "TestBUG064003_RoutingValuesFailLoudWithoutFallback",
+          "category": "unit"
+        }
       ],
       "evidenceRefs": [
         "report.md#red-green-ordering — mutation KILLED DISCRIMINATINGLY: replacing the EnvConfidenceFloor miss-append with `floor = 0.65` failed exactly confidence_floor_absent and confidence_floor_empty (2 of 8) while confidence_floor_unparseable, every consider_top_n_* and fallback_scenario_id_absent still passed."
@@ -72,7 +92,11 @@
       "requiredTestType": "unit",
       "scopeRef": "Scope 1: Make the SCOPE-12 routing test's verdict independent of embedder cold start",
       "linkedTests": [
-        "internal/agent/bug064003_router_warmup_contract_test.go::TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST"
+        {
+          "file": "internal/agent/bug064003_router_warmup_contract_test.go",
+          "testId": "TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST",
+          "category": "unit"
+        }
       ],
       "evidenceRefs": [
         "report.md#test-evidence — T4: 6 subtests including the adversarial build_unit_above_the_sst_per_call_ceiling_is_rejected"
