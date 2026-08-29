@@ -17,11 +17,11 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.gaps",
-    "currentPhase": "gaps",
+    "activeAgent": "bubbles.harden",
+    "currentPhase": "harden",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
-    "substate": "gap_audit_complete",
-    "runStartedAt": "2026-08-29T21:46:25Z",
+    "substate": "independently_verified",
+    "runStartedAt": "2026-08-29T22:00:33Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -58,6 +58,12 @@
         "agent": "bubbles.gaps",
         "timestamp": "2026-08-29T21:46:44Z",
         "summary": "Audited every checked DoD entry present in the packet and all three scenario-manifest contracts. SCN-001 supplies real PostgreSQL recalculation coverage, SCN-003 is limited to GET /topics rendering, and open R-020 separately routes the absent test-reachable E2E recalculation trigger to bubbles.test. No additional packet gap was found; status and certification remain in progress."
+      },
+      {
+        "phase": "harden",
+        "agent": "bubbles.harden",
+        "timestamp": "2026-08-29T22:01:12Z",
+        "summary": "At starting revision 41d235f5, inspected all 15 checked DoD entries, their linked evidence, five Test Plan rows, three scenario-manifest mappings, and six predecessor phase claims. No blocker was found beyond open R-020, which remains routed to bubbles.test. No tests were rerun; status and certification remain in progress."
       }
     ],
     "pendingTransitionRequests": [],
@@ -235,6 +241,17 @@
       "runStartedAt": "2026-08-29T21:46:25Z",
       "runCompletedAt": "2026-08-29T21:46:44Z",
       "summary": "Inspected every checked DoD entry present at HEAD and all three scenario-manifest mappings. Confirmed that SCN-001 proves PostgreSQL recalculation, SCN-003 proves only GET /topics rendering, and R-020 remains explicitly open under bubbles.test for a test-reachable E2E recalculation trigger. No additional packet gap was found; certification was not modified."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": [
+        "harden"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-29T22:00:33Z",
+      "runCompletedAt": "2026-08-29T22:01:12Z",
+      "summary": "Performed a packet-only hardening review at starting revision 41d235f5. Inspected all 15 checked DoD entries, evidence links, Test Plan-to-manifest parity, and predecessor phase claims. Preserved R-020 as the separately routed limitation, made no runtime claim, and changed no certification field."
     }
   ],
   "activeBugs": [
@@ -247,7 +264,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-08-29T21:46:44Z",
+  "lastUpdatedAt": "2026-08-29T22:01:12Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -259,7 +276,7 @@
     "scenarioManifest": "scenario-manifest.json"
   },
   "routing": {
-    "nextOwner": "bubbles.harden",
+    "nextOwner": "bubbles.stabilize",
     "testOwner": "bubbles.test",
     "validationOwner": "bubbles.validate",
     "auditOwner": "bubbles.audit",

@@ -2471,3 +2471,63 @@ GAPS-DISPOSITION-AUDIT-COMPLETE
 
 **Result:** PASS. R-020 retains an explicit owner and does not invalidate this
 bug packet's integration-proven recalculation repair.
+
+## Hardening Evidence - 2026-08-29
+
+The packet-only review started at revision `41d235f5`. It inspected every one
+of the 15 checked DoD entries and opened each linked evidence section. Each
+entry has phase, execution, exit-code, claim-source, evidence, and result
+markers. The three interpreted entries retain explicit interpretations and do
+not claim end-to-end recalculation coverage.
+
+The three scenario-manifest contracts match Test Plan rows 01, 03, and 04 by
+scenario ID, category, and test path. Rows 02 and 05 provide supporting
+functional and broader unit coverage. The predecessor phase claims are ordered
+through `gaps`, and `stabilize` follows `harden` in `bugfix-fastlane`.
+
+R-020 remains open under `bubbles.test`. It is the packet's only known
+hardening limitation, and this review makes no end-to-end recalculation claim.
+No tests were rerun. No source, test, framework, scope, manifest, or
+certification artifact changed during this review.
+
+### Read-Only Packet Audit
+
+**Phase:** harden
+**Executed:** YES (current session)
+**Command:** `cd ~/smackerel && P=specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count && printf '%s\n' 'HARDEN-EVIDENCE' && awk '/^- \[x\]/ { n++; item_line=NR; phase="missing"; claim="missing"; evidence="no"; result="no"; active=1; next } active && /^  \*\*Phase:\*\*/ { phase=$0; sub(/^  \*\*Phase:\*\*[[:space:]]*/, "", phase); next } active && /^  \*\*Claim Source:\*\*/ { claim=$0; sub(/^  \*\*Claim Source:\*\*[[:space:]]*/, "", claim); next } active && /^  \*\*Evidence:\*\*/ { evidence="yes"; next } active && /^  \*\*Result:\*\*/ { result="yes"; printf "dod=%02d line=%d phase=%s claim=%s evidence=%s result=%s\n", n, item_line, phase, claim, evidence, result; active=0 } END { printf "dod-total=%d\n", n }' "$P/scopes.md" && printf 'test-plan-rows=%s\n' "$(grep -c '^| T-BUG-003-002-' "$P/scopes.md")" && jq -r '.scenarios[] | "manifest=" + .id + " type=" + .requiredTestType + " category=" + .linkedTests[0].category + " test=" + .linkedTests[0].file' "$P/scenario-manifest.json" && jq -r '"phase-chain=" + ([.execution.completedPhaseClaims[].phase] | join(","))' "$P/state.json" && jq -r '"status=" + .status + " certification=" + .certification.status + " nextOwner=" + .routing.nextOwner' "$P/state.json" && awk -F'|' '$2 ~ /R-020/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $6); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $7); print "r020-status=" $6 " r020-owner=" $7 }' .specify/memory/open-work.md && printf '%s\n' 'HARDEN-EVIDENCE-COMPLETE'`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The output enumerates all checked DoD records, exposes the
+three conservative claim-source labels, identifies all manifest mappings, and
+shows the predecessor phase chain plus the separately routed R-020 limitation.
+**Output:**
+
+```text
+HARDEN-EVIDENCE
+dod=01 line=79 phase=implement claim=executed evidence=yes result=yes
+dod=02 line=106 phase=test claim=executed evidence=yes result=yes
+dod=03 line=134 phase=test claim=executed evidence=yes result=yes
+dod=04 line=161 phase=test claim=executed evidence=yes result=yes
+dod=05 line=191 phase=test claim=executed evidence=yes result=yes
+dod=06 line=201 phase=implement claim=executed evidence=yes result=yes
+dod=07 line=228 phase=implement claim=interpreted evidence=yes result=yes
+dod=08 line=256 phase=implement claim=executed evidence=yes result=yes
+dod=09 line=286 phase=test claim=interpreted evidence=yes result=yes
+dod=10 line=297 phase=test claim=interpreted evidence=yes result=yes
+dod=11 line=308 phase=test claim=executed evidence=yes result=yes
+dod=12 line=341 phase=test claim=executed evidence=yes result=yes
+dod=13 line=369 phase=test claim=executed evidence=yes result=yes
+dod=14 line=398 phase=implement claim=executed evidence=yes result=yes
+dod=15 line=426 phase=test claim=executed evidence=yes result=yes
+dod-total=15
+test-plan-rows=5
+manifest=BUG-003-002-SCN-001 type=integration category=integration test=tests/integration/topic_lifecycle_momentum_test.go
+manifest=BUG-003-002-SCN-002 type=unit category=unit test=internal/scheduler/jobs_test.go
+manifest=BUG-003-002-SCN-003 type=e2e-api category=e2e-api test=tests/e2e/test_topic_lifecycle.sh
+phase-chain=bug,implement,test,regression,simplify,gaps
+status=in_progress certification=in_progress nextOwner=bubbles.harden
+r020-status=open r020-owner=bubbles.test
+HARDEN-EVIDENCE-COMPLETE
+```
+
+**Result:** PASS. No packet blocker was found beyond separately routed R-020.
