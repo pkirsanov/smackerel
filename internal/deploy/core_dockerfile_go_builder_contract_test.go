@@ -1,4 +1,11 @@
 // Spec 047 BUG-047-004 — production Go builder patch floor contract.
+//
+// Three trivy CRITICAL/HIGH findings have now raised this floor (BUG-047-002,
+// BUG-047-004, and the 1.25.12 -> 1.25.13 stdlib bump). Each bump previously
+// meant rewriting the same version literal in four places, so the contract
+// message and both adversarial fixtures are DERIVED from the constants below.
+// minimumAcceptedGoBuilderPatch is the one literal that stays hardcoded: it is
+// what makes lowering the floor fail.
 package deploy
 
 import (
@@ -11,8 +18,28 @@ import (
 const (
 	requiredGoBuilderMajor = 1
 	requiredGoBuilderMinor = 25
-	requiredGoBuilderPatch = 12
+	// Floor 13 fixes the Go stdlib CVEs trivy flags at 1.25.12: CVE-2026-33818,
+	// CVE-2026-46600, CVE-2026-56853, CVE-2026-56858, CVE-2026-56859,
+	// CVE-2026-56860, CVE-2026-56862. Prior floor 12 covered CVE-2026-39822.
+	requiredGoBuilderPatch = 13
+
+	// minimumAcceptedGoBuilderPatch may only ever be RAISED. Deriving the
+	// adversarial fixtures from requiredGoBuilderPatch keeps routine bumps
+	// cheap, but it also means those fixtures would keep passing if the floor
+	// were lowered. This literal is the guarantee they can no longer give.
+	minimumAcceptedGoBuilderPatch = 13
 )
+
+// goBuilderSecurityFloor renders the active floor as major.minor.patch.
+func goBuilderSecurityFloor() string {
+	return fmt.Sprintf("%d.%d.%d", requiredGoBuilderMajor, requiredGoBuilderMinor, requiredGoBuilderPatch)
+}
+
+// goBuilderFixture renders a minimal builder-stage Dockerfile pinned to the
+// given patch on the required major.minor line.
+func goBuilderFixture(patch int) []byte {
+	return []byte(fmt.Sprintf("FROM golang:%d.%d.%d-alpine AS builder\n", requiredGoBuilderMajor, requiredGoBuilderMinor, patch))
+}
 
 func assertCoreDockerfileGoBuilderContract(raw []byte) error {
 	lines := parseDockerfile(raw)
@@ -48,8 +75,8 @@ func assertCoreDockerfileGoBuilderContract(raw []byte) error {
 
 		if major != requiredGoBuilderMajor || minor != requiredGoBuilderMinor || patch < requiredGoBuilderPatch {
 			return fmt.Errorf(
-				"contract violation: builder Go version %s is below the required 1.25.12 security floor for CVE-2026-39822",
-				version,
+				"contract violation: builder Go version %s is below the required %s security floor",
+				version, goBuilderSecurityFloor(),
 			)
 		}
 
@@ -67,20 +94,31 @@ func TestCoreDockerfileGoBuilderContract_LiveFile(t *testing.T) {
 }
 
 func TestCoreDockerfileGoBuilderContract_AdversarialRejectsVulnerablePatch(t *testing.T) {
-	// This invalid pre-fix pin must fail so reintroducing CVE-2026-39822 cannot pass silently.
-	raw := []byte("FROM golang:1.25.11-alpine AS builder\n")
-	err := assertCoreDockerfileGoBuilderContract(raw)
+	// One patch below the floor must fail, so a regression to the CVE-bearing
+	// pin cannot pass silently.
+	patch := requiredGoBuilderPatch - 1
+	err := assertCoreDockerfileGoBuilderContract(goBuilderFixture(patch))
 	if err == nil {
-		t.Fatal("expected vulnerable Go 1.25.11 builder to be rejected")
+		t.Fatalf("expected below-floor Go %d.%d.%d builder to be rejected", requiredGoBuilderMajor, requiredGoBuilderMinor, patch)
 	}
-	if !strings.Contains(err.Error(), "below the required 1.25.12 security floor") {
+	if !strings.Contains(err.Error(), "security floor") {
 		t.Fatalf("expected security-floor error, got: %v", err)
 	}
 }
 
 func TestCoreDockerfileGoBuilderContract_AdversarialAcceptsPatchedPatch(t *testing.T) {
-	raw := []byte("FROM golang:1.25.12-alpine AS builder\n")
-	if err := assertCoreDockerfileGoBuilderContract(raw); err != nil {
-		t.Fatalf("expected patched Go 1.25.12 builder to pass, got: %v", err)
+	if err := assertCoreDockerfileGoBuilderContract(goBuilderFixture(requiredGoBuilderPatch)); err != nil {
+		t.Fatalf("expected at-floor Go %s builder to pass, got: %v", goBuilderSecurityFloor(), err)
+	}
+}
+
+func TestCoreDockerfileGoBuilderContract_SecurityFloorRatchet(t *testing.T) {
+	// The adversarial fixtures above track requiredGoBuilderPatch, so they
+	// cannot detect the floor being lowered. This can.
+	if requiredGoBuilderPatch < minimumAcceptedGoBuilderPatch {
+		t.Fatalf(
+			"security floor lowered: requiredGoBuilderPatch=%d is below minimumAcceptedGoBuilderPatch=%d; that constant may only ever be raised",
+			requiredGoBuilderPatch, minimumAcceptedGoBuilderPatch,
+		)
 	}
 }
