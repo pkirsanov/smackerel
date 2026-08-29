@@ -17,11 +17,11 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.test",
-    "currentPhase": "test",
+    "activeAgent": "bubbles.regression",
+    "currentPhase": "regression",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
     "substate": "independently_verified",
-    "runStartedAt": "2026-08-29T20:38:09Z",
+    "runStartedAt": "2026-08-29T21:19:03Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -40,6 +40,12 @@
         "agent": "bubbles.test",
         "timestamp": "2026-08-29T20:43:55Z",
         "summary": "Reconciled current-session RED, GREEN, IMPLEMENT, and REGRESSION receipts at the preserved a6e927b2 product/test input closure. All three active scenarios derived REGRESSION_GREEN, and the recorded broader E2E and Go unit commands exited 0. R-020 remains an explicit limitation, so no recalculation E2E claim is made."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-08-29T21:19:37Z",
+        "summary": "Compared tested closure a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1 with current HEAD cf005ed4d59cb1de3f025376f917dbc7ce6d4843. Current-HEAD focused unit, PostgreSQL integration, targeted topic-lifecycle E2E, and builder-contract canary evidence remained clean; parent and neighbor contracts stayed coherent; and five packet guards exited 0. R-020 remains open, so no E2E recalculation or full-release certification claim is made."
       }
     ],
     "pendingTransitionRequests": [],
@@ -184,6 +190,17 @@
       "runStartedAt": "2026-08-29T20:38:09Z",
       "runCompletedAt": "2026-08-29T20:43:55Z",
       "summary": "Reconciled the current-session scenario receipts without rerunning tests, confirmed the packet-only input closure, derived REGRESSION_GREEN for all three active scenarios, and recorded successful broader E2E and Go unit receipts. Scope execution is complete, while top-level and certification status remain in progress."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-29T21:19:03Z",
+      "runCompletedAt": "2026-08-29T21:19:37Z",
+      "summary": "Compared the a6e927b2 tested closure with cf005ed4 current HEAD, confirmed the bug closure files were unchanged, reviewed focused unit, PostgreSQL integration, targeted E2E, and builder canary receipts, checked parent, neighbor, coverage, and deployment deltas, and preserved R-020 as open. Added only regression evidence and execution provenance; status and certification remain in progress."
     }
   ],
   "activeBugs": [
@@ -196,7 +213,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-08-29T20:43:55Z",
+  "lastUpdatedAt": "2026-08-29T21:19:37Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -208,7 +225,7 @@
     "scenarioManifest": "scenario-manifest.json"
   },
   "routing": {
-    "nextOwner": "bubbles.test",
+    "nextOwner": "bubbles.simplify",
     "testOwner": "bubbles.test",
     "validationOwner": "bubbles.validate",
     "auditOwner": "bubbles.audit",

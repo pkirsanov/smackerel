@@ -1596,3 +1596,664 @@ regression_quality_bugfix=0
 
 **Result:** PASS. The five requested packet and regression guards accepted the
 reconciled packet before its final execution-state update.
+
+## Independent Regression Review - 2026-08-29
+
+### Review Boundary And Verdict
+
+This review started from `cf005ed4d59cb1de3f025376f917dbc7ce6d4843`.
+The tested closure was `a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1`.
+
+No post-closure change touched the momentum query, formula tests, scheduler
+failure test, topic page, integration regression, targeted E2E, or scenario
+manifest. The intervening product-wide input change updated the Go dependency
+set and Docker builder security floor. This change can affect compilation and
+container builds, so this review reran the focused unit, integration, and E2E
+rows at current HEAD. It also ran the changed builder contract as a canary.
+
+The focused current-HEAD closure is regression-free. This verdict does not
+certify the packet and does not replace a full release-suite result.
+
+### Tested-Closure To Current-HEAD Delta
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `git diff --name-status a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1..HEAD`; per-file `git diff --quiet` checks; `git diff --numstat a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1..HEAD -- Dockerfile go.mod go.sum internal/deploy/core_dockerfile_go_builder_contract_test.go`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+BUG-003-002 regression delta at HEAD
+tested-closure=a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1
+current-head=cf005ed4d59cb1de3f025376f917dbc7ce6d4843
+changed-paths:
+M       Dockerfile
+M       go.mod
+M       go.sum
+M       internal/deploy/core_dockerfile_go_builder_contract_test.go
+M       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+M       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scopes.md
+M       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+focused product/test closure:
+UNCHANGED internal/topics/lifecycle.go
+UNCHANGED internal/topics/lifecycle_test.go
+UNCHANGED internal/scheduler/jobs.go
+UNCHANGED internal/scheduler/jobs_test.go
+UNCHANGED internal/web/handler.go
+UNCHANGED tests/integration/topic_lifecycle_momentum_test.go
+UNCHANGED tests/e2e/test_topic_lifecycle.sh
+UNCHANGED specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json
+dependency-builder-delta:
+6       1       Dockerfile
+4       4       go.mod
+8       8       go.sum
+49      11      internal/deploy/core_dockerfile_go_builder_contract_test.go
+```
+
+**Result:** PASS. The bug's product, test, rendering, and scenario inputs are
+unchanged. The dependency and builder changes required current-HEAD execution.
+
+### Test Baseline Comparison
+
+The existing test closeout records successful focused commands at the tested
+closure. This review reran the same three behavior rows at current HEAD.
+
+| Category | Tested closure | Current HEAD | Delta | Status |
+|---|---|---|---|---|
+| Focused unit and functional | selected command exit 0 | selected command exit 0 | stable | CLEAN |
+| PostgreSQL integration | selected command exit 0 | selected command exit 0 | stable | CLEAN |
+| Targeted E2E API | selected shell row exit 0 | selected shell row exit 0 | stable | CLEAN |
+| Builder contract canary | not part of bug closure | selected command exit 0 | added impact check | CLEAN |
+
+No numeric test-count delta is inferred from compact output. The command
+registry exposes no separate coverage command, so no numeric coverage
+percentage is claimed. The post-closure diff removed no tests or assertions
+from the bug's source and test closure.
+
+### Current-HEAD Focused Unit And Functional Regression
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 regression focused unit at cf005ed4
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run ^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$ --verbose
+exit: 0
+lines: 578
+sha256: ea306e7985bbf5f3d69c0a28461b80ce1c03a8211bfac3a9afdf4bbbdf25ca6a
+--- first 20 ---
+oom-preflight: OK — 28708 MB available (need 6000 MB; swap used 1181 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
+[go-unit] envsubst missing — installing gettext-base
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+	gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 538 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.019s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup    [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/observability      0.003s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.008s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.007s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.136s [no tests to run]
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS. The focused selector completed through the repository CLI at
+current HEAD with the updated dependency set.
+
+### Current-HEAD PostgreSQL Integration Regression
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 regression PostgreSQL integration at cf005ed4
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run ^TestTopicLifecycleMomentumFromPersistedStars$
+exit: 0
+lines: 309
+sha256: 671631664de2212773f230dcbc672f478adc8a38dbf66143367b21437b96c8a9
+--- first 20 ---
+oom-preflight: OK — 28279 MB available (need 6000 MB; swap used 1181 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.4051951 OK
+Smackerel pre-flight resource check: OK
+	RAM  available: 28145 MB (required >= 2000 MB)
+	Disk available: 497119 MB / 485.5 GB (required >= 8 GB)
+ Network smackerel-test_default  Creating
+ Network smackerel-test_default  Created
+ Volume "smackerel-test-nats-data"  Creating
+ Volume "smackerel-test-nats-data"  Created
+ Volume "smackerel-test-postgres-data"  Creating
+ Volume "smackerel-test-postgres-data"  Created
+ Container smackerel-test-postgres-1  Creating
+ Container smackerel-test-nats-1  Creating
+ Container smackerel-test-nats-1  Created
+ Container smackerel-test-postgres-1  Created
+ Container smackerel-test-postgres-1  Starting
+ Container smackerel-test-nats-1  Starting
+ Container smackerel-test-postgres-1  Started
+ Container smackerel-test-nats-1  Started
+--- omitted 269 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/eval/assistant     0.004s [no tests to run]
+go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (^TestTopicLifecycleMomentumFromPersistedStars$) is active. Only a full lane run with no --run selector enforces that TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ran with a non-zero executed-assertion count.
+PASS: go-integration-light
+Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.4101620 OK
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-postgres-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Container smackerel-test-postgres-1  Stopped
+ Container smackerel-test-postgres-1  Removing
+ Container smackerel-test-postgres-1  Removed
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-postgres-data  Removing
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS. The selected canonical PostgreSQL regression completed and
+the disposable test resources were removed.
+
+### Current-HEAD Targeted Topic Lifecycle E2E
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 regression targeted topic E2E at cf005ed4
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh
+exit: 0
+lines: 334
+sha256: ddcf656500722703c7af53b0a7f98f9bc9289929280fbe45410f0f09edf2eb52
+--- first 20 ---
+oom-preflight: OK — 28755 MB available (need 6000 MB; swap used 1181 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.4115860 OK
+Smackerel pre-flight resource check: OK
+	RAM  available: 28662 MB (required >= 6000 MB)
+	Disk available: 497106 MB / 485.5 GB (required >= 15 GB)
+Running targeted shell E2E: test_topic_lifecycle.sh
+Running project-scoped test stack teardown (before targeted shared-stack shell E2E, timeout 180s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.4119024 OK
+oom-preflight: OK — 28754 MB available (need 6000 MB; swap used 1181 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.4122928 OK
+Smackerel pre-flight resource check: OK
+	RAM  available: 28726 MB (required >= 6000 MB)
+	Disk available: 497105 MB / 485.5 GB (required >= 15 GB)
+Preparing disposable test stack...
+Building disposable test stack images before up (freshness convention)...
+Compose can now delegate builds to bake for better performance.
+ To do so, set COMPOSE_BAKE=true.
+#0 building with "default" instance using docker driver
+--- omitted 294 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ Container smackerel-test-postgres-1  Removing
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-intent-compiler-provider-1  Stopped
+ Container smackerel-test-intent-compiler-provider-1  Removing
+ Container smackerel-test-intent-compiler-provider-1  Removed
+ Container smackerel-test-smackerel-ml-1  Stopped
+ Container smackerel-test-smackerel-ml-1  Removing
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-ollama-data  Removing
+ Volume smackerel-test-postgres-data  Removing
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS. The targeted shell E2E rebuilt the disposable stack from the
+current Dockerfile, completed, and removed its volumes and network.
+
+### Independent Builder-Delta Canary
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^TestCoreDockerfileGoBuilderContract_.*$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 independent builder delta canary at cf005ed4
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run ^TestCoreDockerfileGoBuilderContract_.*$ --verbose
+exit: 0
+lines: 529
+sha256: da99b90b5a06e2fbacabd170ac56623fa75876755afc9ea1d5b924a6cbee4792
+--- first 20 ---
+oom-preflight: OK — 28214 MB available (need 6000 MB; swap used 1185 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
+[go-unit] envsubst missing — installing gettext-base
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+	gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 489 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.006s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup    [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/observability      0.006s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.006s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.003s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.114s [no tests to run]
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+**Result:** PASS. The changed builder contract test selection completed under
+the current dependency graph.
+
+### Parent And Neighbor Lifecycle Coherence
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `grep -nE 'explicit_star_count|Topic Lifecycle System|COUNT\(DISTINCT a.id\)|a.user_starred IS TRUE|UpdateAllMomentum\(ctx\)|two distinct linked starred|unrelated starred|ON CONFLICT \(name\) DO NOTHING|Existing pricing topic owner|HOT_MOMENTUM=|CORE_URL/topics|Topics page shows owned|coverageNote.*R-020' specs/003-phase2-ingestion/spec.md internal/topics/lifecycle.go tests/integration/topic_lifecycle_momentum_test.go tests/e2e/test_topic_lifecycle.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The parent R-208 star signal, production aggregate,
+integration assertions, neighboring duplicate-seed guard, page request, and
+R-020 limitation remain mutually consistent. The focused executions above
+provide the runtime result.
+**Output:**
+
+```text
+BUG-003-002 parent and neighbor lifecycle contract inspection
+specs/003-phase2-ingestion/spec.md:165:### R-208: Topic Lifecycle System
+specs/003-phase2-ingestion/spec.md:172:    explicit_star_count × 5.0 +
+internal/topics/lifecycle.go:123:                   COALESCE((SELECT COUNT(DISTINCT a.id)
+internal/topics/lifecycle.go:127:                               AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+tests/integration/topic_lifecycle_momentum_test.go:38:  if err := lifecycle.UpdateAllMomentum(ctx); err != nil {
+tests/integration/topic_lifecycle_momentum_test.go:53:  t.Log("PASS: two distinct linked starred artifacts contribute exactly 10.0 star momentum")
+tests/integration/topic_lifecycle_momentum_test.go:55:  t.Log("PASS: an unrelated starred artifact contributes nothing to the tested topic")
+tests/e2e/test_topic_lifecycle.sh:20:ON CONFLICT (name) DO NOTHING;
+tests/e2e/test_topic_lifecycle.sh:32:echo "  Existing pricing topic owner: $PRICING_OWNER"
+tests/e2e/test_topic_lifecycle.sh:46:HOT_MOMENTUM=$(e2e_psql "SELECT momentum_score FROM topics WHERE id='topic-lifecycle-hot'")
+tests/e2e/test_topic_lifecycle.sh:53:  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/topics")
+tests/e2e/test_topic_lifecycle.sh:57:  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/topics" 2>/dev/null || true)
+tests/e2e/test_topic_lifecycle.sh:58:e2e_assert_contains "$BODY" "topic-lifecycle-pricing" "Topics page shows owned lifecycle pricing topic"
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json:80:      "coverageNote": "Narrowed 2026-08-29 from 'renders the lifecycle topics and momentum values'. The momentum half was not supported by the linked test: it seeds momentum_score as a literal and reads the same row back, so it cannot fail however badly recalculation breaks. Proven by injecting the pre-fix t.star_count fault and running the full e2e lane, which PASSED. The rendering half IS genuinely exercised via GET /topics against WebHandler.TopicsPage, so the scenario is anchored there. The uncovered recalculation path is tracked as R-020.",
+```
+
+The parent spec's R-208 formula still defines explicit stars as a weighted
+signal. The integration test still exercises the real recalculation entrypoint.
+The shared E2E still protects BUG-003-001's pre-existing `pricing` fixture and
+the `GET /topics` rendering path. No route, table, or API contract changed in
+the post-closure delta.
+
+### R-020 Preservation
+
+R-020 remains open and unchanged. The targeted E2E seeds literal
+`momentum_score` values. It reads those values and renders the seeded topic by
+name. It does not trigger `UpdateAllMomentum` through an E2E-visible entrypoint.
+
+SCN-003 therefore proves only the narrowed `GET /topics` rendering contract.
+SCN-001 remains the real PostgreSQL recalculation proof. This regression review
+does not claim E2E recalculation coverage.
+
+### Cross-Spec Impact Classification
+
+| Surface | Relationship | Current evidence | Classification |
+|---|---|---|---|
+| Parent spec 003 Scope 6 and R-208 | Owns the momentum formula and lifecycle behavior | Focused unit and PostgreSQL integration commands exited 0 | no detected regression |
+| BUG-003-001 duplicate-seed repair | Shares `test_topic_lifecycle.sh` and the `topics.name` uniqueness path | Targeted E2E exited 0 with the idempotent fixture code unchanged | no detected regression |
+| Specs 002, 007, 009, 095, and 107 | Reference the topic lifecycle implementation | `internal/topics/lifecycle.go` is unchanged from the tested closure | no new post-closure impact |
+| Independent builder-security change | Changes Docker builder and Go dependency inputs | Builder canary and image-rebuilding targeted E2E exited 0 | impact exercised, no detected regression |
+
+### Coverage Regression Check
+
+No bug source, test, assertion, or scenario-manifest file changed after the
+tested closure. The three mapped scenario rows were rerun at current HEAD. No
+numeric coverage result is available from the registered command surface, so
+this review makes no percentage claim. The known missing E2E recalculation
+trigger remains R-020 and is not misclassified as newly covered.
+
+### Deployment Regression Applicability
+
+The post-closure diff contains no adapter, build workflow, deployment manifest,
+config SST, promotion script, rollback script, or image-pinning change. The
+deployment regression scan does not apply. The changed Docker builder still
+received focused coverage through the builder contract canary and a targeted
+E2E run that rebuilt disposable stack images.
+
+### Regression Phase Packet Guards
+
+All five requested guards ran after the regression evidence was appended. Home
+paths in the traceability and regression outputs are rendered as `~/smackerel`.
+
+#### Artifact Lint
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 regression artifact lint pre-state
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- first 20 ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ All checklist bullet items use checkbox syntax
+✅ uservalidation separates automation readiness from human acceptance
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+--- omitted 1 line(s); sha256 above covers the full output ---
+--- last 20 ---
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+**Result:** PASS.
+
+#### Traceability Guard
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/traceability-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 regression traceability guard pre-state
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+exit: 0
+lines: 48
+sha256: 67ef63071196fe689f17ad2d1306b28b66898fb4f2afe048d41c37d816e7fc7e
+--- first 20 ---
+============================================================
+	BUBBLES TRACEABILITY GUARD
+	Feature: ~/smackerel/specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+	Timestamp: 2026-08-29T21:15:25Z
+============================================================
+
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 3 scenario contract(s)
+✅ scenario-manifest.json linked test exists: tests/integration/topic_lifecycle_momentum_test.go
+✅ scenario-manifest.json linked test exists: internal/scheduler/jobs_test.go
+✅ scenario-manifest.json linked test exists: tests/e2e/test_topic_lifecycle.sh
+✅ scenario-manifest.json records evidenceRefs for all 3 scenario contract(s)
+✅ All linked tests from scenario-manifest.json exist
+
+ℹ️  Checking traceability for Scope 1: Restore canonical topic star aggregation
+✅ Scope 1: Restore canonical topic star aggregation scenario mapped to Test Plan row: BUG-003-002-SCN-001 Canonical star aggregation updates momentum
+ℹ️  Scope 1: Restore canonical topic star aggregation scenario→row match confidence: declared
+✅ Scope 1: Restore canonical topic star aggregation scenario maps to concrete test file: tests/integration/topic_lifecycle_momentum_test.go
+✅ Scope 1: Restore canonical topic star aggregation report references concrete test evidence: tests/integration/topic_lifecycle_momentum_test.go
+✅ Scope 1: Restore canonical topic star aggregation scenario mapped to Test Plan row: BUG-003-002-SCN-002 Lifecycle query failures remain observable
+--- omitted 8 line(s); sha256 above covers the full output ---
+--- last 20 ---
+
+--- Gherkin → DoD Content Fidelity (Gate G068) ---
+✅ Scope 1: Restore canonical topic star aggregation scenario maps to DoD item: BUG-003-002-SCN-001 Canonical star aggregation updates momentum
+ℹ️  Scope 1: Restore canonical topic star aggregation scenario→DoD match confidence: declared
+✅ Scope 1: Restore canonical topic star aggregation scenario maps to DoD item: BUG-003-002-SCN-002 Lifecycle query failures remain observable
+ℹ️  Scope 1: Restore canonical topic star aggregation scenario→DoD match confidence: declared
+✅ Scope 1: Restore canonical topic star aggregation scenario maps to DoD item: BUG-003-002-SCN-003 Existing topic lifecycle surface remains available
+ℹ️  Scope 1: Restore canonical topic star aggregation scenario→DoD match confidence: declared
+ℹ️  DoD fidelity: 3 scenarios checked, 3 mapped to DoD, 0 unmapped
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 3
+ℹ️  Test rows checked: 6
+ℹ️  Scenario-to-row mappings: 3
+ℹ️  Concrete test file references: 3
+ℹ️  Report evidence references: 3
+ℹ️  DoD fidelity scenarios: 3 (mapped: 3, unmapped: 0)
+ℹ️  Edge confidence (IMP-015 Scope B): declared=6 inferred=0 ambiguous=0
+
+RESULT: PASSED (0 warnings)
+```
+
+**Result:** PASS.
+
+#### Implementation Reality Scan
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 regression reality guard pre-state
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --verbose
+exit: 0
+lines: 35
+sha256: 7d7f9c395d2617b29bfde6d813eb7580efbcb7f29931f02d743f19512addf488
+--- output ---
+ℹ️  INFO: Resolved 1 implementation file(s) to scan
+
+--- Scan 1: Gateway/Backend Stub Patterns ---
+
+--- Scan 1B: Handler / Endpoint Execution Depth ---
+
+--- Scan 1C: Endpoint Not-Implemented / Placeholder Responses ---
+
+--- Scan 1D: External Integration Authenticity ---
+
+--- Scan 2: Frontend Hardcoded Data Patterns ---
+
+--- Scan 2B: Sensitive Client Storage ---
+
+--- Scan 3: Frontend API Call Absence ---
+
+--- Scan 4: Prohibited Simulation Helpers in Production ---
+
+--- Scan 5: Default/Fallback Value Patterns ---
+
+--- Scan 6: Live-System Test Interception ---
+
+--- Scan 7: IDOR / Auth Bypass Detection (Gate G047) ---
+
+--- Scan 8: Silent Decode Failure Detection (Gate G048) ---
+
+============================================================
+	IMPLEMENTATION REALITY SCAN RESULT
+============================================================
+
+	Files scanned:  1
+	Violations:     0
+	Warnings:       0
+
+🟢 PASSED: No source code reality violations detected
+```
+
+**Result:** PASS.
+
+#### Standard Regression Quality Guard
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/regression-quality-guard.sh tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 regression quality guard pre-state
+$ bash .github/bubbles/scripts/regression-quality-guard.sh tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh
+exit: 0
+lines: 15
+sha256: 39a24635d6b95af15ebb0ddba208b2e250c8bf819664635080a58a5bc2e3c254
+--- output ---
+============================================================
+	BUBBLES REGRESSION QUALITY GUARD
+	Repo: ~/smackerel
+	Timestamp: 2026-08-29T21:15:35Z
+	Bugfix mode: false
+============================================================
+
+ℹ️  Scanning tests/integration/topic_lifecycle_momentum_test.go
+ℹ️  Scanning internal/scheduler/jobs_test.go
+ℹ️  Scanning tests/e2e/test_topic_lifecycle.sh
+
+============================================================
+	REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+	Files scanned: 3
+============================================================
+```
+
+**Result:** PASS.
+
+#### Adversarial Bugfix Regression Guard
+
+**Phase:** regression
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 adversarial regression guard pre-state
+$ bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh
+exit: 0
+lines: 19
+sha256: 56558894c7d0e0e85e9ce21e8207fe8ab5b7e241f6aea303136b8fdefbf3b95f
+--- output ---
+============================================================
+	BUBBLES REGRESSION QUALITY GUARD
+	Repo: ~/smackerel
+	Timestamp: 2026-08-29T21:15:40Z
+	Bugfix mode: true
+============================================================
+
+ℹ️  Scanning tests/integration/topic_lifecycle_momentum_test.go
+✅ Adversarial signal detected in tests/integration/topic_lifecycle_momentum_test.go
+ℹ️  Scanning internal/scheduler/jobs_test.go
+✅ Adversarial signal detected in internal/scheduler/jobs_test.go
+ℹ️  Scanning tests/e2e/test_topic_lifecycle.sh
+✅ Adversarial signal detected in tests/e2e/test_topic_lifecycle.sh
+
+============================================================
+	REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+	Files scanned: 3
+	Files with adversarial signals: 3
+============================================================
+```
+
+**Result:** PASS.
