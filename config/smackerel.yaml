@@ -2019,11 +2019,21 @@ services:
     # NATS_URL, LLM_PROVIDER, LLM_MODEL, OLLAMA_URL, SMACKEREL_ENV, ML_LOG_LEVEL,
     # ML_EMBEDDING_WORKERS, ML_EMBEDDING_QUEUE_MAX, ML_HEALTH_LATENCY_SLA_MS,
     # ML_PROCESSING_DEGRADED_FALLBACK_ENABLED, ML_OLLAMA_KEEP_ALIVE,
-    # ML_STRUCTURED_EXTRACTION_THINKING, and the NATS_* reconnect/consumer keys —
-    # all covered by the ML_* / NATS_* / OLLAMA_* / AGENT_* prefixes plus the
-    # explicit keys below. Membership is validated against the sidecar's real
-    # env-read surface by scripts/lint/python-compute-only-guard.sh (check c) and
-    # internal/deploy/bundle_secret_contract_test.go.
+    # ML_STRUCTURED_EXTRACTION_THINKING, the ASSISTANT_INTENT_COMPILER_* route
+    # contract, and the NATS_* reconnect/consumer keys — all covered by the
+    # ML_* / NATS_* / OLLAMA_* / AGENT_* / ASSISTANT_INTENT_COMPILER_* prefixes
+    # plus the explicit keys below. Membership is NOT hand-maintained: it is
+    # DERIVED from the sidecar's real fail-loud env-read surface and asserted by
+    # internal/deploy/bundle_secret_contract_test.go
+    # (TestMLEnv_ContainsEveryComputeKey_Spec102), with the env-delivery shape
+    # additionally checked by scripts/lint/python-compute-only-guard.sh.
+    #
+    # BUG-102-002 — the ASSISTANT_INTENT_COMPILER_* prefix is deliberately a
+    # PREFIX, not the 7 boot-required keys spelled out: the sidecar's required
+    # set grows (BUG-069-005 added all 7 at once), and an exact-key list drifts
+    # silently until the sidecar exits 1 on boot and blocks the deploy. The
+    # prefix carries no credential-suffixed key, so the projection's
+    # credential-shape tripwire stays effective.
     #
     # NOTE (Google Keep sidecar bridge, spec 059): ml/app/keep_bridge.py reads
     # KEEP_GOOGLE_APP_PASSWORD (a SHELL_SECRET_KEY) lazily, ONLY when a
@@ -2056,6 +2066,7 @@ services:
     - "OLLAMA_*"
     - "NATS_*"
     - "AGENT_*"
+    - "ASSISTANT_INTENT_COMPILER_*"
     # core Validate() chain rejects any configured model whose profile
     # exceeds ML_MEMORY_LIMIT (deploy_resources.smackerel_ml.memory).
     #

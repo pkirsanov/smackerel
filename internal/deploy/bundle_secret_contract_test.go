@@ -813,7 +813,15 @@ func bundleFileNames(files map[string][]byte) []string {
 // ml.env body extracted from the bundle.
 func generateMLEnvBody(t *testing.T) []byte {
 	t.Helper()
-	tmpRoot := setupTestRepoRoot(t, nil, nil)
+	return generateMLEnvBodyWithYaml(t, nil)
+}
+
+// generateMLEnvBodyWithYaml is generateMLEnvBody with an optional tampered
+// config/smackerel.yaml, so an adversarial sub-test can prove that regressing
+// the allowlist really does drop required keys out of the projection.
+func generateMLEnvBodyWithYaml(t *testing.T, smackerelYamlOverride []byte) []byte {
+	t.Helper()
+	tmpRoot := setupTestRepoRoot(t, nil, smackerelYamlOverride)
 	outputDir := filepath.Join(t.TempDir(), "bundle-out")
 	out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
 	if exit != 0 {
@@ -896,36 +904,266 @@ func assertMLEnvFileProjected(t *testing.T) {
 	}
 }
 
-// TestMLEnv_ContainsEveryComputeKey_Spec102 — SCN-102-C1-02.
+// =============================================================================
+// BUG-102-002 — DERIVED boot-required env set (replaces a hand-maintained list).
+//
+// The previous shape of TestMLEnv_ContainsEveryComputeKey_Spec102 duplicated the
+// sidecar's required-config list as Go string literals. That duplicate drifted:
+// BUG-069-005 added seven ASSISTANT_INTENT_COMPILER_* keys to
+// ml/app/main.py::_check_required_config, nobody updated either the allowlist or
+// this list, and the guard stayed green while every self-hosted bundle shipped an
+// ml.env that made the sidecar exit 1 on boot — blocking the deploy.
+//
+// The expected set is therefore DERIVED from the sidecar sources instead of
+// restated here. Two derivation rules, both keyed on fail-loud shapes:
+//
+//  1. the `keys = [...]` list literal inside ml/app/main.py::_check_required_config
+//     (missing/empty ⇒ logger.error + sys.exit(1) at boot), and
+//  2. every `os.environ["KEY"]` SUBSCRIPT read anywhere under ml/app/ (raises
+//     KeyError when absent). The `os.environ.get(...)` form is deliberately NOT
+//     derived — it tolerates absence and so cannot crash the sidecar. That
+//     exclusion is load-bearing: ml/app/keep_bridge.py reads the managed secret
+//     KEEP_GOOGLE_APP_PASSWORD via `.get`, and it is deliberately projected OUT.
+//
+// NOT derived: request-time fail-loud reads behind per-module helpers (e.g.
+// ml/app/routes/intent_compile.py::_required). Those return HTTP 500 on a missing
+// key rather than killing the process, so they are outside this guard's
+// boot-safety contract; every such key is already in rule 1's boot list.
+//
+// TestMLEnv_DerivedComputeKeySet_HasBite_BUG102002 is the adversarial half: it
+// proves the derivation fails when the sidecar requires a key the allowlist does
+// not project, and when the allowlist regresses.
+// =============================================================================
+
+// mlEnvSubscriptReadRe matches a fail-loud env read: os.environ["KEY"].
+var mlEnvSubscriptReadRe = regexp.MustCompile(`os\.environ\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\]`)
+
+// mlPyUpperStringLiteralRe matches one SHOUT_CASE quoted literal (a list entry).
+var mlPyUpperStringLiteralRe = regexp.MustCompile(`["']([A-Z][A-Z0-9_]*)["']`)
+
+// stripPyFullLineComments removes whole-line `#` comments so a commented-out
+// env read is never derived as required.
+func stripPyFullLineComments(src string) string {
+	var kept []string
+	for _, line := range strings.Split(src, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// parseCheckRequiredConfigKeys extracts the `keys = [...]` list literal from
+// ml/app/main.py::_check_required_config. Every entry is a key whose absence
+// makes the sidecar exit 1 at boot.
+func parseCheckRequiredConfigKeys(mainPy string) ([]string, error) {
+	// Strip comments BEFORE locating the list so a `]` inside a comment can
+	// never truncate the slice early.
+	src := stripPyFullLineComments(mainPy)
+	const fnMarker = "def _check_required_config("
+	fnAt := strings.Index(src, fnMarker)
+	if fnAt < 0 {
+		return nil, fmt.Errorf("marker %q not found in ml/app/main.py", fnMarker)
+	}
+	body := src[fnAt:]
+	const listMarker = "keys = ["
+	listAt := strings.Index(body, listMarker)
+	if listAt < 0 {
+		return nil, fmt.Errorf("marker %q not found inside _check_required_config", listMarker)
+	}
+	body = body[listAt+len(listMarker):]
+	closeAt := strings.Index(body, "]")
+	if closeAt < 0 {
+		return nil, fmt.Errorf("unterminated `keys = [` list in _check_required_config")
+	}
+	var keys []string
+	for _, m := range mlPyUpperStringLiteralRe.FindAllStringSubmatch(body[:closeAt], -1) {
+		keys = append(keys, m[1])
+	}
+	return keys, nil
+}
+
+// deriveMLBootRequiredKeys walks ml/app/ and returns the sorted union of the
+// two derivation rules documented above. mainPyOverride, when non-nil, replaces
+// the on-disk ml/app/main.py body (adversarial use only).
+func deriveMLBootRequiredKeys(t *testing.T, repoRoot string, mainPyOverride []byte) []string {
+	t.Helper()
+	mlAppDir := filepath.Join(repoRoot, "ml", "app")
+	mainPyPath := filepath.Join(mlAppDir, "main.py")
+
+	readSource := func(path string) string {
+		if mainPyOverride != nil && path == mainPyPath {
+			return string(mainPyOverride)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read sidecar source %s: %v", path, err)
+		}
+		return string(raw)
+	}
+
+	derived := map[string]bool{}
+
+	// Rule 1 — the boot-required list literal.
+	bootKeys, err := parseCheckRequiredConfigKeys(readSource(mainPyPath))
+	if err != nil {
+		t.Fatalf("DERIVATION BROKEN: cannot parse the sidecar's boot-required key list: %v\n"+
+			"This guard derives its expectations from ml/app/main.py; a silent parse failure would make it vacuous. "+
+			"Fix the parser (or the marker it anchors on) rather than reinstating a hand-maintained list (BUG-102-002).", err)
+	}
+	// Floor on the parse itself: a regex that silently matched nothing would let
+	// this whole guard pass vacuously, which is exactly the failure mode
+	// BUG-102-002 is about. The floor is a sanity bound on the PARSE, not a
+	// restatement of the expected keys.
+	if len(bootKeys) < 12 {
+		t.Fatalf("DERIVATION BROKEN: parsed only %d boot-required keys from ml/app/main.py (%v) — expected at least 12. "+
+			"The parse is probably no longer matching the real list; a vacuous guard is worse than no guard (BUG-102-002).",
+			len(bootKeys), bootKeys)
+	}
+	for _, k := range bootKeys {
+		derived[k] = true
+	}
+
+	// Rule 2 — fail-loud subscript reads anywhere under ml/app/.
+	subscriptHits := 0
+	walkErr := filepath.WalkDir(mlAppDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".py") {
+			return nil
+		}
+		for _, m := range mlEnvSubscriptReadRe.FindAllStringSubmatch(stripPyFullLineComments(readSource(path)), -1) {
+			derived[m[1]] = true
+			subscriptHits++
+		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walk %s: %v", mlAppDir, walkErr)
+	}
+	if subscriptHits < 8 {
+		t.Fatalf("DERIVATION BROKEN: found only %d os.environ[\"KEY\"] reads under ml/app/ — expected at least 8. "+
+			"Either the sidecar layout moved or the matcher regressed (BUG-102-002).", subscriptHits)
+	}
+
+	return sortedKeySet(derived)
+}
+
+// TestMLEnv_ContainsEveryComputeKey_Spec102 — SCN-102-C1-02 (+ BUG-102-002).
 //
 // The projection MUST retain every env key the sidecar reads FAIL-LOUD at
-// startup (ml/app/main.py::_check_required_config + ml/app/nats_client.py
-// subscribe), or the sidecar exits 1 on boot. This is the boot-safety half of
-// the projection: it proves secret-removal did not strip a required compute key.
+// startup, or the sidecar exits 1 on boot and the deploy never becomes healthy.
+// This is the boot-safety half of the projection: it proves secret-removal did
+// not strip a required compute key. The expected set is DERIVED from the sidecar
+// sources (see the header above), never restated here.
 func TestMLEnv_ContainsEveryComputeKey_Spec102(t *testing.T) {
+	repoRoot := bundleSecretRepoRoot(t)
+	required := deriveMLBootRequiredKeys(t, repoRoot, nil)
+
 	mlEnv := generateMLEnvBody(t)
 	keys := mlEnvKeySet(mlEnv)
 
-	required := []string{
-		// _check_required_config unconditional keys.
-		"NATS_URL", "LLM_PROVIDER", "LLM_MODEL", "OLLAMA_URL",
-		"ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "SMACKEREL_ENV", "ML_LOG_LEVEL",
-		"ML_EMBEDDING_WORKERS", "ML_EMBEDDING_QUEUE_MAX", "ML_HEALTH_LATENCY_SLA_MS",
-		// Inter-service auth (ml/app/auth.py) — required at import.
-		"SMACKEREL_AUTH_TOKEN",
-		// nats_client subscribe-time fail-loud reads.
-		"NATS_MAX_RECONNECT_ATTEMPTS", "NATS_RECONNECT_TIME_WAIT_SECONDS",
-		"NATS_CONSUMER_MAX_DELIVER", "NATS_CONSUMER_ACK_WAIT_SECONDS",
+	missing := mlMissingRequiredKeys(required, keys)
+	if len(missing) > 0 {
+		t.Fatalf("BOOT REGRESSION: ml.env is missing compute keys the sidecar reads fail-loud at startup: %v\n"+
+			"The sidecar will exit 1 on boot and the deploy will never reach a healthy strict health check. "+
+			"Fix services.ml.env_allowlist in config/smackerel.yaml (spec 102 SCN-102-C1-02, BUG-102-002).\n"+
+			"--- derived required (%d) ---\n%v\n--- ml.env keys present (%d) ---\n%v\n--- end ---",
+			missing, len(required), required, len(keys), sortedKeySet(keys))
 	}
+	t.Logf("SCN-102-C1-02 OK — all %d derived fail-loud sidecar keys are projected into ml.env (%d keys).",
+		len(required), len(keys))
+}
+
+// mlMissingRequiredKeys returns the required keys absent from the projection.
+func mlMissingRequiredKeys(required []string, projected map[string]bool) []string {
 	var missing []string
 	for _, k := range required {
-		if !keys[k] {
+		if !projected[k] {
 			missing = append(missing, k)
 		}
 	}
-	if len(missing) > 0 {
-		t.Fatalf("BOOT REGRESSION: ml.env is missing compute keys the sidecar reads fail-loud at startup: %v (spec 102 SCN-102-C1-02)\n--- ml.env keys present ---\n%v\n--- end ---", missing, sortedKeySet(keys))
-	}
+	return missing
+}
+
+// TestMLEnv_DerivedComputeKeySet_HasBite_BUG102002 is the adversarial contract
+// for the derivation above. Two independent ways the outage could recur:
+//
+//	(a) the sidecar starts requiring a key the allowlist does not project
+//	    (this is literally BUG-069-005 → BUG-102-002), and
+//	(b) the allowlist regresses and stops projecting keys the sidecar requires.
+//
+// Both MUST be detected. If either sub-test passes silently the guard is inert
+// and the next boot-blocking drift ships unnoticed.
+func TestMLEnv_DerivedComputeKeySet_HasBite_BUG102002(t *testing.T) {
+	repoRoot := bundleSecretRepoRoot(t)
+	mlEnv := generateMLEnvBody(t)
+	projected := mlEnvKeySet(mlEnv)
+
+	t.Run("sidecar requires an unprojected key", func(t *testing.T) {
+		livemainPy, err := os.ReadFile(filepath.Join(repoRoot, "ml", "app", "main.py"))
+		if err != nil {
+			t.Fatalf("read live ml/app/main.py: %v", err)
+		}
+		// A key no allowlist entry can match, injected as a new boot requirement.
+		const injected = "SIDECAR_BOOT_DRIFT_SENTINEL"
+		const anchor = "    keys = [\n"
+		if !bytes.Contains(livemainPy, []byte(anchor)) {
+			t.Fatalf("anchor %q not found in live ml/app/main.py — the derivation parser needs updating", anchor)
+		}
+		tampered := bytes.Replace(livemainPy,
+			[]byte(anchor),
+			[]byte(anchor+"        \""+injected+"\",\n"), 1)
+
+		required := deriveMLBootRequiredKeys(t, repoRoot, tampered)
+		missing := mlMissingRequiredKeys(required, projected)
+		if len(missing) == 0 {
+			t.Fatalf("GUARD INERT: the sidecar was made to require %q, which no env_allowlist entry projects, "+
+				"yet the coverage check reported nothing missing. The derivation is not reaching the real boot list (BUG-102-002).\n"+
+				"--- derived required (%d) ---\n%v\n--- end ---", injected, len(required), required)
+		}
+		found := false
+		for _, k := range missing {
+			if k == injected {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("GUARD INERT: injected boot requirement %q was not reported missing (reported: %v)", injected, missing)
+		}
+	})
+
+	t.Run("allowlist drops the intent-compiler prefix", func(t *testing.T) {
+		liveYaml, err := os.ReadFile(filepath.Join(repoRoot, "config", "smackerel.yaml"))
+		if err != nil {
+			t.Fatalf("read live smackerel.yaml: %v", err)
+		}
+		const entry = "    - \"ASSISTANT_INTENT_COMPILER_*\"\n"
+		if !bytes.Contains(liveYaml, []byte(entry)) {
+			t.Fatalf("live services.ml.env_allowlist no longer declares %q — the sidecar's boot-required "+
+				"ASSISTANT_INTENT_COMPILER_* keys would not be projected (BUG-102-002 regression)", strings.TrimSpace(entry))
+		}
+		regressed := bytes.Replace(liveYaml, []byte(entry), nil, 1)
+
+		required := deriveMLBootRequiredKeys(t, repoRoot, nil)
+		degraded := mlEnvKeySet(generateMLEnvBodyWithYaml(t, regressed))
+		missing := mlMissingRequiredKeys(required, degraded)
+		if len(missing) == 0 {
+			t.Fatalf("GUARD INERT: removing the ASSISTANT_INTENT_COMPILER_* allowlist entry produced an ml.env "+
+				"that still satisfies the derived boot requirements — the guard cannot detect an allowlist regression (BUG-102-002).\n"+
+				"--- derived required (%d) ---\n%v\n--- end ---", len(required), required)
+		}
+		for _, k := range missing {
+			if !strings.HasPrefix(k, "ASSISTANT_INTENT_COMPILER_") {
+				t.Fatalf("removing one allowlist entry dropped unrelated key %q (reported missing: %v) — "+
+					"the projection is not behaving as a per-entry filter", k, missing)
+			}
+		}
+		t.Logf("BUG-102-002 bite confirmed — dropping the allowlist entry strips %d boot-required keys: %v",
+			len(missing), missing)
+	})
 }
 
 // TestMLEnv_AllowlistIntersectsSecret_FailsLoud_Spec102 — projection tripwire

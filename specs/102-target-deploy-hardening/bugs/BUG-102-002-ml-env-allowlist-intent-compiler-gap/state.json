@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "102-target-deploy-hardening",
+  "bugId": "BUG-102-002-ml-env-allowlist-intent-compiler-gap",
+  "featureDir": "specs/102-target-deploy-hardening/bugs/BUG-102-002-ml-env-allowlist-intent-compiler-gap",
+  "featureName": "BUG-102-002: projected ml.env omits the sidecar's boot-required ASSISTANT_INTENT_COMPILER_* keys",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct-implement",
+  "releaseTrain": "mvp",
+  "severity": "S1",
+  "owner": "bubbles.devops",
+  "status": "in_progress",
+  "statusCeiling": "done",
+  "statusRationale": "NOT terminal, and deliberately so. Six of the seven SCOPE-01 DoD items are satisfied with first-hand evidence measured in this session (bundle regeneration, ml.env projection, derived guard + adversarial bite, check, lint, python-compute-only-guard, full unit lane -- all exit 0). The seventh requires building the fixed SST and promoting it to the <deploy-target> target, and NO build, promotion, or host interaction was performed. SCN-102-002-A is therefore unverified. Marking this done would repeat the precise inference this bug punished: the pre-existing boot-safety guard was ALSO green while the deploy was broken, because it asserted a hand-maintained list rather than the sidecar's real requirement. A green local lane is a necessary precondition for the deploy landing, not evidence that it does.",
+  "planningOnly": false,
+  "requiresRevalidation": false,
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "discoveredAt": "2026-08-29T00:00:00Z",
+  "discoveredBy": "bubbles.devops, promoting the local-operator build of cf005ed4 to the <deploy-target> target",
+  "latency": "Latent, not new. The seven keys became unconditionally required in ml/app/main.py::_check_required_config when BUG-069-005 landed, so every self-hosted bundle built since then carries the same defect. It blocked the earlier 02697bfd build from deploying as well, not only cf005ed4.",
+  "rootCause": "services.ml.env_allowlist in config/smackerel.yaml had no ASSISTANT_* coverage, so the ml.env projection filtered out the seven ASSISTANT_INTENT_COMPILER_* keys that ml/app/main.py::_check_required_config requires unconditionally. smackerel-ml called sys.exit(1) about one second after start, smackerel-core never cleared ML readiness, /api/health?strict=true never returned 200, and the knb adapter's ollama-pre-retirement-proof apply gate refused.",
+  "resolution": "Two changes shipped together. (1) config/smackerel.yaml: added the PREFIX entry \"ASSISTANT_INTENT_COMPILER_*\" to services.ml.env_allowlist, chosen over the seven literal keys because the sidecar's required set grows in batches (BUG-069-005 added all seven at once) and an exact list is the same drift trap that produced this bug. (2) internal/deploy/bundle_secret_contract_test.go: replaced the hand-maintained `required` slice -- the thing that drifted and let this ship -- with a set DERIVED from the sidecar sources (the `keys = [...]` literal in _check_required_config plus every os.environ[\"KEY\"] subscript read under ml/app/), guarded by parse floors so a broken derivation fails loudly instead of asserting nothing; added TestMLEnv_DerivedComputeKeySet_HasBite_BUG102002 with two adversarial sub-cases.",
+  "designNotes": "os.environ.get(...) reads are deliberately EXCLUDED from the derivation, and that exclusion is load-bearing rather than incidental: ml/app/keep_bridge.py reads the managed secret KEEP_GOOGLE_APP_PASSWORD via .get, and spec 102 projects it OUT on purpose. A naive all-env-reads scan would demand that secret be projected into the least-trusted tier, turning a boot-safety guard into a security regression.",
+  "affectedSurface": [
+    "config/smackerel.yaml (services.ml.env_allowlist and its SST comment)",
+    "internal/deploy/bundle_secret_contract_test.go (derived boot-required key set + adversarial bite test)"
+  ],
+  "execution": {
+    "activeAgent": "bubbles.devops",
+    "currentPhase": "verify",
+    "currentScope": "SCOPE-01",
+    "executionModel": "direct-authorized-runner",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "SCOPE-01",
+        "agent": "bubbles.devops",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.devops",
+        "expansionReason": "Executed directly by bubbles.devops rather than a dispatched bubbles.implement specialist. The change is an SST allowlist entry plus its boot-safety guard -- operational delivery surfaces this agent owns outright -- and the defect was found by this agent while promoting a build to the target.",
+        "expansionEvidenceRef": "report.md",
+        "evidenceRef": "report.md#summary",
+        "outcome": "completed",
+        "summary": "Allowlist prefix entry added to config/smackerel.yaml; guard derivation and adversarial bite test added to internal/deploy/bundle_secret_contract_test.go. Both changes were already present in the working tree at the start of the verification session and were re-read against the diff before evidence collection."
+      },
+      {
+        "phase": "verify",
+        "scope": "SCOPE-01",
+        "agent": "bubbles.devops",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.devops",
+        "expansionReason": "In-repo verification of a deployment-artifact projection is a devops execution surface; every command run is a config-generation or build-quality gate from the repo CLI.",
+        "expansionEvidenceRef": "report.md#test-evidence",
+        "evidenceRef": "report.md#test-evidence",
+        "outcome": "completed",
+        "claimedAtNote": "MEASURED. Every command in report.md was executed in this session and its output recorded first-hand; no value was carried forward from the earlier triage session. That is why the recorded bundle digest f20e30ab... differs from the one observed during triage -- the tree has changed since, and copying a digest is not measuring one.",
+        "summary": "Seven verifications, all exit 0: config generate (run twice, same sha256 f20e30ab... -- bundle determinism holds); bundle extraction showing all 7 boot-required keys present (11 total via the prefix) and the DATABASE_URL/POSTGRES_*/REDIS_*/RABBITMQ_* boundary scan returning no matches; focused TestMLEnv lane reporting 30 derived fail-loud keys against 104 projected, with the bite sub-case naming exactly the 7 boot-required keys that drop when the allowlist entry is removed; ./smackerel.sh check; ./smackerel.sh lint; scripts/lint/python-compute-only-guard.sh; and the full ./smackerel.sh test unit lane."
+      }
+    ],
+    "pendingPhases": [
+      {
+        "phase": "deploy",
+        "scope": "SCOPE-01",
+        "owner": "bubbles.devops",
+        "blockedOn": "No build or promotion was performed in this session. SCN-102-002-A requires building the fixed SST and promoting it to the <deploy-target> target, then observing the sidecar boot, 8/8 container health, digest match against the new manifest, and /api/health?strict=true returning 200.",
+        "evidenceRef": "report.md#evidence-7--live-deploy"
+      }
+    ]
+  },
+  "executionHistory": [
+    {
+      "agent": "bubbles.devops",
+      "phase": "verify",
+      "scope": "SCOPE-01",
+      "startedAt": "2026-08-29T00:00:00Z",
+      "outcome": "completed",
+      "note": "Verification session. Re-read the working-tree diff for both changed files before collecting any evidence, then executed every command in report.md first-hand rather than restating the triage session's scrollback. Seven gates, all exit 0. No build, no promotion, no host interaction."
+    }
+  ],
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "certification": {
+    "status": "in_progress",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhasesNote": "Empty on purpose. The implement and verify phases are recorded in execution.completedPhaseClaims with real evidence, but no certifying agent has independently reviewed them, so nothing is promoted into the certified set by the executing agent's own say-so.",
+    "completedScopes": [],
+    "totalScopes": 1,
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Project the boot-required sidecar keys and derive the guard",
+        "status": "in_progress",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "pendingGates": [
+      "Live deploy of the fixed SST to the <deploy-target> target (SCN-102-002-A): sidecar boots, 8/8 containers healthy, running core AND ml digests match the new manifest, /api/health?strict=true returns 200, and the knb adapter's ollama-pre-retirement-proof gate passes."
+    ],
+    "blockers": [],
+    "concerns": [
+      "The four non-boot ASSISTANT_INTENT_COMPILER_* tuning keys (_CONFIDENCE_FLOOR, _MAX_CONTEXT_TURNS, _MAX_OUTPUT_BYTES, _RETRY_BUDGET) are now projected into the ML tier as a consequence of choosing a prefix over seven literals. They are non-secret and carry no credential suffix, and TestMLEnv_CredentialSuffixRequiresSanction_Spec102 still refuses a future prefix-covered key that looks like a credential. Recorded as a known consequence of the design decision, not an unnoticed side effect."
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "invalidationLedger": []
+  },
+  "completedScopes": [],
+  "openScopes": [
+    "SCOPE-01"
+  ],
+  "dodStatus": {
+    "total": 7,
+    "checked": 6,
+    "unchecked": 1,
+    "uncheckedItems": [
+      "The fixed SST is built and promoted to the <deploy-target> target; the ML sidecar boots, all containers are healthy, running core AND ml digests match the new manifest, and /api/health?strict=true returns 200 -- NOT PERFORMED, see report.md#evidence-7--live-deploy"
+    ]
+  },
+  "scenarioStatus": {
+    "SCN-102-002-A": "not_verified",
+    "SCN-102-002-B": "pass",
+    "SCN-102-002-C": "pass",
+    "SCN-102-002-D": "pass",
+    "SCN-102-002-E": "pass",
+    "SCN-102-002-F": "pass_structural"
+  },
+  "userValidation": {
+    "parentItem": "specs/102-target-deploy-hardening/uservalidation.md :: SCN-102-C1 :: \"smackerel-ml still starts cleanly against ml.env -- no missing-env fail-loud error (it has every compute key it actually reads)\"",
+    "state": "left_unchecked",
+    "rationale": "This bug is what will close that item, but it is NOT checked here. The item is phrased as something the operator observes about a RUNNING sidecar, and no sidecar was run. The parent spec's own anti-fabrication convention reserves those boxes for confirmation against the live apply. uservalidation.md is human-owned and was left byte-identical."
+  },
+  "relatedBugs": [
+    "BUG-069-005 -- introduced the seven unconditionally-required keys in the sidecar without updating either derived duplicate (the allowlist or the guard's expectation)"
+  ],
+  "relatesTo": [
+    "specs/102-target-deploy-hardening (SCOPE-102-01 owns the projection and the allowlist)",
+    "specs/052-bundle-secret-injection-contract"
+  ],
+  "policySnapshot": {
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    }
+  },
+  "createdAt": "2026-08-29T00:00:00Z",
+  "updatedAt": "2026-08-29T00:00:00Z"
+}
