@@ -1407,3 +1407,192 @@ No product source, test, managed documentation, configuration, deployment, or
 framework-managed file was modified by this implement closeout. The only owned
 updates are implement evidence and execution-state provenance inside this bug
 packet. Scope and certification status remain `in_progress`.
+
+## Current-Session Test Closeout - 2026-08-29
+
+### Test Owner Statement
+
+This closeout reconciles executions already recorded in the current top-level
+session. It does not rerun any test. The current tree preserves every product
+and test input named by the scenario receipts from source revision
+`a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1`.
+
+The test phase supports the packet's three active scenario contracts. The
+physical regression categories remain proportionate: integration for SCN-001,
+unit for SCN-002, and E2E API for SCN-003.
+
+### Packet-Only Input Closure
+
+**Phase:** test
+**Executed:** YES (current session, evidence reconciliation only)
+**Command:** `printf` framing, `git diff --name-only a6e927b2..HEAD`, `sha256sum` over the six receipt inputs, and `git diff --quiet a6e927b2..HEAD -- <six receipt inputs>`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+BUG-003-002 PACKET INPUT CLOSURE
+receipt revision=a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1
+current revision=fc5f1d439c5543f8aea6a9b13be78dc9a9859eb2
+changed paths a6e927b2..HEAD:
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+current product/test input hashes:
+cb6ff3e629dec36fe4b49c3b4c7851d13d06237fd66bef209e772807cda108c7  internal/topics/lifecycle.go
+07d35d2ebb6ed5010bb73e92413c034d856256943a39750369a856418685b1a4  internal/scheduler/jobs.go
+5d4f11bad41e09d9558b2110a203a5431d2e835ea0c4caf8e100a5872b638b6a  internal/scheduler/jobs_test.go
+67ca9b0c88a4c278ee98a3f5df11990d13ce7e98c9c16008e060bece579ad14a  internal/web/handler.go
+87ab31988ef6325f02310d939c11241c0bf3ec2c9255e95d857ecca7893468eb  tests/integration/topic_lifecycle_momentum_test.go
+df1bdd6f8c69580deab72debf21adbc315e59c4b2459c7dd67ec7978ba359998  tests/e2e/test_topic_lifecycle.sh
+product/test input closure unchanged=yes
+closure verdict=PASS
+```
+
+**Result:** PASS. The packet-only commit did not invalidate the recorded
+product or test input closures.
+
+### Current-Session Scenario Receipts
+
+**Phase:** test
+**Executed:** YES (current session receipts)
+**Command:** `jq -s -r 'to_entries[] | select((.key + 1) >= 89 and (.key + 1) <= 102) | "line=\(.key + 1) scenario=\(.value.scenarioBinding.scenarioId) phase=\(.value.scenarioBinding.phase) exit=\(.value.exitCode) cmd=\(.value.cmd) sourceRevision=\(.value.scenarioBinding.sourceRevision[0:12]) stdoutSha256=\(.value.stdoutHash)"' .specify/runtime/tool-calls.jsonl`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+line=89 scenario=BUG-003-002-SCN-001 phase=red exit=1 cmd=./smackerel.sh test integration-light --go-run ^TestTopicLifecycleMomentumFromPersistedStars$ sourceRevision=a6e927b2df7d stdoutSha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+line=90 scenario=BUG-003-002-SCN-001 phase=red exit=1 cmd=./smackerel.sh test integration-light --go-run ^TestTopicLifecycleMomentumFromPersistedStars$ sourceRevision=a6e927b2df7d stdoutSha256=bf593e054b8e56c085ed7d9a2ef5f4b39ebbb312405c8636bd3fb617771f730c
+line=91 scenario=BUG-003-002-SCN-002 phase=red exit=1 cmd=./smackerel.sh test unit --go --go-run ^TestTopicMomentumJob_LogsLifecycleQueryFailure$ --verbose sourceRevision=a6e927b2df7d stdoutSha256=966e73d2a31b0c6f02776fcbc6196364891af162b9ba8b5cbb8be8ff85a8a0d0
+line=92 scenario=BUG-003-002-SCN-003 phase=red exit=1 cmd=./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh sourceRevision=a6e927b2df7d stdoutSha256=3bcb40e9a1c4d751ab5c0f15ccb854e3081dbe96a75427ef8be75bc0538211e8
+line=93 scenario=BUG-003-002-SCN-001 phase=green exit=0 cmd=./smackerel.sh test integration-light --go-run ^TestTopicLifecycleMomentumFromPersistedStars$ sourceRevision=a6e927b2df7d stdoutSha256=fbc4941ba8e62e9403188ae206684b00e6117163ded6eee1937da75a4bdab3c4
+line=94 scenario=BUG-003-002-SCN-001 phase=implement exit=0 cmd=git --no-pager grep -n -A 11 -B 1 COUNT(DISTINCT a.id) HEAD -- internal/topics/lifecycle.go sourceRevision=a6e927b2df7d stdoutSha256=5a295d6515810be919741310b5b123ab7e2e39b6aabf055b5cd402611051ce59
+line=95 scenario=BUG-003-002-SCN-002 phase=implement exit=0 cmd=git --no-pager grep -n -A 7 -B 1 func (s \*Scheduler) doTopicMomentumJob HEAD -- internal/scheduler/jobs.go sourceRevision=a6e927b2df7d stdoutSha256=dfdb16333f7ac23c213b97f89479b915b4edb919fe719ee99a81fb5fdbe42fb3
+line=96 scenario=BUG-003-002-SCN-003 phase=implement exit=0 cmd=git --no-pager grep -n -A 12 -B 2 "Topics":   topics, HEAD -- internal/web/handler.go sourceRevision=a6e927b2df7d stdoutSha256=cc11328964e84a8688dbe59681d10018d8d102ffc28eaa3d0871f21331f20005
+line=97 scenario=BUG-003-002-SCN-002 phase=green exit=0 cmd=./smackerel.sh test unit --go --go-run ^TestTopicMomentumJob_LogsLifecycleQueryFailure$ --verbose sourceRevision=a6e927b2df7d stdoutSha256=ef1bbcffa3bec7e267594ab377e13d2a17c5249efa60f4b2cf400a587cb5c69a
+line=98 scenario=BUG-003-002-SCN-003 phase=green exit=0 cmd=./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh sourceRevision=a6e927b2df7d stdoutSha256=44b2d72cd3f3073aa48f3b3745f4fde524f4ea4886835a2e988379db566fc3f6
+line=99 scenario=BUG-003-002-SCN-001 phase=regression exit=0 cmd=./smackerel.sh test integration --go-run TestTopicLifecycle sourceRevision=a6e927b2df7d stdoutSha256=5f117888282eb96ef81631bf3f752338d9ce7cc5cffae78edc87fd24d0f49472
+line=100 scenario=BUG-003-002-SCN-002 phase=regression exit=0 cmd=./smackerel.sh test unit --go sourceRevision=a6e927b2df7d stdoutSha256=4b366167c9665b2d0a9ae7f85ef7aa1720745bcdae6ae0fcacbfa53d14015d27
+line=101 scenario=BUG-003-002-SCN-003 phase=regression exit=1 cmd=./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh sourceRevision=a6e927b2df7d stdoutSha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+line=102 scenario=BUG-003-002-SCN-003 phase=regression exit=0 cmd=./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh sourceRevision=a6e927b2df7d stdoutSha256=1db229d6922fad7307578c83a9dec4be5f20b13e446297a024f4f8064debeec5
+```
+
+The first SCN-001 RED receipt stopped before test output. The second RED receipt
+contains the executed PostgreSQL counterexample and is the controlling RED.
+The SCN-003 regression receipt at line 101 also stopped before test output. The
+line 102 receipt is the controlling successful regression rerun.
+
+### Scenario State Reconciliation
+
+**Phase:** test
+**Executed:** YES (current session, receipt resolver only)
+**Command:** `bash .github/bubbles/scripts/scenario-state-resolve.sh --spec-dir specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --source-revision a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1 --require RED_VERIFIED --require IMPLEMENTED --require GREEN_TARGETED --require REGRESSION_GREEN --certifiable`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+scenario-state-resolve: specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+	source revision: a6e927b2df7d
+	BUG-003-002-SCN-001  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+	BUG-003-002-SCN-002  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+	BUG-003-002-SCN-003  state=REGRESSION_GREEN  derived=[PLANNED RED_VERIFIED IMPLEMENTED GREEN_TARGETED REGRESSION_GREEN]
+	REFUSED SCS-REVISION-DRIFT [SCN-064-003-03]: receipt cites source revision ec31eddc6b1d but the resolved revision is a6e927b2df7d
+	REFUSED SCS-REVISION-DRIFT [SCN-064-003-03]: receipt cites source revision ec31eddc6b1d but the resolved revision is a6e927b2df7d
+	REFUSED SCS-REVISION-DRIFT [SCN-064-003-03]: receipt cites source revision ec31eddc6b1d but the resolved revision is a6e927b2df7d
+	REFUSED SCS-REVISION-DRIFT [SCN-064-003-04]: receipt cites source revision ec31eddc6b1d but the resolved revision is a6e927b2df7d
+	REFUSED SCS-REVISION-DRIFT [SCN-064-003-04]: receipt cites source revision ec31eddc6b1d but the resolved revision is a6e927b2df7d
+	(all 85 refusals are SCS-REVISION-DRIFT: superseded receipts, excluded from derivation, not blocking)
+	certifiable: yes
+```
+
+**Result:** PASS. All three active scenarios reached the required derived
+states from receipts at the unchanged product and test input closure.
+
+### Broader E2E And Unit Receipts
+
+**Phase:** test
+**Executed:** YES (current top-level session receipts)
+**Command:** existing recorded commands `env DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test e2e` and `./smackerel.sh test unit --go`
+**Exit Code:** 0 for both commands
+**Claim Source:** interpreted
+**Interpretation:** The full E2E receipt predates the packet-only a6e927b2
+commit. The two intervening commit ranges contain no product or test input.
+The receipt therefore remains valid for the unchanged execution closure. The
+full E2E result is broad regression evidence only.
+**Output:**
+
+```text
+line=87 session=auto-20260829T180049-4048534
+cmd=env DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test e2e
+exit=0
+sourceRevision=6856d3160ef19a01b542069f711e225f4be3c8f5
+stdoutSha256=24be09da4471777ce746a55afeb66c25317955be8045c1e1e666d4e77c39b191
+git diff --name-status 6856d316..a6e927b2:
+M .specify/memory/open-work.md
+M specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json
+git diff --name-only a6e927b2..fc5f1d43:
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+line=100 session=vscode-0cc9797b22a783b6a9be5d7946541ba3
+cmd=./smackerel.sh test unit --go
+exit=0
+sourceRevision=a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1
+stdoutSha256=4b366167c9665b2d0a9ae7f85ef7aa1720745bcdae6ae0fcacbfa53d14015d27
+product/test input closure unchanged=yes
+```
+
+**Result:** PASS for the recorded broader E2E and Go unit command outcomes at
+the preserved input closure.
+
+### R-020 Limitation
+
+R-020 remains explicit. The full E2E lane returned exit zero while its earlier
+fault restored the invalid `t.star_count` query. That run cannot prove lifecycle
+recalculation. It is used only as broader regression evidence.
+
+SCN-003 now proves that `GET /topics` renders the seeded topic by name. Its RED,
+GREEN, and REGRESSION receipts use the `TopicsPage` render model as the negative
+control. SCN-001 proves recalculation through the real PostgreSQL integration
+path. This closeout makes no recalculation E2E claim.
+
+### Packet Guard Closeout
+
+**Phase:** test
+**Executed:** YES (current session)
+**Command:** packet `artifact-lint.sh`, `traceability-guard.sh`, `implementation-reality-scan.sh --verbose`, standard `regression-quality-guard.sh`, and `regression-quality-guard.sh --bugfix`
+**Exit Code:** 0 for every command
+**Claim Source:** executed
+**Output:**
+
+```text
+Artifact lint PASSED.
+✅ scenario-manifest.json covers 3 scenario contract(s)
+✅ All linked tests from scenario-manifest.json exist
+ℹ️  Scenarios checked: 3
+ℹ️  Test rows checked: 6
+ℹ️  Scenario-to-row mappings: 3
+ℹ️  Concrete test file references: 3
+ℹ️  Report evidence references: 3
+ℹ️  DoD fidelity scenarios: 3 (mapped: 3, unmapped: 0)
+RESULT: PASSED (0 warnings)
+Files scanned:  1
+Violations:     0
+Warnings:       0
+🟢 PASSED: No source code reality violations detected
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+✅ Adversarial signal detected in tests/integration/topic_lifecycle_momentum_test.go
+✅ Adversarial signal detected in internal/scheduler/jobs_test.go
+✅ Adversarial signal detected in tests/e2e/test_topic_lifecycle.sh
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files with adversarial signals: 3
+artifact_lint=0
+traceability=0
+implementation_reality=0
+regression_quality=0
+regression_quality_bugfix=0
+```
+
+**Result:** PASS. The five requested packet and regression guards accepted the
+reconciled packet before its final execution-state update.

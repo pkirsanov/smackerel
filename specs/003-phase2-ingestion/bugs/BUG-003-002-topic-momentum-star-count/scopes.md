@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Restore canonical topic star aggregation
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -188,7 +188,16 @@ Excluded:
   ```
 
   **Result:** PASS
-- [ ] Pre-fix real PostgreSQL regression fails with the missing `topics.star_count` counterexample
+- [x] Pre-fix real PostgreSQL regression fails with the missing `topics.star_count` counterexample
+
+  **Phase:** test
+  **Executed:** YES (current session receipt reconciliation)
+  **Command:** `./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+  **Exit Code:** 1 (expected RED)
+  **Claim Source:** executed
+  **Evidence:** [report.md#current-session-scenario-receipts](report.md#current-session-scenario-receipts)
+
+  **Result:** PASS - receipt line 90 records the real PostgreSQL RED at the preserved product and test input closure.
 - [x] Lifecycle query derives explicit stars from linked `artifacts.user_starred` rows
 
   **Phase:** implement
@@ -274,8 +283,28 @@ Excluded:
   ```
 
   **Result:** PASS
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+
+  **Phase:** test
+  **Executed:** YES (current session receipt reconciliation)
+  **Command:** `bash .github/bubbles/scripts/scenario-state-resolve.sh --spec-dir specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --source-revision a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1 --require RED_VERIFIED --require IMPLEMENTED --require GREEN_TARGETED --require REGRESSION_GREEN --certifiable`
+  **Exit Code:** 0
+  **Claim Source:** interpreted
+  **Interpretation:** The active proportionate regression categories are integration for SCN-001, unit for SCN-002, and E2E API for SCN-003. The resolver derived `REGRESSION_GREEN` for all three. This result does not claim recalculation E2E coverage.
+  **Evidence:** [report.md#scenario-state-reconciliation](report.md#scenario-state-reconciliation), [report.md#r-020-limitation](report.md#r-020-limitation)
+
+  **Result:** PASS for every active scenario's persistent regression obligation under the authoritative proportionate category matrix.
+- [x] Broader E2E regression suite passes
+
+  **Phase:** test
+  **Executed:** YES (current top-level session receipt)
+  **Command:** `env DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test e2e`
+  **Exit Code:** 0
+  **Claim Source:** interpreted
+  **Interpretation:** Receipt line 87 predates two packet-only commit ranges. Both ranges preserve product and test inputs, so the broad-suite result remains valid for this closeout. It is not recalculation E2E evidence.
+  **Evidence:** [report.md#broader-e2e-and-unit-receipts](report.md#broader-e2e-and-unit-receipts), [report.md#packet-only-input-closure](report.md#packet-only-input-closure)
+
+  **Result:** PASS for the broad E2E command outcome at the preserved execution closure.
 - [x] Focused unit, functional, integration, and scheduler regressions pass
 
   **Phase:** test
@@ -394,7 +423,16 @@ Excluded:
   ```
 
   **Result:** PASS
-- [ ] Documentation and bug packet match the implemented behavior
+- [x] Documentation and bug packet match the implemented behavior
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** packet `artifact-lint.sh`, `traceability-guard.sh`, `implementation-reality-scan.sh --verbose`, standard `regression-quality-guard.sh`, and `regression-quality-guard.sh --bugfix`
+  **Exit Code:** 0 for every command
+  **Claim Source:** executed
+  **Evidence:** [report.md#packet-guard-closeout](report.md#packet-guard-closeout)
+
+  **Result:** PASS - the packet artifacts, three scenario mappings, implementation reference, and adversarial regression surfaces passed their requested guards.
 
 ### Post-Scope Certification Gate (Not Scope DoD)
 

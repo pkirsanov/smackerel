@@ -17,11 +17,11 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
-    "substate": "implemented",
-    "runStartedAt": "2026-08-29T20:17:32Z",
+    "substate": "independently_verified",
+    "runStartedAt": "2026-08-29T20:38:09Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -34,6 +34,12 @@
         "agent": "bubbles.implement",
         "timestamp": "2026-08-29T20:22:50Z",
         "summary": "At source revision a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1, reconciled the canonical distinct-star query, scheduler error/success separation, TopicsPage rendering path, narrowed SCN-003 claim, and open R-020 marker; the repository check and focused lifecycle/scheduler unit selection exited 0. No product source or test file changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-08-29T20:43:55Z",
+        "summary": "Reconciled current-session RED, GREEN, IMPLEMENT, and REGRESSION receipts at the preserved a6e927b2 product/test input closure. All three active scenarios derived REGRESSION_GREEN, and the recorded broader E2E and Go unit commands exited 0. R-020 remains an explicit limitation, so no recalculation E2E claim is made."
       }
     ],
     "pendingTransitionRequests": [],
@@ -167,6 +173,17 @@
       "runStartedAt": "2026-08-29T20:17:32Z",
       "runCompletedAt": "2026-08-29T20:22:50Z",
       "summary": "Inspected the unchanged product source at a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1, confirmed alignment with the narrowed manifest and open R-020 marker, and executed the repository check plus focused lifecycle and scheduler validation. Added only implement evidence and execution provenance; status and certification remain in progress."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": [
+        "test"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-29T20:38:09Z",
+      "runCompletedAt": "2026-08-29T20:43:55Z",
+      "summary": "Reconciled the current-session scenario receipts without rerunning tests, confirmed the packet-only input closure, derived REGRESSION_GREEN for all three active scenarios, and recorded successful broader E2E and Go unit receipts. Scope execution is complete, while top-level and certification status remain in progress."
     }
   ],
   "activeBugs": [
@@ -179,7 +196,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-08-29T20:22:50Z",
+  "lastUpdatedAt": "2026-08-29T20:43:55Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
