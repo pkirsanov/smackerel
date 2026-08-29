@@ -17,11 +17,11 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.simplify",
-    "currentPhase": "simplify",
+    "activeAgent": "bubbles.gaps",
+    "currentPhase": "gaps",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
-    "substate": "no_source_change_reviewed",
-    "runStartedAt": "2026-08-29T21:23:44Z",
+    "substate": "gap_audit_complete",
+    "runStartedAt": "2026-08-29T21:46:25Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -52,6 +52,12 @@
         "agent": "bubbles.simplify",
         "timestamp": "2026-08-29T21:24:08Z",
         "summary": "Reviewed the exact BUG-003-002 product delta and focused tests through code-reuse, code-quality, and efficiency passes. No source or test simplification was warranted; packet artifact lint exited 0, and R-020 remained unchanged."
+      },
+      {
+        "phase": "gaps",
+        "agent": "bubbles.gaps",
+        "timestamp": "2026-08-29T21:46:44Z",
+        "summary": "Audited every checked DoD entry present in the packet and all three scenario-manifest contracts. SCN-001 supplies real PostgreSQL recalculation coverage, SCN-003 is limited to GET /topics rendering, and open R-020 separately routes the absent test-reachable E2E recalculation trigger to bubbles.test. No additional packet gap was found; status and certification remain in progress."
       }
     ],
     "pendingTransitionRequests": [],
@@ -218,6 +224,17 @@
       "runStartedAt": "2026-08-29T21:23:44Z",
       "runCompletedAt": "2026-08-29T21:24:08Z",
       "summary": "Reviewed the exact BUG-003-002 production delta and focused tests for reuse, quality, and efficiency. No source or test change was warranted. Appended simplify evidence and execution provenance only, preserved R-020, and kept status and certification in progress."
+    },
+    {
+      "agent": "bubbles.gaps",
+      "phasesExecuted": [
+        "gaps"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-29T21:46:25Z",
+      "runCompletedAt": "2026-08-29T21:46:44Z",
+      "summary": "Inspected every checked DoD entry present at HEAD and all three scenario-manifest mappings. Confirmed that SCN-001 proves PostgreSQL recalculation, SCN-003 proves only GET /topics rendering, and R-020 remains explicitly open under bubbles.test for a test-reachable E2E recalculation trigger. No additional packet gap was found; certification was not modified."
     }
   ],
   "activeBugs": [
@@ -230,7 +247,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-08-29T21:24:08Z",
+  "lastUpdatedAt": "2026-08-29T21:46:44Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -242,7 +259,7 @@
     "scenarioManifest": "scenario-manifest.json"
   },
   "routing": {
-    "nextOwner": "bubbles.gaps",
+    "nextOwner": "bubbles.harden",
     "testOwner": "bubbles.test",
     "validationOwner": "bubbles.validate",
     "auditOwner": "bubbles.audit",

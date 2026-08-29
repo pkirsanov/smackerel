@@ -2421,3 +2421,53 @@ Only this report and simplify-owned `execution.*` provenance in `state.json`
 change in this phase. Top-level status and certification remain `in_progress`.
 No `certification.*` field, scenario receipt, source file, test file, or R-020
 artifact changes. Routing advances to `bubbles.gaps`.
+
+## Gaps Evidence - 2026-08-29
+
+R-020 does not block this narrowed missing-column repair. SCN-001 exercises
+`UpdateAllMomentum` against real disposable PostgreSQL state and proves the
+recalculation contract. SCN-003 is explicitly limited to the independently
+proved `GET /topics` rendering behavior. R-020 separately records the absent
+test-reachable E2E recalculation trigger as an open item owned by
+`bubbles.test`. It is a routed gap, not a hidden concern, and this packet makes
+no E2E recalculation claim.
+
+The bounded review covered every checked DoD entry present in `scopes.md` and
+all three scenario-manifest contracts. This revision contains 15 checked DoD
+entries, rather than the 16 stated in the request. Each of the 15 has an
+evidence link, claim-source tag, and result marker. No additional packet gap
+was found. Status remains `in_progress`, certification remains untouched, and
+routing advances to `bubbles.harden`.
+
+### Bounded DoD, Scenario, And Routing Audit
+
+**Phase:** gaps
+**Executed:** YES (current session)
+**Command:** `P=specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count && printf '%s\n' 'GAPS-DISPOSITION-AUDIT' "head=$(git rev-parse HEAD)" && printf 'checked-dod=' && grep -c '^- \[x\]' "$P/scopes.md" && printf 'dod-evidence-links=' && grep -c '^  \*\*Evidence:\*\*' "$P/scopes.md" && printf 'dod-claim-sources=' && grep -c '^  \*\*Claim Source:\*\*' "$P/scopes.md" && printf 'dod-results=' && grep -c '^  \*\*Result:\*\*' "$P/scopes.md" && printf 'manifest-scenarios=' && grep -c '"id": "BUG-003-002-SCN-' "$P/scenario-manifest.json" && printf 'manifest-linked-tests=' && grep -c '"testId":' "$P/scenario-manifest.json" && grep -n '"requiredTestType": "integration"' "$P/scenario-manifest.json" && grep -n '"then": "the topics surface returns 200 and renders the seeded lifecycle topic by name"' "$P/scenario-manifest.json" && grep -n 'coverageNote.*R-020' "$P/scenario-manifest.json" && awk -F'|' '$2 ~ /R-020/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $6); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $7); print "r020-status=" $6; print "r020-owner=" $7 }' .specify/memory/open-work.md && printf '%s\n' 'GAPS-DISPOSITION-AUDIT-COMPLETE'`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The equal DoD marker counts cover every checked entry. The
+manifest maps SCN-001 to integration coverage, narrows SCN-003 to rendering,
+and names R-020. The open-work row independently keeps R-020 open and routes it
+to `bubbles.test`.
+**Output:**
+
+```text
+GAPS-DISPOSITION-AUDIT
+head=1a4e8c687bed80d7b55f34061c060439e000a178
+checked-dod=15
+dod-evidence-links=15
+dod-claim-sources=15
+dod-results=15
+manifest-scenarios=3
+manifest-linked-tests=3
+19:      "requiredTestType": "integration",
+72:        "then": "the topics surface returns 200 and renders the seeded lifecycle topic by name"
+80:      "coverageNote": "Narrowed 2026-08-29 from 'renders the lifecycle topics and momentum values'. The momentum half was not supported by the linked test: it seeds momentum_score as a literal and reads the same row back, so it cannot fail however badly recalculation breaks. Proven by injecting the pre-fix t.star_count fault and running the full e2e lane, which PASSED. The rendering half IS genuinely exercised via GET /topics against WebHandler.TopicsPage, so the scenario is anchored there. The uncovered recalculation path is tracked as R-020.",
+r020-status=open
+r020-owner=bubbles.test
+GAPS-DISPOSITION-AUDIT-COMPLETE
+```
+
+**Result:** PASS. R-020 retains an explicit owner and does not invalidate this
+bug packet's integration-proven recalculation repair.
