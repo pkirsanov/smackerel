@@ -3086,3 +3086,405 @@ Top-level status and certification status remain `in_progress`. Every
 `certification.*` field remains untouched. This phase did not build, deploy,
 modify source or framework files, or mint receipts. Routing advances to
 `bubbles.security`.
+
+## Security Evidence - 2026-08-29
+
+### Review Boundary
+
+The review started at revision
+`9b155650f02e66c1bf1d22cb8d9f87ddbd205613`. It covered the correlated SQL
+aggregate, its scheduler call site, canonical graph constraints, and focused
+regressions.
+
+No source or test file changed during this phase. All worktree paths outside
+this report and its execution-state record were treated as foreign work and
+excluded from the packet commit.
+
+### Threat Model
+
+| Attack surface | Trust boundary | Data class | Threat | OWASP | Result |
+|---|---|---|---|---|---|
+| `Lifecycle.UpdateAllMomentum` query | Go core to PostgreSQL | Topic counters and artifact star state | SQL injection through dynamic query fragments | A03 | No dynamic fragment or request value enters the query. |
+| Artifact-to-topic correlation | Persisted graph to lifecycle score | Private corpus relationships | Cross-principal row mixing | A01 | The product contract defines one operator-owned global corpus with grant-gated access and no row partitioning. |
+| Star aggregate cardinality | Graph relationship rows to momentum input | User-star signal | Duplicate edges inflate momentum | A04, A08 | `COUNT(DISTINCT a.id)` composes with the canonical relationship uniqueness constraint. |
+| Scheduler error path | PostgreSQL error to operator log | Database diagnostics | Internal error reaches an API caller | A05, A09 | The only production caller is the scheduler. It logs the wrapped query error and exposes no response body. |
+| Repair commit boundary | Git commit to runtime artifact | Schema, secrets, and configuration | Narrow fix widens a protected surface | A02, A05 | The repair commit changes no migration, config, secret, deploy, script, or framework path. |
+
+### Security Review Results
+
+1. **Static SQL and parameterization:** No SQL injection path was found. The
+	aggregate is a fixed query literal. The only write uses PostgreSQL
+	parameters `$1`, `$2`, and `$3`.
+2. **Authorization and data isolation:** No authorization boundary changed.
+	`UpdateAllMomentum` runs from the internal scheduler and returns no corpus
+	data. The current model is one operator-owned global corpus, so the absence
+	of a tenant predicate matches the declared model rather than weakening one.
+3. **Distinct behavior:** Duplicate graph relationships cannot increase the
+	star signal. The database rejects duplicate relationship tuples, and the
+	aggregate counts each joined artifact identifier once.
+4. **Error disclosure:** Initial query failures keep `query topics` context in
+	operator logs. No request payload, SQL parameter, credential, or corpus row
+	is interpolated into that message. The focused scheduler test also rejects
+	a false success log.
+5. **Schema, secret, and config containment:** The repair commit introduced no
+	schema, secret, configuration, deployment, or framework change. The query
+	still matches the original repair at current HEAD.
+6. **Targeted security regression:** The PostgreSQL test covers an unrelated
+	starred artifact and duplicate-edge rejection. The scheduler test covers
+	failure-versus-success log separation.
+
+R-020 stays in the existing residue ledger under `bubbles.test`. It concerns a
+missing end-to-end recalculation trigger. It does not expose a concrete
+security defect in this aggregate, and this phase does not claim that coverage.
+
+### Mandatory G034 Mechanical Floor
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/security-gate.sh --repo-root .`
+**Exit Code:** 1
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 G034 repository floor at 9b155650
+$ bash .github/bubbles/scripts/security-gate.sh --repo-root .
+exit: 1
+lines: 13
+sha256: 2cd11a85cbf5f98814e79f92906b0a9fffedcd39805ac5a881d10b3f4a27a75a
+--- output ---
+FINDING: inline-credentials: ./scripts/commands/config.sh:866: POSTGRES_PASSWORD="__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1070: LLM_PROVIDER_SECRET_MASTER_KEY="__SECRET_PLACEHOLDER__LLM_PROVIDER_SECRET_MASTER_KEY__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1236: TELEGRAM_BOT_TOKEN="__SECRET_PLACEHOLDER__TELEGRAM_BOT_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1542: KEEP_GOOGLE_APP_PASSWORD="__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1841: AUTH_BOOTSTRAP_TOKEN="__SECRET_PLACEHOLDER__AUTH_BOOTSTRAP_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:1851: WEB_REGISTRATION_INVITE_TOKEN="__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2239: ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF="ASSISTANT_TELEGRAM_WEBHOOK_SECRET"
+FINDING: inline-credentials: ./scripts/commands/config.sh:2240: ASSISTANT_TELEGRAM_WEBHOOK_SECRET="test-webhook-secret-061-scope-05-bs001-fixture"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:56: echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=self-hosted (expected non-zero)"
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:111: if grep -qE '^POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__$' "$SELF_HOSTED_ENV"; then
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:118: if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$SELF_HOSTED_ENV"; then
+FINDING: inline-credentials: ./scripts/commands/config_secret_rejection_test.sh:122: echo "PASS: self-hosted.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
+[security-gate] FAIL — G034 findings: 12
+```
+
+**Result:** FAIL. Manual inspection classifies the candidates as six SOPS
+placeholder sentinels, one secret-reference identifier, one test-only webhook
+fixture, and four assertions inside the secret-rejection test. No candidate is
+part of the BUG-003-002 repair commit. No production credential was identified.
+The repository-wide compliance gate still exits nonzero, so this phase does not
+claim G034 passed.
+
+### SQL, Isolation, Distinct, And Error Contract Inspection
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** targeted `grep -nE` inspection of the lifecycle query, global-corpus contract, canonical graph constraints, integration assertions, and scheduler assertions
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The captured source lines show fixed SQL structure,
+parameterized writes, the declared global-corpus model, duplicate controls,
+cross-topic exclusion, and failure-log assertions. They require code review to
+connect those facts to the security properties above.
+**Output:**
+
+```text
+BUG-003-002 SECURITY CONTRACT REVIEW
+query:
+123:                   COALESCE((SELECT COUNT(DISTINCT a.id)
+125:                             JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
+126:                             WHERE e.dst_type = 'topic' AND e.dst_id = t.id
+127:                               AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+153:                    WHERE id = $1 AND (state != $3 OR momentum_score IS DISTINCT FROM $2)
+isolation-model:
+7:// Product decision reconciled by BUG-070-001: there is ONE operator-owned
+8:// global corpus accessed via explicit roles/grants — no tenant and no per-user
+134:// honored. There is no tenant or per-user isolation parameter — the corpus is
+135:// one global store and access is grant-gated, not row-partitioned.
+cardinality-controls:
+35:    user_starred            BOOLEAN DEFAULT FALSE,
+132:    UNIQUE(src_type, src_id, dst_type, dst_id, edge_type)
+security-regressions:
+35:     assertDuplicateBelongsToRejected(t, ctx, pool, fixturePrefix)
+53:     t.Log("PASS: two distinct linked starred artifacts contribute exactly 10.0 star momentum")
+55:     t.Log("PASS: an unrelated starred artifact contributes nothing to the tested topic")
+140:func assertDuplicateBelongsToRejected(t *testing.T, ctx context.Context, pool *pgxpool.Pool, prefix string) {
+156:    if postgresError.Code != "23505" || postgresError.ConstraintName != "edges_src_type_src_id_dst_type_dst_id_edge_type_key" {
+488:    if !strings.Contains(logs, "topic momentum update failed") {
+491:    if !strings.Contains(logs, "query topics") {
+494:    if strings.Contains(logs, "topic momentum updated") {
+BUG-003-002 SECURITY CONTRACT REVIEW COMPLETE
+```
+
+**Result:** PASS for the interpreted packet-local review.
+
+### Focused PostgreSQL Security Regression
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 security PostgreSQL isolation and distinct-count regression at 9b155650
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run ^TestTopicLifecycleMomentumFromPersistedStars$
+exit: 0
+lines: 309
+sha256: 6c21b3a7708662b2daba023307579c3f19242a4dca39409ecfe2419a623025ef
+--- first 20 ---
+oom-preflight: OK — 28766 MB available (need 6000 MB; swap used 2560 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.2939855 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 28828 MB (required >= 2000 MB)
+  Disk available: 486382 MB / 475.0 GB (required >= 8 GB)
+ Network smackerel-test_default  Creating
+ Network smackerel-test_default  Created
+ Volume "smackerel-test-postgres-data"  Creating
+ Volume "smackerel-test-postgres-data"  Created
+ Volume "smackerel-test-nats-data"  Creating
+ Volume "smackerel-test-nats-data"  Created
+ Container smackerel-test-nats-1  Creating
+ Container smackerel-test-postgres-1  Creating
+ Container smackerel-test-nats-1  Created
+ Container smackerel-test-postgres-1  Created
+ Container smackerel-test-nats-1  Starting
+ Container smackerel-test-postgres-1  Starting
+ Container smackerel-test-postgres-1  Started
+ Container smackerel-test-nats-1  Started
+--- omitted 269 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/eval/assistant     0.004s [no tests to run]
+go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (^TestTopicLifecycleMomentumFromPersistedStars$) is active. Only a full lane run with no --run selector enforces that TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ran with a non-zero executed-assertion count.
+PASS: go-integration-light
+Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.2974360 OK
+ Container smackerel-test-postgres-1  Stopping
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Container smackerel-test-postgres-1  Stopped
+ Container smackerel-test-postgres-1  Removing
+ Container smackerel-test-postgres-1  Removed
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-postgres-data  Removing
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS for the focused PostgreSQL row. The focused-selector notice
+applies to an unrelated acceptance gate and is not presented as full-lane
+evidence.
+
+### Focused Scheduler Error-Boundary Regression
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^TestTopicMomentumJob_LogsLifecycleQueryFailure$' --verbose`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The full-output hash covers the selected scheduler test.
+The inspected test assertions require failure and query context while rejecting
+the success message. Unselected packages report normal no-match output.
+**Output:**
+
+```text
+# BUG-003-002 security scheduler error-boundary regression at 9b155650
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run ^TestTopicMomentumJob_LogsLifecycleQueryFailure$ --verbose
+exit: 0
+lines: 523
+sha256: 6a6568d0b129be4b4784ef416d4ffd222e20ff4235175adb5f81abda8b2f7f78
+--- first 20 ---
+oom-preflight: OK — 29087 MB available (need 6000 MB; swap used 2548 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
+[go-unit] envsubst missing — installing gettext-base
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 483 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.004s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup    [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/observability      0.003s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.007s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.004s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.113s [no tests to run]
+[go-unit] go test ./... finished OK
++ echo '[go-unit] go test ./... finished OK'
+```
+
+**Result:** PASS for the selected scheduler regression.
+
+### Packet-Scoped Reality Scan
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+INFO: Resolved 1 implementation file(s) to scan
+--- Scan 1: Gateway/Backend Stub Patterns ---
+--- Scan 1B: Handler / Endpoint Execution Depth ---
+--- Scan 1C: Endpoint Not-Implemented / Placeholder Responses ---
+--- Scan 1D: External Integration Authenticity ---
+--- Scan 2: Frontend Hardcoded Data Patterns ---
+--- Scan 2B: Sensitive Client Storage ---
+--- Scan 3: Frontend API Call Absence ---
+--- Scan 4: Prohibited Simulation Helpers in Production ---
+--- Scan 5: Default/Fallback Value Patterns ---
+--- Scan 6: Live-System Test Interception ---
+--- Scan 7: IDOR / Auth Bypass Detection (Gate G047) ---
+--- Scan 8: Silent Decode Failure Detection (Gate G048) ---
+============================================================
+  IMPLEMENTATION REALITY SCAN RESULT
+============================================================
+  Files scanned:  1
+  Violations:     0
+  Warnings:       0
+PASSED: No source code reality violations detected
+```
+
+**Result:** PASS.
+
+### Repair-Commit Containment
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** exact repair-commit path inventory plus protected-surface and current-query `git diff --quiet` checks
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+BUG-003-002 SECURITY CHANGE CONTAINMENT
+head=9b155650f02e66c1bf1d22cb8d9f87ddbd205613
+fix-commit-paths:
+M       internal/scheduler/jobs_test.go
+M       internal/topics/lifecycle.go
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/bug.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/design.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scopes.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/spec.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/uservalidation.md
+A       tests/integration/topic_lifecycle_momentum_test.go
+schema-secret-config-deploy-framework-widening=none
+production-query-since-fix=unchanged
+BUG-003-002 SECURITY CHANGE CONTAINMENT COMPLETE
+```
+
+**Result:** PASS. Current foreign worktree changes are not part of this commit
+inventory and receive no claim from this phase.
+
+### Security Packet Artifact Lint
+
+**Phase:** security
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 security artifact lint after G034 routing
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- first 20 ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ All checklist bullet items use checkbox syntax
+✅ uservalidation separates automation readiness from human acceptance
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+--- omitted 1 line(s); sha256 above covers the full output ---
+--- last 20 ---
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+```
+
+**Result:** PASS.
+
+### Security Phase Disposition
+
+The packet-local review found no concrete vulnerability in the correlated
+aggregate or its focused tests. The G034 repository floor still exits 1.
+Therefore, this section issues no `SECURE` verdict and records no security
+`completedPhaseClaims` entry.
+
+Finding `SEC-003-002-G034-001` routes the repository-level gate mismatch to
+`bubbles.plan`. The owner must choose an auditable project acknowledgement or
+an upstream scanner correction. Validation would be premature while this
+business-invariant gate is red.
+
+Top-level status and certification status remain `in_progress`. Every
+`certification.*` field remains untouched. R-020 remains unchanged and routed
+to `bubbles.test`.
