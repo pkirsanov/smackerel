@@ -2531,3 +2531,401 @@ HARDEN-EVIDENCE-COMPLETE
 ```
 
 **Result:** PASS. No packet blocker was found beyond separately routed R-020.
+
+## Stabilize Evidence - 2026-08-29
+
+### Stability Verdict And Scope
+
+The stabilize phase started from revision
+`522f7e6651339e27db82111506c30321c3f30c57`. No in-scope operational defect
+was observed in the canonical star-aggregation repair. This phase makes no
+product source, test, configuration, build, deployment, or framework change.
+
+The repair preserves one outer row per topic. Its scalar star subquery counts
+distinct artifact IDs, joins artifacts by primary key, and constrains the edge
+lookup by the indexed destination pair. The canonical relationship uniqueness
+constraint prevents duplicate `artifact -> topic` `BELONGS_TO` edges. The
+existing per-topic update loop is unchanged by the repair.
+
+The scheduler retains an hourly overlap guard and a two-minute cancellation
+budget. Initial query failures retain `query topics` context and reach the
+failure log branch without emitting the success log. The focused scheduler
+regression completed successfully at the starting revision.
+
+The disposable PostgreSQL regression and targeted full-stack shell flow both
+completed successfully. The full-stack flow proves only its existing
+`GET /topics` rendering contract. It seeds and reads literal momentum values;
+it does not invoke `UpdateAllMomentum`. R-020 therefore remains open under
+`bubbles.test`, and this phase makes no end-to-end recalculation claim.
+
+No production-cardinality sample or latency SLO is declared for this packet.
+This phase therefore makes no arbitrary-scale latency claim. The no-source-change
+decision rests on the observed indexed query shape, bounded scheduler execution,
+focused PostgreSQL and scheduler regressions, and the accurately narrowed
+full-stack contract.
+
+### Stability Inventory
+
+| Domain | Observed impact | Disposition |
+|---|---|---|
+| Query shape and cardinality | The scalar aggregate cannot multiply outer topic rows. `COUNT(DISTINCT a.id)` and relationship uniqueness preserve one contribution per linked starred artifact. | No repair required. |
+| Database performance | The correlation key matches `idx_edges_dst(dst_type, dst_id)` and the artifact join uses the artifact primary key. The repair adds indexed edge and artifact work per topic rather than a denormalized-column read. | No measured bottleneck. No production-scale bound claimed. |
+| Database reliability | The real migration-backed PostgreSQL regression completed and the disposable stores were removed. The configured pool permits ten connections with two minimum connections. | No repair required. |
+| Scheduler reliability | `runGuarded` prevents overlap, the job context expires after two minutes, and the query-error regression preserves failure-versus-success log separation. | No repair required. |
+| Infrastructure and resource use | The targeted test stack rebuilt, completed, and removed its containers, network, and volumes. | No residual test resource found. |
+| Configuration and build | The repair introduces no config key, generated file, build input, or deployment surface. | No change required. |
+| Targeted full-stack behavior | The shell E2E completed against the disposable stack and exercised the topics page. | Rendering regression is green; R-020 remains explicit. |
+
+### Query, Index, Scheduler, And E2E Boundary Inspection
+
+**Phase:** stabilize
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'STABILIZE STATIC REVIEW' "head=$(timeout 30 git rev-parse HEAD)" 'query-shape:' && timeout 30 grep -nE "COUNT\(DISTINCT a.id\)|JOIN artifacts a|e.dst_type = 'topic'|e.dst_id = t.id|e.edge_type = 'BELONGS_TO'|a.user_starred IS TRUE|COUNT\(\*\) FROM edges|FROM topics t|WHERE id = \$1 AND" internal/topics/lifecycle.go && printf '%s\n' 'schema-cardinality:' && timeout 30 grep -nE 'UNIQUE\(src_type, src_id, dst_type, dst_id, edge_type\)|idx_edges_(src|dst|type)' internal/db/migrations/001_initial_schema.sql && printf '%s\n' 'pool-and-scheduler-bounds:' && timeout 30 grep -nE 'max_conns:|min_conns:' config/smackerel.yaml && timeout 30 grep -nE 'TryLock|skipping overlapping job' internal/scheduler/lifecycle.go && timeout 30 grep -nE 'context.WithTimeout\(s.baseCtx, 2\*time.Minute\)|UpdateAllMomentum|topic momentum update failed|topic momentum updated' internal/scheduler/jobs.go && printf '%s\n' 'targeted-e2e-boundary:' && timeout 30 grep -nE 'momentum_score.*capture_count|topic-lifecycle-hot|HOT_MOMENTUM=|DORMANT_MOMENTUM=|CORE_URL/topics|Topics page shows owned' tests/e2e/test_topic_lifecycle.sh && printf '%s\n' 'STABILIZE STATIC REVIEW COMPLETE'`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The output shows the scalar aggregate predicates, canonical
+relationship uniqueness, eligible edge indexes, explicit pool size, overlap and
+timeout bounds, scheduler log branches, and the literal-seed/read E2E boundary.
+It does not claim an `EXPLAIN` plan or a production-scale latency measurement.
+**Output:**
+
+```text
+STABILIZE STATIC REVIEW
+head=522f7e6651339e27db82111506c30321c3f30c57
+query-shape:
+123:                   COALESCE((SELECT COUNT(DISTINCT a.id)
+125:                             JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
+126:                             WHERE e.dst_type = 'topic' AND e.dst_id = t.id
+127:                               AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+128:                   COALESCE((SELECT COUNT(*) FROM edges WHERE src_type = 'topic' AND src_id = t.id
+131:            FROM topics t
+schema-cardinality:
+132:    UNIQUE(src_type, src_id, dst_type, dst_id, edge_type)
+135:CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src_type, src_id);
+136:CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_type, dst_id);
+137:CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
+pool-and-scheduler-bounds:
+2385:    max_conns: 10
+2386:    min_conns: 2
+35:// runGuarded runs fn under a TryLock guard. If the mutex is already held
+40:     if !mu.TryLock() {
+41:             slog.Warn("skipping overlapping job", "group", group, "job", job)
+71:     ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+203:    ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+205:    if err := s.lifecycle.UpdateAllMomentum(ctx); err != nil {
+206:            slog.Error("topic momentum update failed", "error", err)
+208:            slog.Info("topic momentum updated")
+257:    ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+382:    ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+399:    ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+485:            ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+targeted-e2e-boundary:
+22:INSERT INTO topics (id, name, state, momentum_score, capture_count_total, capture_count_30d, capture_count_90d, search_hit_count_30d, last_active)
+24:  ('topic-lifecycle-hot', 'topic-lifecycle-pricing', 'hot', 20.0, 15, 10, 15, 8, NOW()),
+39:HOT_STATE=$(e2e_psql "SELECT state FROM topics WHERE id='topic-lifecycle-hot'")
+46:HOT_MOMENTUM=$(e2e_psql "SELECT momentum_score FROM topics WHERE id='topic-lifecycle-hot'")
+48:DORMANT_MOMENTUM=$(e2e_psql "SELECT momentum_score FROM topics WHERE id='topic-lifecycle-dormant'")
+53:  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/topics")
+57:  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/topics" 2>/dev/null || true)
+58:e2e_assert_contains "$BODY" "topic-lifecycle-pricing" "Topics page shows owned lifecycle pricing topic"
+STABILIZE STATIC REVIEW COMPLETE
+```
+
+**Result:** PASS for the bounded source and schema assessment.
+
+### Current-HEAD PostgreSQL Aggregation Regression
+
+**Phase:** stabilize
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The repository runner completed its migration-backed
+integration-light lane with the exact focused selector. The compact evidence
+retains the full-output hash and final lane result. The focused-selector notice
+means this run is not evidence for the unrelated acceptance-gate assertion.
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 stabilize PostgreSQL aggregation
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run ^TestTopicLifecycleMomentumFromPersistedStars$
+exit: 0
+lines: 309
+sha256: e868cf18c11ae977b121ad5773402c4ba7844bba6d7c752cc6a5bbd5bdc19f03
+--- first 20 ---
+oom-preflight: OK — 28302 MB available (need 6000 MB; swap used 1855 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.1688792 OK
+Smackerel pre-flight resource check: OK
+	RAM  available: 28316 MB (required >= 2000 MB)
+	Disk available: 489550 MB / 478.1 GB (required >= 8 GB)
+ Network smackerel-test_default  Creating
+ Network smackerel-test_default  Created
+ Volume "smackerel-test-postgres-data"  Creating
+ Volume "smackerel-test-postgres-data"  Created
+ Volume "smackerel-test-nats-data"  Creating
+ Volume "smackerel-test-nats-data"  Created
+ Container smackerel-test-postgres-1  Creating
+ Container smackerel-test-nats-1  Creating
+ Container smackerel-test-nats-1  Created
+ Container smackerel-test-postgres-1  Created
+ Container smackerel-test-nats-1  Starting
+ Container smackerel-test-postgres-1  Starting
+ Container smackerel-test-nats-1  Started
+ Container smackerel-test-postgres-1  Started
+--- omitted 269 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/eval/assistant     0.004s [no tests to run]
+go-integration: NOTICE: acceptance-gate executed-assertion assertion NOT ENFORCED for this run — a focused --run selector (^TestTopicLifecycleMomentumFromPersistedStars$) is active. Only a full lane run with no --run selector enforces that TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ran with a non-zero executed-assertion count.
+PASS: go-integration-light
+Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.1722077 OK
+ Container smackerel-test-postgres-1  Stopping
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Container smackerel-test-postgres-1  Stopped
+ Container smackerel-test-postgres-1  Removing
+ Container smackerel-test-postgres-1  Removed
+ Volume smackerel-test-postgres-data  Removing
+ Volume smackerel-test-nats-data  Removing
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS for the focused migration-backed PostgreSQL lane. No broader
+acceptance-gate or production-scale performance claim is made.
+
+### Current-HEAD Scheduler Failure Regression
+
+**Phase:** stabilize
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^TestTopicMomentumJob_LogsLifecycleQueryFailure$' --verbose`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The full-output hash covers the selected scheduler test. Its
+inspected assertions require the failure message and `query topics` context and
+reject the success message. The compact block confirms the focused Go lane
+completed; unrelated packages legitimately report no matching tests.
+**Output:**
+
+```text
+# BUG-003-002 stabilize scheduler failure
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run ^TestTopicMomentumJob_LogsLifecycleQueryFailure$ --verbose
+exit: 0
+lines: 523
+sha256: ffb3e85ed947eea7016b5d3e1889f74cc1b3af09a9f479a1ae96756e65c53c7d
+--- first 20 ---
+oom-preflight: OK — 28261 MB available (need 6000 MB; swap used 1855 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
+[go-unit] envsubst missing — installing gettext-base
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+	gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 483 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.006s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup    [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/observability      0.003s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.006s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.003s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.110s [no tests to run]
+[go-unit] go test ./... finished OK
+++ echo '[go-unit] go test ./... finished OK'
+```
+
+**Result:** PASS for the focused scheduler failure lane.
+
+### Current-HEAD Targeted Full-Stack Regression
+
+**Phase:** stabilize
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The targeted shell lane rebuilt and exercised the disposable
+stack and exited zero. Source inspection above limits the claim to the topics
+page assertion. The literal momentum seed/read does not cover recalculation and
+does not close R-020.
+**Path normalization:** The repository root is rendered as `~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 stabilize targeted full-stack
+$ env DISK_PREFLIGHT_OVERRIDE=1 SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh
+exit: 0
+lines: 396
+sha256: 182c7e2e5a4f372399fe28bf11edffa5eaad0f2692df06680035045573ae8ce4
+--- first 20 ---
+oom-preflight: OK — 28277 MB available (need 6000 MB; swap used 1855 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.1761762 OK
+Smackerel pre-flight resource check: OK
+	RAM  available: 28223 MB (required >= 6000 MB)
+	Disk available: 489308 MB / 477.8 GB (required >= 15 GB)
+Running targeted shell E2E: test_topic_lifecycle.sh
+Running project-scoped test stack teardown (before targeted shared-stack shell E2E, timeout 180s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.1770819 OK
+oom-preflight: OK — 28341 MB available (need 6000 MB; swap used 1855 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.1775856 OK
+Smackerel pre-flight resource check: OK
+	RAM  available: 27968 MB (required >= 6000 MB)
+	Disk available: 489267 MB / 477.8 GB (required >= 15 GB)
+Preparing disposable test stack...
+Building disposable test stack images before up (freshness convention)...
+Compose can now delegate builds to bake for better performance.
+ To do so, set COMPOSE_BAKE=true.
+#0 building with "default" instance using docker driver
+--- omitted 356 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ Container smackerel-test-postgres-1  Removing
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-intent-compiler-provider-1  Stopped
+ Container smackerel-test-intent-compiler-provider-1  Removing
+ Container smackerel-test-intent-compiler-provider-1  Removed
+ Container smackerel-test-smackerel-ml-1  Stopped
+ Container smackerel-test-smackerel-ml-1  Removing
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-ollama-data  Removing
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-postgres-data  Removing
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS for the narrowed targeted full-stack regression. R-020 remains
+open and is not represented as covered.
+
+### Post-Run Cleanup And Change Boundary
+
+**Phase:** stabilize
+**Executed:** YES (current session)
+**Command:** `set -e && printf '%s\n' 'STABILIZE CLEANUP CONFIRMATION' 'tracked-delta:' && timeout 30 git status --short && printf '%s\n' 'test-containers:' && timeout 30 docker ps -a --filter 'name=smackerel-test' --format '{{.Names}} {{.Status}}' && printf '%s\n' 'test-networks:' && timeout 30 docker network ls --filter 'name=smackerel-test' --format '{{.Name}}' && printf '%s\n' 'test-volumes:' && timeout 30 docker volume ls --filter 'name=smackerel-test' --format '{{.Name}}' && printf '%s\n' 'test-processes:' && if timeout 30 pgrep -af '[s]mackerel\.sh test|[s]mackerel-test|[t]est_topic_lifecycle'; then printf '%s\n' 'cleanup-verdict=unexpected-process'; exit 1; else process_status=$?; if [[ "$process_status" -ne 1 ]]; then exit "$process_status"; fi; fi && printf '%s\n' 'cleanup-verdict=zero-listed-resources' 'STABILIZE CLEANUP CONFIRMATION COMPLETE'`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+STABILIZE CLEANUP CONFIRMATION
+tracked-delta:
+ M specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+ M specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+test-containers:
+test-networks:
+test-volumes:
+test-processes:
+cleanup-verdict=zero-listed-resources
+STABILIZE CLEANUP CONFIRMATION COMPLETE
+```
+
+**Result:** PASS. No disposable Smackerel test resource remained, and the only
+tracked delta is the authorized report and state pair.
+
+### Stabilize Packet Artifact Lint
+
+**Phase:** stabilize
+**Executed:** YES (current session)
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 stabilize packet artifact lint
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- first 20 ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ All checklist bullet items use checkbox syntax
+✅ uservalidation separates automation readiness from human acceptance
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+--- omitted 1 line(s); sha256 above covers the full output ---
+--- last 20 ---
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+**Result:** PASS.
+
+### Stabilize Phase Boundary
+
+Only this report and stabilize-owned `execution.*` provenance in `state.json`
+change in this phase. Top-level status and certification remain `in_progress`.
+No `certification.*` field, source, test, config, deployment, framework, scope,
+scenario-manifest, or R-020 artifact changes. Routing advances to
+`bubbles.devops`.

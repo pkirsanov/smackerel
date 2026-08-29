@@ -17,11 +17,11 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.harden",
-    "currentPhase": "harden",
+    "activeAgent": "bubbles.stabilize",
+    "currentPhase": "stabilize",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
     "substate": "independently_verified",
-    "runStartedAt": "2026-08-29T22:00:33Z",
+    "runStartedAt": "2026-08-29T22:04:02Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -64,6 +64,12 @@
         "agent": "bubbles.harden",
         "timestamp": "2026-08-29T22:01:12Z",
         "summary": "At starting revision 41d235f5, inspected all 15 checked DoD entries, their linked evidence, five Test Plan rows, three scenario-manifest mappings, and six predecessor phase claims. No blocker was found beyond open R-020, which remains routed to bubbles.test. No tests were rerun; status and certification remain in progress."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-08-29T22:14:35Z",
+        "summary": "At starting revision 522f7e66, reviewed aggregation cardinality, supporting indexes, scheduler bounds and query-failure logging, PostgreSQL reliability, and the narrowed full-stack behavior. Focused PostgreSQL, scheduler, and targeted E2E commands exited 0; no in-scope source change was warranted. R-020 remains open under bubbles.test and is not claimed as covered. Packet artifact lint exited 0; status and certification remain in progress."
       }
     ],
     "pendingTransitionRequests": [],
@@ -252,6 +258,17 @@
       "runStartedAt": "2026-08-29T22:00:33Z",
       "runCompletedAt": "2026-08-29T22:01:12Z",
       "summary": "Performed a packet-only hardening review at starting revision 41d235f5. Inspected all 15 checked DoD entries, evidence links, Test Plan-to-manifest parity, and predecessor phase claims. Preserved R-020 as the separately routed limitation, made no runtime claim, and changed no certification field."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-29T22:04:02Z",
+      "runCompletedAt": "2026-08-29T22:14:35Z",
+      "summary": "Performed an evidence-backed stability review at starting revision 522f7e66. The canonical scalar aggregation preserves topic cardinality and aligns with existing destination indexes and relationship uniqueness. Focused PostgreSQL, scheduler failure-path, and targeted full-stack commands exited 0, and disposable resources were removed. No source or test change was warranted. R-020 remains open under bubbles.test and is not claimed as recalculation E2E coverage."
     }
   ],
   "activeBugs": [
@@ -264,7 +281,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-08-29T22:01:12Z",
+  "lastUpdatedAt": "2026-08-29T22:14:35Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -276,7 +293,7 @@
     "scenarioManifest": "scenario-manifest.json"
   },
   "routing": {
-    "nextOwner": "bubbles.stabilize",
+    "nextOwner": "bubbles.devops",
     "testOwner": "bubbles.test",
     "validationOwner": "bubbles.validate",
     "auditOwner": "bubbles.audit",
