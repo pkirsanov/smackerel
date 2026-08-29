@@ -4,6 +4,7 @@
   "generatedAt": "2026-07-20T20:17:05Z",
   "scenarios": [
     {
+      "id": "BUG-003-002-SCN-001",
       "scenarioId": "BUG-003-002-SCN-001",
       "scope": "scope-1-restore-canonical-topic-star-aggregation",
       "title": "Canonical star aggregation updates momentum",
@@ -21,7 +22,8 @@
       "linkedTests": [
         {
           "file": "tests/integration/topic_lifecycle_momentum_test.go",
-          "testId": "TestTopicLifecycleMomentumFromPersistedStars"
+          "testId": "TestTopicLifecycleMomentumFromPersistedStars",
+          "category": "integration"
         }
       ],
       "evidenceRefs": [
@@ -31,6 +33,7 @@
       "invalidatedBy": null
     },
     {
+      "id": "BUG-003-002-SCN-002",
       "scenarioId": "BUG-003-002-SCN-002",
       "scope": "scope-1-restore-canonical-topic-star-aggregation",
       "title": "Lifecycle query failures remain observable",
@@ -48,7 +51,8 @@
       "linkedTests": [
         {
           "file": "internal/scheduler/jobs_test.go",
-          "testId": "TestTopicMomentumJob_LogsLifecycleQueryFailure"
+          "testId": "TestTopicMomentumJob_LogsLifecycleQueryFailure",
+          "category": "unit"
         }
       ],
       "evidenceRefs": [
@@ -58,13 +62,14 @@
       "invalidatedBy": null
     },
     {
+      "id": "BUG-003-002-SCN-003",
       "scenarioId": "BUG-003-002-SCN-003",
       "scope": "scope-1-restore-canonical-topic-star-aggregation",
       "title": "Existing topic lifecycle surface remains available",
       "gherkin": {
         "given": "the disposable full test stack contains topic lifecycle fixtures",
         "when": "the targeted topic lifecycle shell flow runs",
-        "then": "the topics surface renders the lifecycle topics and momentum values"
+        "then": "the topics surface returns 200 and renders the seeded lifecycle topic by name"
       },
       "gherkinHash": null,
       "behaviorClass": "api",
@@ -72,10 +77,12 @@
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
       "lockdown": false,
+      "coverageNote": "Narrowed 2026-08-29 from 'renders the lifecycle topics and momentum values'. The momentum half was not supported by the linked test: it seeds momentum_score as a literal and reads the same row back, so it cannot fail however badly recalculation breaks. Proven by injecting the pre-fix t.star_count fault and running the full e2e lane, which PASSED. The rendering half IS genuinely exercised via GET /topics against WebHandler.TopicsPage, so the scenario is anchored there. The uncovered recalculation path is tracked as R-020.",
       "linkedTests": [
         {
           "file": "tests/e2e/test_topic_lifecycle.sh",
-          "testId": "Topic lifecycle: states and momentum verified"
+          "testId": "Topic lifecycle: states and momentum verified",
+          "category": "e2e-api"
         }
       ],
       "evidenceRefs": [
