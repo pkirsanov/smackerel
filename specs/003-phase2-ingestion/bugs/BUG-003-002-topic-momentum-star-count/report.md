@@ -1187,3 +1187,223 @@ certification field was changed.
 	`completedAt`, nine historical evidence blocks lacking terminal-signal
 	heuristics, and one narrative-summary phrase. They were not reclassified as
 	test success.
+
+## Implement Evidence - 2026-08-29
+
+### Implement Owner Statement
+
+The implement phase began from clean source revision
+`a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1`. No product source or test change
+was required. Current source inspection confirmed these bounded facts:
+
+1. `Lifecycle.UpdateAllMomentum` derives the explicit-star input from distinct
+	starred artifacts linked by canonical artifact-to-topic `BELONGS_TO` edges.
+2. Initial query failures retain `query topics` context. The scheduler logs the
+	failure branch and emits the success message only from the `else` branch.
+3. `WebHandler.TopicsPage` reads ordered topic rows and passes the resulting
+	topic names to `topics.html`, matching the narrowed SCN-003 rendering claim.
+4. The scenario manifest still identifies R-020 as the open recalculation-path
+	coverage obligation. This implement phase does not claim that obligation.
+
+The packet remains `in_progress`. This phase does not claim test ownership or
+certification, and it does not change any test-owned DoD item.
+
+### Source And Narrowed Manifest Inspection
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `grep -nE "COUNT\(DISTINCT a.id\)|JOIN artifacts a|e.src_type = 'artifact'|e.dst_type = 'topic'|e.dst_id = t.id|e.edge_type = 'BELONGS_TO'|a.user_starred IS TRUE|return fmt.Errorf\(\"query topics|func \(s \*Scheduler\) doTopicMomentumJob|if err := s.lifecycle.UpdateAllMomentum|topic momentum update failed|topic momentum updated|func \(h \*Handler\) TopicsPage|SELECT id, name, state, capture_count_total, last_active|FROM topics ORDER BY momentum_score|Templates.ExecuteTemplate\(w, \"topics.html\"|\"Topics\":[[:space:]]+topics|\"title\": \"Existing topic lifecycle surface remains available\"|\"then\": \"the topics surface returns 200 and renders the seeded lifecycle topic by name\"|coverageNote.*R-020" internal/topics/lifecycle.go internal/scheduler/jobs.go internal/web/handler.go specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The captured lines directly show the production query predicates,
+error/success branch separation, topic-template data path, narrowed SCN-003 claim,
+and the unchanged R-020 marker. Relating those source lines to the combined
+packet claim requires source reconciliation rather than a runtime assertion.
+**Output:**
+
+```text
+# BUG-003-002 implement source and manifest inspection at a6e927b2
+$ grep -nE COUNT\(DISTINCT a.id\)|JOIN artifacts a|e.src_type = 'artifact'|e.dst_type = 'topic'|e.dst_id = t.id|e.edge_type = 'BELONGS_TO'|a.user_starred IS TRUE|return fmt.Errorf\("query topics|func \(s \*Scheduler\) doTopicMomentumJob|if err := s.lifecycle.UpdateAllMomentum|topic momentum update failed|topic momentum updated|func \(h \*Handler\) TopicsPage|SELECT id, name, state, capture_count_total, last_active|FROM topics ORDER BY momentum_score|Templates.ExecuteTemplate\(w, "topics.html"|"Topics":[[:space:]]+topics|"title": "Existing topic lifecycle surface remains available"|"then": "the topics surface returns 200 and renders the seeded lifecycle topic by name"|coverageNote.*R-020 internal/topics/lifecycle.go internal/scheduler/jobs.go internal/web/handler.go specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json
+exit: 0
+lines: 20
+sha256: 4dde474eb5fcb0f5eb05d8203186921a467c9c459a361a71de9dd2fc21c43c6a
+--- output ---
+internal/topics/lifecycle.go:123:                   COALESCE((SELECT COUNT(DISTINCT a.id)
+internal/topics/lifecycle.go:125:                             JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
+internal/topics/lifecycle.go:126:                             WHERE e.dst_type = 'topic' AND e.dst_id = t.id
+internal/topics/lifecycle.go:127:                               AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+internal/topics/lifecycle.go:134:            return fmt.Errorf("query topics: %w", err)
+internal/scheduler/jobs.go:202:func (s *Scheduler) doTopicMomentumJob() {
+internal/scheduler/jobs.go:205: if err := s.lifecycle.UpdateAllMomentum(ctx); err != nil {
+internal/scheduler/jobs.go:206:         slog.Error("topic momentum update failed", "error", err)
+internal/scheduler/jobs.go:208:         slog.Info("topic momentum updated")
+internal/web/handler.go:368:            "Topics":      topicsParsed,
+internal/web/handler.go:449:func (h *Handler) TopicsPage(w http.ResponseWriter, r *http.Request) {
+internal/web/handler.go:461:            SELECT id, name, state, capture_count_total, last_active
+internal/web/handler.go:462:            FROM topics ORDER BY momentum_score DESC, capture_count_total DESC
+internal/web/handler.go:467:            if err := h.Templates.ExecuteTemplate(w, "topics.html", map[string]interface{}{
+internal/web/handler.go:504:    if err := h.Templates.ExecuteTemplate(w, "topics.html", map[string]interface{}{
+internal/web/handler.go:506:            "Topics":   topics,
+internal/web/handler.go:701:    h.Templates.ExecuteTemplate(w, "notifications-ntfy-source.html", map[string]interface{}{"Title": "ntfy Source", "Source": source, "Topics": topics, "DeadLetters": deadLetters, "LastEvent": lastEvent})
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json:68:      "title": "Existing topic lifecycle surface remains available",
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json:72:        "then": "the topics surface returns 200 and renders the seeded lifecycle topic by name"
+specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json:80:      "coverageNote": "Narrowed 2026-08-29 from 'renders the lifecycle topics and momentum values'. The momentum half was not supported by the linked test: it seeds momentum_score as a literal and reads the same row back, so it cannot fail however badly recalculation breaks. Proven by injecting the pre-fix t.star_count fault and running the full e2e lane, which PASSED. The rendering half IS genuinely exercised via GET /topics against WebHandler.TopicsPage, so the scenario is anchored there. The uncovered recalculation path is tracked as R-020.",
+```
+
+**Result:** PASS for current source-to-manifest reconciliation. This is not a
+replacement for test-owner runtime evidence.
+
+### Repository Check
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `./smackerel.sh check`
+**Exit Code:** 0
+**Claim Source:** executed
+**Path normalization:** The repository root is rendered as `~/smackerel` to
+avoid recording a workstation home path. All other output is unchanged.
+**Output:**
+
+```text
+# BUG-003-002 implement check at a6e927b2
+$ ./smackerel.sh check
+exit: 0
+lines: 6
+sha256: d45ad8ef5a1e8376323cd59e3b0435033e1341b586f8988f609cc6202fccec50
+--- output ---
+config-validate: ~/smackerel/config/generated/dev.env.tmp.2259220 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+```
+
+**Result:** PASS. The repository-standard check completed successfully at the
+unchanged product source revision.
+
+### Focused Validation Initial Refusal
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `./smackerel.sh test unit --go --go-run '^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$' --verbose`
+**Exit Code:** 1
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 implement focused lifecycle and scheduler validation at a6e927b2
+$ ./smackerel.sh test unit --go --go-run ^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$ --verbose
+exit: 1
+lines: 34
+sha256: d317ce28abfa6ba4b5ef5e029c3edca6fa12f6551ad50809f19223244308ae66
+--- output ---
+oom-preflight: OK — 28922 MB available (need 6000 MB; swap used 807 MB).
+
+  ┌─ disk-preflight: REFUSED — not enough free disk ──────────────────┐
+  │  C: (backs the vhdx): 23     GB free   required: 40   GB
+  │  WSL / (ext4)       : 490    GB free   required: 25   GB
+  │
+  │  A heavy build here can fill the disk and wedge the daemon.
+  │  Reclaim space first, then re-run. Biggest levers, in order:
+  │
+  │   1) Safe Docker reclaim (keeps labeled-persistent volumes):
+  │        docker-safe-prune.sh          # dry-run first
+  │        docker-safe-prune.sh --apply
+  │   2) Stop idle project stacks you are NOT working in:
+  │        ./wanderaide.sh deploy stop complete
+  │        ./guesthost.sh stop all
+  │        ./quantitativefinance.sh --env=dev down
+  │        ./smackerel.sh down
+  │   3) Journald + apt (needs sudo password — run yourself):
+  │        sudo journalctl --vacuum-size=200M && sudo apt-get clean
+  │   4) If C: is low but WSL / looks fine, the vhdx is holding slack.
+  │      Reclaim needs a full WSL shutdown + compact from Windows:
+  │        wsl --shutdown            (kills ALL sessions — schedule it)
+  │        Optimize-VHD -Path <ext4.vhdx> -Mode Full   (elevated)
+  │
+  │  Current Docker footprint:
+  │      TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+  │      Images          95        48        41.23GB   21.32GB (51%)
+  │      Containers      74        74        32.97MB   0B (0%)
+  │      Local Volumes   547       17        187.7GB   179.5GB (95%)
+  │      Build Cache     226       0         25.6GB    19.36GB
+  │
+  │  Override (only if you KNOW it fits): DISK_PREFLIGHT_OVERRIDE=1
+  └────────────────────────────────────────────────────────────────────┘
+```
+
+**Result:** REFUSED before test execution by the repository disk gate. The
+successful bounded rerun below used the override printed by that gate.
+
+### Focused Lifecycle And Scheduler Validation
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test unit --go --go-run '^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 implement focused lifecycle and scheduler validation at a6e927b2 with disk preflight override
+$ env DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test unit --go --go-run ^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$ --verbose
+exit: 0
+lines: 578
+sha256: 19e585e7f3ca1ca57b992f326d1cd84de09a284cab94da8983c3bb07284cf94c
+--- first 20 ---
+oom-preflight: OK — 28940 MB available (need 6000 MB; swap used 807 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+++ dirname /workspace/scripts/runtime/go-unit.sh
++ source /workspace/scripts/runtime/_ensure_envsubst.sh
++ ensure_envsubst go-unit
++ local tag=go-unit
++ command -v envsubst
+[go-unit] envsubst missing — installing gettext-base
++ echo '[go-unit] envsubst missing — installing gettext-base'
++ apt-get update -qq
++ apt-get install -y --no-install-recommends gettext-base
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  gettext-base
+0 upgraded, 1 newly installed, 0 to remove and 20 not upgraded.
+Need to get 160 kB of archives.
+After this operation, 660 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 gettext-base amd64 0.21-12 [160 kB]
+--- omitted 538 line(s); sha256 above covers the full output ---
+--- last 20 ---
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.008s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/agent/routerwarmup    [no test files]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+?       github.com/smackerel/smackerel/tests/integration/nslock [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/observability      0.005s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.020s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       0.022s [no tests to run]
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.123s [no tests to run]
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS. The selected momentum, state-transition, lifecycle-constructor,
+and scheduler failure-path tests completed successfully. Unselected packages
+reported their normal no-match messages because the repository runner applies
+the regular expression across `./...`.
+
+### Implement Phase Boundary
+
+No product source, test, managed documentation, configuration, deployment, or
+framework-managed file was modified by this implement closeout. The only owned
+updates are implement evidence and execution-state provenance inside this bug
+packet. Scope and certification status remain `in_progress`.

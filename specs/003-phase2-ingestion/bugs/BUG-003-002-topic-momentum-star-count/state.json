@@ -17,16 +17,23 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.test",
-    "currentPhase": "test",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
-    "runStartedAt": "2026-07-20T21:37:33Z",
+    "substate": "implemented",
+    "runStartedAt": "2026-08-29T20:17:32Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
         "agent": "bubbles.bug",
         "timestamp": "2026-07-20T20:17:05Z",
         "summary": "Created the complete in-progress BUG-003-002 packet from the live missing-column counterexample and grounded the repair in artifacts.user_starred plus artifact-to-topic BELONGS_TO edges. No delivery or certification claim made."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-08-29T20:22:50Z",
+        "summary": "At source revision a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1, reconciled the canonical distinct-star query, scheduler error/success separation, TopicsPage rendering path, narrowed SCN-003 claim, and open R-020 marker; the repository check and focused lifecycle/scheduler unit selection exited 0. No product source or test file changed."
       }
     ],
     "pendingTransitionRequests": [],
@@ -149,6 +156,17 @@
       "runStartedAt": "2026-07-20T21:37:33Z",
       "runCompletedAt": "2026-07-20T22:23:35Z",
       "summary": "Executed the authorized current-session test phase from exact starting HEAD 4049cd7ea978dab1dd32e7651182b96b2e4ff658: the canonical PostgreSQL integration, focused lifecycle and scheduler tests, targeted lifecycle E2E, 140-package Go unit regression, and quality checks passed. The complete E2E runner passed 12 packages with 126 top-level passes but emitted 20 Go skips and omitted the opt-in Ollama suite, so no completedPhaseClaims or certification fields were changed."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-29T20:17:32Z",
+      "runCompletedAt": "2026-08-29T20:22:50Z",
+      "summary": "Inspected the unchanged product source at a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1, confirmed alignment with the narrowed manifest and open R-020 marker, and executed the repository check plus focused lifecycle and scheduler validation. Added only implement evidence and execution provenance; status and certification remain in progress."
     }
   ],
   "activeBugs": [
@@ -161,7 +179,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-07-20T22:23:35Z",
+  "lastUpdatedAt": "2026-08-29T20:22:50Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -173,7 +191,7 @@
     "scenarioManifest": "scenario-manifest.json"
   },
   "routing": {
-    "nextOwner": "bubbles.implement",
+    "nextOwner": "bubbles.test",
     "testOwner": "bubbles.test",
     "validationOwner": "bubbles.validate",
     "auditOwner": "bubbles.audit",
