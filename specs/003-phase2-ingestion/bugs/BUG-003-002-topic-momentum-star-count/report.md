@@ -2257,3 +2257,167 @@ sha256: 56558894c7d0e0e85e9ce21e8207fe8ab5b7e241f6aea303136b8fdefbf3b95f
 ```
 
 **Result:** PASS.
+
+## Simplify Phase Review - 2026-08-29
+
+### Simplify Owner Statement
+
+`bubbles.simplify` reviewed the exact BUG-003-002 production delta and its
+focused scheduler and PostgreSQL regressions at starting revision
+`cd71d621cfd952c520805a4bf3cbec7f85291c06`. The review applied separate code
+reuse, code quality, and efficiency passes.
+
+No source or test simplification is warranted. The production change is one
+correlated aggregate that directly expresses the persisted star source and all
+relationship predicates. The starred predicate has no duplicate product
+implementation to extract. The focused integration test already separates
+schema inspection, fixture creation, uniqueness, persisted reads, assertions,
+and cleanup through named helpers. The destination-side edge index supports the
+correlation key, while the relationship uniqueness constraint and explicit
+`COUNT(DISTINCT a.id)` preserve the distinct-artifact contract without another
+abstraction.
+
+No product source or test file changed. The existing R-020 boundary remains
+unchanged and was not expanded into this packet.
+
+### Consolidated Review
+
+| Pass | Finding count | Decision |
+|---|---:|---|
+| Code reuse | 0 | Keep the single product aggregate and existing shared integration helpers. |
+| Code quality | 0 | Keep the direct SQL predicates and focused named test helpers. |
+| Efficiency | 0 | Keep the indexed correlated aggregate; no measured bottleneck justifies a wider query rewrite. |
+
+The product and focused-test line counts remain unchanged:
+
+- `internal/topics/lifecycle.go`: 170 to 170
+- `internal/scheduler/jobs_test.go`: 583 to 583
+- `tests/integration/topic_lifecycle_momentum_test.go`: 206 to 206
+- Product-source net change in this phase: 0 lines added, 0 lines removed
+
+### Current-Revision Simplification Evidence
+
+**Phase:** simplify
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'SIMPLIFY-REVIEW-V1' 'target=BUG-003-002' 'phase=simplify'; timeout 30 git rev-parse HEAD; printf '%s\n' 'worktree-status-begin'; timeout 30 git status --short; printf '%s\n' 'worktree-status-end' 'original-production-delta:'; timeout 60 git --no-pager diff --unified=0 f5f05450848630fe84c0a215429bdfc701c4bcd2 7ff2d5441f8d90158873cff378c8b81d448900b8 -- internal/topics/lifecycle.go; printf '%s\n' 'starred-predicate-product-occurrence:'; timeout 30 git grep -n "user_starred IS TRUE" -- internal; printf '%s\n' 'relationship-constraints-and-indexes:'; timeout 30 grep -nE 'UNIQUE\(src_type, src_id, dst_type, dst_id, edge_type\)|CREATE INDEX IF NOT EXISTS idx_edges_(src|dst|type)' internal/db/migrations/001_initial_schema.sql; printf '%s\n' 'focused-test-boundaries:'; timeout 30 grep -nE '^func (TestTopicLifecycleMomentumFromPersistedStars|assertTopicsStarCountColumnAbsent|seedTopicMomentumFixtures|assertDuplicateBelongsToRejected|readTopicMomentum|assertTopicMomentum|registerTopicMomentumCleanup)' tests/integration/topic_lifecycle_momentum_test.go; if timeout 30 git diff --quiet a6e927b2df7dfbe8e3e478be71a0c547fa3e67f1..HEAD -- internal/topics/lifecycle.go internal/topics/lifecycle_test.go internal/scheduler/jobs.go internal/scheduler/jobs_test.go tests/integration/topic_lifecycle_momentum_test.go tests/e2e/test_topic_lifecycle.sh; then printf '%s\n' 'scoped-closure=UNCHANGED-since-a6e927b2'; else printf '%s\n' 'scoped-closure=CHANGED-since-a6e927b2'; exit 1; fi; timeout 30 grep -n '"coverageNote"' specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json; printf '%s\n' 'SIMPLIFY-REVIEW-COMPLETE'`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The output identifies the complete production delta, the
+single product occurrence of the starred predicate, the canonical uniqueness
+and index contracts, the focused helper boundaries, unchanged product and test
+inputs since the tested closure, and the preserved R-020 marker. These facts
+support the no-source-change simplify decision. They do not claim a new runtime
+test execution.
+**Output:**
+
+```text
+SIMPLIFY-REVIEW-V1
+target=BUG-003-002
+phase=simplify
+cd71d621cfd952c520805a4bf3cbec7f85291c06
+worktree-status-begin
+worktree-status-end
+original-production-delta:
+diff --git a/internal/topics/lifecycle.go b/internal/topics/lifecycle.go
+index 11bb4df6..fe5ded44 100644
+--- a/internal/topics/lifecycle.go
++++ b/internal/topics/lifecycle.go
+@@ -123 +123,5 @@ func (l *Lifecycle) UpdateAllMomentum(ctx context.Context) error {
+-                      COALESCE(t.star_count, 0),
++                      COALESCE((SELECT COUNT(DISTINCT a.id)
++                                FROM edges e
++                                JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
++                                WHERE e.dst_type = 'topic' AND e.dst_id = t.id
++                                  AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+starred-predicate-product-occurrence:
+internal/topics/lifecycle.go:127:                                  AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+relationship-constraints-and-indexes:
+132:    UNIQUE(src_type, src_id, dst_type, dst_id, edge_type)
+135:CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src_type, src_id);
+136:CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_type, dst_id);
+137:CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
+focused-test-boundaries:
+25:func TestTopicLifecycleMomentumFromPersistedStars(t *testing.T) {
+58:func assertTopicsStarCountColumnAbsent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+79:func seedTopicMomentumFixtures(t *testing.T, ctx context.Context, pool *pgxpool.Pool, prefix string) {
+140:func assertDuplicateBelongsToRejected(t *testing.T, ctx context.Context, pool *pgxpool.Pool, prefix string) {
+163:func readTopicMomentum(t *testing.T, ctx context.Context, pool *pgxpool.Pool, topicID string) topicMomentumResult {
+177:func assertTopicMomentum(t *testing.T, label string, result topicMomentumResult, expectedMomentum float64, expectedState string) {
+188:func registerTopicMomentumCleanup(t *testing.T, pool *pgxpool.Pool, prefix string) {
+scoped-closure=UNCHANGED-since-a6e927b2
+80:      "coverageNote": "Narrowed 2026-08-29 from 'renders the lifecycle topics and momentum values'. The momentum half was not supported by the linked test: it seeds momentum_score as a literal and reads the same row back, so it cannot fail however badly recalculation breaks. Proven by injecting the pre-fix t.star_count fault and running the full e2e lane, which PASSED. The rendering half IS genuinely exercised via GET /topics against WebHandler.TopicsPage, so the scenario is anchored there. The uncovered recalculation path is tracked as R-020.",
+SIMPLIFY-REVIEW-COMPLETE
+```
+
+**Result:** PASS. The bounded review found no behavior-preserving
+simplification that improves the product delta enough to justify source or test
+churn.
+
+### Simplify Packet Artifact Lint
+
+**Phase:** simplify
+**Executed:** YES (current session)
+**Command:** `timeout 300 bash .github/bubbles/scripts/evidence-capture.sh --label "BUG-003-002 simplify artifact lint final" -- bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+# BUG-003-002 simplify artifact lint final
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- first 20 ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ All checklist bullet items use checkbox syntax
+✅ uservalidation separates automation readiness from human acceptance
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+--- omitted 1 line(s); sha256 above covers the full output ---
+--- last 20 ---
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+**Result:** PASS.
+
+### Simplify Phase Boundary
+
+Only this report and simplify-owned `execution.*` provenance in `state.json`
+change in this phase. Top-level status and certification remain `in_progress`.
+No `certification.*` field, scenario receipt, source file, test file, or R-020
+artifact changes. Routing advances to `bubbles.gaps`.
