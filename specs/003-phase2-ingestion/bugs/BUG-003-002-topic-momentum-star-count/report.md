@@ -2929,3 +2929,160 @@ change in this phase. Top-level status and certification remain `in_progress`.
 No `certification.*` field, source, test, config, deployment, framework, scope,
 scenario-manifest, or R-020 artifact changes. Routing advances to
 `bubbles.devops`.
+
+## DevOps Evidence — Retry 1 Packet-Only Review (2026-08-29)
+
+**Phase:** devops
+
+**Starting revision:** `0e1e850cf77ef3cb8b4b18bc5429cc77dad19874`
+
+**Claim Source:** executed and interpreted
+
+### Excluded Operational Surfaces
+
+**Executed:** YES (current session)
+
+**Command:** `BUG_COMMITS=(7a2d10d0 92b6893b 5e759d86 2298cc61 5247a0c3 a6e927b2 fc5f1d43 4f428517 cd71d621 1a4e8c68 41d235f5 522f7e66 0e1e850c); scan_bug_paths <deploy-contract|config|migration|secret|adapter>`
+
+**Exit Code:** 0
+
+**Output:**
+
+```text
+BUG-003-002 DEVOPS EXCLUDED-SURFACE SCAN
+HEAD=0e1e850cf77ef3cb8b4b18bc5429cc77dad19874
+bug_commit_count=13
+deploy_contract=none
+config=none
+migration=none
+secret=none
+adapter=none
+independent_security_commit=cf005ed4d59cb1de3f025376f917dbc7ce6d4843
+independent_security_commit_in_bug_set=no
+product_deploy_implementation_required=no
+BUG-003-002 DEVOPS EXCLUDED-SURFACE SCAN COMPLETE
+```
+
+**Result:** PASS. The selected bug commits change only lifecycle source, focused
+tests, packet artifacts, and the open-work record. They change no deploy
+contract, config, migration, secret, or adapter path. No product deploy
+implementation or deployment is required.
+
+### Independent Security Commit
+
+Current-session Git inspection confirms that independent commit `cf005ed4`
+pins the builder to Go 1.25.13 and `golang.org/x/net` to v0.56.0. The operator
+states that this commit already cleared Trivy and carries separate verification.
+This phase did not rerun Trivy or adopt that prior result as current-session
+execution evidence.
+
+### Repository Check
+
+**Executed:** YES (current session)
+
+**Command:** `./smackerel.sh check`
+
+**Exit Code:** 0
+
+**Claim Source:** executed
+
+**Path normalization:** The generated temporary path is rendered under
+`~/smackerel`.
+**Output:**
+
+```text
+# BUG-003-002 DevOps repository check at 0e1e850c
+$ ./smackerel.sh check
+exit: 0
+lines: 6
+sha256: 653750408fd7765a43b54a95fd36cecb82d013ed62a10c61009b6b373cb458ba
+--- output ---
+config-validate: ~/smackerel/config/generated/dev.env.tmp.2711454 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+```
+
+**Result:** PASS.
+
+### Artifact Lint
+
+**Executed:** YES (current session)
+
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`
+
+**Exit Code:** 0
+
+**Claim Source:** executed
+
+**Output:**
+
+```text
+# BUG-003-002 DevOps artifact lint
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- first 20 ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ All checklist bullet items use checkbox syntax
+✅ uservalidation separates automation readiness from human acceptance
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+--- omitted 1 line(s); sha256 above covers the full output ---
+--- last 20 ---
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+**Result:** PASS.
+
+### DevOps Phase Boundary
+
+The BUG-003-002 delta changes only this report and DevOps-owned `execution.*`
+provenance in `state.json`. BUG-003-002 has no deployment, configuration,
+migration, or secret delta. The worktree contains a separate uncommitted
+`config/smackerel.yaml` change. That change remains untouched and excluded from
+this packet. Finding `BUG-102-001-ML-ENV-PREFIX` routes to `bubbles.implement`
+under
+`specs/102-target-deploy-hardening/bugs/BUG-102-001-product-journey-acceptance-gap`.
+
+Top-level status and certification status remain `in_progress`. Every
+`certification.*` field remains untouched. This phase did not build, deploy,
+modify source or framework files, or mint receipts. Routing advances to
+`bubbles.security`.
