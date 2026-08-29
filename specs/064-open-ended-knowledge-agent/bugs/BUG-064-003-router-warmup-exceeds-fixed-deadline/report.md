@@ -998,23 +998,70 @@ enforce.
 
 ## Validate And Audit Phases
 
+### Validation Evidence
+
 Validation surface, all green:
 
 ```
 $ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh check          CHECK_EXIT=0
 $ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh lint           LINT_EXIT=0
+    === Checking extension version consistency ===
     OK: Extension versions match (1.0.0)
     Web validation passed
 $ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh format --check FORMAT_EXIT=0
     78 files already formatted
 $ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test unit --go UNIT_EXIT=0
+    ok github.com/smackerel/smackerel/internal/agent 1.678s
     FAIL lines: 0
-$ bash .github/bubbles/scripts/implementation-reality-scan.sh <spec>   IRS_EXIT=0
-    PASSED with 1 warning
 $ bash .github/bubbles/scripts/artifact-lint.sh <spec>     ARTIFACT_LINT=0
 ```
 
-### Audit found a real defect: the manifest's linked tests did not resolve
+Selector soundness was verified rather than assumed. The `--go-run BUG064003`
+selector appeared to match nothing, which would have made every green receipt
+vacuous. Running it with `--verbose` settled it:
+
+```
+$ DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test unit --go --go-run BUG064003 --verbose
+VERBOSE_EXIT=0
+TestBUG064003 RUN lines=27
+PASS lines=9
+FAIL lines=0
+--- PASS: TestBUG064003_WarmupGateIsLoadBearing (0.82s)
+--- PASS: TestBUG064003_ZeroWarmResultIsStructurallyRefused (0.00s)
+--- PASS: TestBUG064003_UnreadyEmbedderReportsReadinessNotRouting (0.80s)
+--- PASS: TestBUG064003_RoutingValuesFailLoudWithoutFallback (0.00s)
+--- PASS: TestBUG064003_PerCallEmbedTimeoutIsNotStricterThanSST (0.00s)
+--- PASS: TestBUG064003_RoutingTestCarriesNoWallClockLiteral (0.00s)
+--- PASS: TestBUG064003_SSTPublishesTheWarmupContract (0.01s)
+--- PASS: TestBUG064003_DerivedBudgetScalesWithTheWork (0.00s)
+--- PASS: TestBUG064003_SSTDefaultsFitTheLaneBudget (0.02s)
+```
+
+The apparent zero came from grepping for verbose markers in non-verbose output:
+plain `go test` prints only `ok <package> <time>`, never test names. The tell was
+`internal/agent 1.678s` rather than `0.017s [no tests to run]`.
+
+### Audit Evidence
+
+```
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh <spec>
+IRS_EXIT=0
+  Warnings:       1
+🟡 PASSED with 1 warning(s) — manual review advised
+
+$ bash .github/bubbles/scripts/traceability-guard.sh <spec>
+BEFORE: RESULT: FAILED (6 failures, 0 warnings)   TRACE_EXIT=1
+AFTER:  RESULT: PASSED (0 warnings)               TRACE_EXIT=0   ❌ count: 0
+
+$ bash .github/bubbles/scripts/scenario-state-resolve.sh --spec-dir <spec>
+  all 5 scenarios parse; id + scenarioId keys intact   RESOLVER_EXIT=0
+
+$ bash .github/bubbles/scripts/discovered-issue-disposition-guard.sh <spec>
+G095_EXIT=0   blocks: 0
+✅ G095: discovered-issue disposition clean (no unfiled deferrals)
+```
+
+#### Audit found a real defect: the manifest's linked tests did not resolve
 
 The traceability guard initially FAILED with 6 failures, all of the shape
 `scenario-manifest.json references missing linked test file: <path>::<TestName>`.
@@ -1032,15 +1079,6 @@ and correctly out of bounds to edit.
 One entry also improved in accuracy: SCN-064-003-02 carried
 `openknowledge_routing_test.go:125`, a bare LINE reference, which named a
 location rather than a test. It now names the test that contains that line.
-
-```
-$ bash .github/bubbles/scripts/traceability-guard.sh <spec>
-BEFORE: RESULT: FAILED (6 failures, 0 warnings)   TRACE_EXIT=1
-AFTER:  RESULT: PASSED (0 warnings)               TRACE_EXIT=0   ❌ count: 0
-
-$ bash .github/bubbles/scripts/scenario-state-resolve.sh --spec-dir <spec>
-  all 5 scenarios still parse; id + scenarioId keys intact   RESOLVER_EXIT=0
-```
 
 This is worth naming plainly: the packet had been carrying a broken
 traceability link for its whole life, and every scenario receipt earned earlier
