@@ -172,10 +172,10 @@ func TestSynthesisMigration_PreservesLegacy064Through066InsertShapesAndEnforcesC
 	)
 
 	const (
-		legacyRunID      = "test-scope03a-legacy-run"
-		legacyOutputID   = "test-scope03a-legacy-output"
+		legacyRunID           = "test-scope03a-legacy-run"
+		legacyOutputID        = "test-scope03a-legacy-output"
 		legacyLogicalIdentity = "test-scope03a-legacy-key"
-		legacyPrincipal  = "test-scope03a-legacy-principal"
+		legacyPrincipal       = "test-scope03a-legacy-principal"
 	)
 	windowStart := time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)
 	windowEnd := time.Date(2026, 8, 29, 0, 0, 0, 0, time.UTC)

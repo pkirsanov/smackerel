@@ -23,16 +23,32 @@ import (
 // unavailable rather than empty, because an unconfigured API answering "no
 // synthesis" would be indistinguishable from a system that has never run.
 type SynthesisHandlers struct {
-	ReadModel   *intelligence.SynthesisReadModel
-	Persistence *intelligence.SynthesisPersistence
+	ReadModel       *intelligence.SynthesisReadModel
+	Persistence     *intelligence.SynthesisPersistence
+	Principal       string
+	FreshnessBudget time.Duration
 	// Producer backs the operator retry route. Nil leaves retry unavailable
 	// rather than accepting a request it cannot act on -- a 202 for work that
 	// will never happen is the failure mode this packet exists to remove.
 	Producer *intelligence.SynthesisProducer
 }
 
-func NewSynthesisHandlers(model *intelligence.SynthesisReadModel, persistence *intelligence.SynthesisPersistence) *SynthesisHandlers {
-	return &SynthesisHandlers{ReadModel: model, Persistence: persistence}
+func NewSynthesisHandlers(
+	model *intelligence.SynthesisReadModel,
+	persistence *intelligence.SynthesisPersistence,
+	principal string,
+	freshnessBudget time.Duration,
+) (*SynthesisHandlers, error) {
+	if principal == "" {
+		return nil, errors.New("synthesis handlers require a principal")
+	}
+	if freshnessBudget <= 0 {
+		return nil, errors.New("synthesis handlers require a positive freshness budget")
+	}
+	return &SynthesisHandlers{
+		ReadModel: model, Persistence: persistence,
+		Principal: principal, FreshnessBudget: freshnessBudget,
+	}, nil
 }
 
 // WithProducer enables the operator retry route.
@@ -61,23 +77,41 @@ type synthesisOutputResponse struct {
 // have to infer "never ran" from an absent field, because an absent field also
 // describes a serialisation bug.
 type synthesisLatestResponse struct {
-	State  string                   `json:"state"`
-	Output *synthesisOutputResponse `json:"output,omitempty"`
+	State         string                    `json:"state"`
+	LatestAttempt *synthesisAttemptResponse `json:"latestAttempt,omitempty"`
+	Output        *synthesisOutputResponse  `json:"output,omitempty"`
+}
+
+type synthesisAttemptResponse struct {
+	RunID       string `json:"runId"`
+	AttemptNo   int    `json:"attemptNo"`
+	State       string `json:"state"`
+	AttemptedAt string `json:"attemptedAt"`
 }
 
 // GetLatest reports the newest verified output, or an explicit never-run state.
 func (h *SynthesisHandlers) GetLatest(w http.ResponseWriter, r *http.Request) {
-	if h == nil || h.ReadModel == nil {
+	if h == nil || h.ReadModel == nil || h.Principal == "" || h.FreshnessBudget <= 0 {
 		writeError(w, http.StatusServiceUnavailable, "synthesis_unavailable", "Synthesis read model is not configured")
 		return
 	}
 
-	latest, found, err := h.ReadModel.Latest(r.Context())
+	cadence, err := requiredSynthesisCadence(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_cadence", err.Error())
+		return
+	}
+	snapshot, err := h.ReadModel.ReadSnapshot(r.Context(), intelligence.SynthesisReadQuery{
+		Principal:       h.Principal,
+		Cadence:         cadence,
+		FreshnessBudget: h.FreshnessBudget,
+		ObservedAt:      time.Now().UTC(),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "synthesis_read_failed", "Could not read synthesis state")
 		return
 	}
-	if !found {
+	if snapshot.LatestAttempt == nil && snapshot.CurrentOutput == nil {
 		// 200 with an explicit never-run state, not 404. A 404 would say "this
 		// endpoint has nothing to say", when the honest answer is that synthesis
 		// has a state and that state is never-run.
@@ -85,10 +119,48 @@ func (h *SynthesisHandlers) GetLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, synthesisLatestResponse{
-		State:  string(latest.Kind),
-		Output: newSynthesisOutputResponse(latest),
-	})
+	response := synthesisLatestResponse{State: synthesisLatestState(snapshot)}
+	if snapshot.LatestAttempt != nil {
+		response.LatestAttempt = &synthesisAttemptResponse{
+			RunID: snapshot.LatestAttempt.RunID, AttemptNo: snapshot.LatestAttempt.AttemptNo,
+			State:       string(snapshot.LatestAttempt.EventType),
+			AttemptedAt: snapshot.LatestAttempt.StartedAt.UTC().Format(time.RFC3339),
+		}
+	}
+	if snapshot.CurrentOutput != nil {
+		response.Output = newSynthesisOutputResponse(snapshot.CurrentOutput.Latest)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func requiredSynthesisCadence(r *http.Request) (intelligence.SynthesisCadence, error) {
+	switch r.URL.Query().Get("cadence") {
+	case string(intelligence.CadenceDaily):
+		return intelligence.CadenceDaily, nil
+	case string(intelligence.CadenceWeekly):
+		return intelligence.CadenceWeekly, nil
+	default:
+		return "", errors.New("cadence must be daily or weekly")
+	}
+}
+
+func synthesisLatestState(snapshot intelligence.SynthesisReadSnapshot) string {
+	switch snapshot.Outcome.Phase {
+	case intelligence.PhaseRunning:
+		return "running"
+	case intelligence.PhaseWriteFailed:
+		if snapshot.Outcome.HasPriorVerifiedOutput {
+			return "failed-with-prior-output"
+		}
+		return "failed-without-output"
+	case intelligence.PhaseCommitted:
+		if snapshot.Outcome.ReadBack != intelligence.ReadBackOK || snapshot.CurrentOutput == nil {
+			return "read-degraded"
+		}
+		return string(snapshot.CurrentOutput.Latest.Kind)
+	default:
+		return "read-degraded"
+	}
 }
 
 func newSynthesisOutputResponse(l intelligence.SynthesisLatest) *synthesisOutputResponse {

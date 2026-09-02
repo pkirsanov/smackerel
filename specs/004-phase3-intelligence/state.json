@@ -13,8 +13,8 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "7",
-    "substate": "needs_reverification",
+    "currentScope": "8",
+    "substate": "in_progress",
     "runStartedAt": "2026-08-30T08:22:30Z",
     "completedPhaseClaims": [
       "select",
@@ -33,7 +33,10 @@
       "chaos",
       "spec-review"
     ],
-    "pendingTransitionRequests": []
+    "pendingTransitionRequests": [],
+    "completedScopes": [
+      "7"
+    ]
   },
   "certification": {
     "status": "in_progress",
@@ -43,7 +46,8 @@
       "3",
       "4",
       "5",
-      "6"
+      "6",
+      "7"
     ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -115,7 +119,7 @@
         "scope": 7,
         "scopeId": "SCOPE-07",
         "name": "Causal Synthesis Event Ledger And Replacement Lifecycle",
-        "status": "In Progress",
+        "status": "Done",
         "dependsOn": [
           1,
           5

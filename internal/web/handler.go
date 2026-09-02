@@ -23,6 +23,7 @@ import (
 	"github.com/smackerel/smackerel/internal/connector/bookmarks"
 	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/graph"
+	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/notification"
@@ -67,6 +68,10 @@ type Handler struct {
 	// show it. Nil leaves content-bearing states without prose rather than
 	// substituting any, which is the safe direction to fail.
 	SynthesisAggregates SynthesisAggregateReader
+	// SynthesisPrincipal and SynthesisCadence identify the one causal history
+	// rendered by Today and Status. Production wiring must provide both.
+	SynthesisPrincipal string
+	SynthesisCadence   intelligence.SynthesisCadence
 	// SynthesisFreshnessBudget is how long a verified output stays current.
 	// Zero keeps stale determination inert rather than calling every output
 	// stale, matching the DigestStaleAfter contract directly above.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/oklog/ulid/v2"
 	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
@@ -146,6 +147,109 @@ func TestSynthesisCoordinator_ExpiredLeaseIsReclaimable(t *testing.T) {
 	}
 	if err := live.ClaimWindow(ctx, runKey, afterExpiry); err != nil {
 		t.Fatalf("an expired lease must be claimable: %v", err)
+	}
+}
+
+// SCN-004-004-C18. Startup turns abandoned execution into immutable failure
+// facts and refuses to certify content that cannot pass the production reader.
+func TestSynthesisStartupReconciliation_ExpiresRunningAndRefusesUnverifiedCommit(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+
+	coord, persistence := synthesisCoordinator(t, "startup-reconciler")
+	ctx := context.Background()
+	observedAt := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	actor := "claim-startup-reconciliation"
+
+	expiredKey := synthesisClaimKey("startup-expired")
+	expiredKey.Principal = actor
+	expiredKey.SourceIDs = []string{"startup-expired-source"}
+	expiredAttempt, err := persistence.StartAttempt(
+		ctx,
+		expiredKey,
+		intelligence.TriggerScheduled,
+		"crashed-before-content",
+		time.Minute,
+		observedAt.Add(-2*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("start expired attempt: %v", err)
+	}
+
+	unverifiedKey := synthesisClaimKey("startup-unverified")
+	unverifiedKey.Principal = actor
+	unverifiedKey.SourceIDs = []string{"startup-unverified-source"}
+	unverifiedAttempt, err := persistence.StartAttempt(
+		ctx,
+		unverifiedKey,
+		intelligence.TriggerScheduled,
+		"crashed-after-content",
+		time.Hour,
+		observedAt.Add(-time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("start unverified attempt: %v", err)
+	}
+	unverifiedOutputID := ulid.Make().String()
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO synthesis_outputs (
+			id, run_id, output_kind, insight_count, citation_count,
+			evaluated_artifact_count, created_at, principal, cadence,
+			window_start, window_end, lifecycle_state
+		) VALUES ($1, $2, 'quiet', 0, 0, 0, $3, $4, $5, $6, $7, 'current')
+	`, unverifiedOutputID, unverifiedAttempt.RunID, observedAt.Add(-30*time.Second),
+		unverifiedKey.Principal, string(unverifiedKey.Cadence),
+		unverifiedKey.WindowStart, unverifiedKey.WindowEnd); err != nil {
+		t.Fatalf("seed crash-after-content output: %v", err)
+	}
+	if _, err := persistence.ReadAggregate(ctx, unverifiedOutputID); err != nil {
+		t.Fatalf("production reader must be able to read the unverified commit: %v", err)
+	}
+
+	summary, err := coord.ReconcileStartup(ctx, actor, intelligence.CadenceDaily, observedAt)
+	if err != nil {
+		t.Fatalf("reconcile startup: %v", err)
+	}
+	if summary.ExpiredAttempts != 1 {
+		t.Fatalf("expired attempts = %d, want 1", summary.ExpiredAttempts)
+	}
+	if summary.ReadbackFailures != 1 {
+		t.Fatalf("read-back failures = %d, want 1", summary.ReadbackFailures)
+	}
+
+	assertTerminal := func(runID string, attemptNo int, wantEvent, wantState string) {
+		t.Helper()
+		var eventType, attemptState string
+		if err := pool.QueryRow(ctx, `
+			SELECT e.event_type, a.state
+			FROM synthesis_run_events e
+			JOIN synthesis_run_attempts a
+			  ON a.run_id = e.run_id AND a.attempt_no = e.attempt_no
+			WHERE e.run_id = $1 AND e.attempt_no = $2
+			  AND e.event_type IN ('persisted', 'quiet', 'partial', 'recovered',
+				'failed', 'readback_failed')
+		`, runID, attemptNo).Scan(&eventType, &attemptState); err != nil {
+			t.Fatalf("read terminal event for %s/%d: %v", runID, attemptNo, err)
+		}
+		if eventType != wantEvent || attemptState != wantState {
+			t.Fatalf("terminal event/state = %s/%s, want %s/%s", eventType, attemptState, wantEvent, wantState)
+		}
+	}
+	assertTerminal(expiredAttempt.RunID, expiredAttempt.AttemptNo, "failed", "failed")
+	assertTerminal(unverifiedAttempt.RunID, unverifiedAttempt.AttemptNo, "readback_failed", "readback_failed")
+
+	var inventedSuccesses int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM synthesis_run_events
+		WHERE run_id IN ($1, $2)
+		  AND event_type IN ('persisted', 'quiet', 'partial', 'recovered')
+	`, expiredAttempt.RunID, unverifiedAttempt.RunID).Scan(&inventedSuccesses); err != nil {
+		t.Fatalf("count invented success events: %v", err)
+	}
+	if inventedSuccesses != 0 {
+		t.Fatalf("startup reconciliation invented %d success event(s), want 0", inventedSuccesses)
 	}
 }
 

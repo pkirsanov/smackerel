@@ -31,8 +31,8 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "SCOPE-03",
-    "substate": "needs_reverification",
+    "currentScope": "SCOPE-04",
+    "substate": "in_progress",
     "runStartedAt": "2026-08-30T07:22:08Z",
     "completedPhaseClaims": [
       {
@@ -224,6 +224,7 @@
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
+      "SCOPE-03",
       "SCOPE-05"
     ],
     "completedPhases": []
@@ -233,6 +234,7 @@
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
+      "SCOPE-03",
       "SCOPE-05"
     ],
     "certifiedCompletedPhases": [],
@@ -263,7 +265,7 @@
         "scope": 3,
         "scopeId": "SCOPE-03",
         "name": "Durable Scheduler Retry And Lifecycle",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [
           "SCOPE-02"
         ],
@@ -546,6 +548,7 @@
   "completedScopes": [
     "SCOPE-01",
     "SCOPE-02",
+    "SCOPE-03",
     "SCOPE-05"
   ]
 }

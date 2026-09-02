@@ -525,6 +525,68 @@ func TestDigestStaleAfterHoursIsRequiredPositiveAndHasNoFallback(t *testing.T) {
 	}
 }
 
+func TestSynthesisFreshnessPerCadenceIsRequiredPositiveAndHasNoFallback(t *testing.T) {
+	const (
+		dailyKey    = "SYNTHESIS_DAILY_FRESHNESS_SECONDS"
+		weeklyKey   = "SYNTHESIS_WEEKLY_FRESHNESS_SECONDS"
+		dailyValue  = "129600"
+		weeklyValue = "691200"
+	)
+
+	setValidFreshness := func(t *testing.T) {
+		t.Helper()
+		setRequiredEnv(t)
+		t.Setenv(dailyKey, dailyValue)
+		t.Setenv(weeklyKey, weeklyValue)
+	}
+
+	for _, key := range []string{dailyKey, weeklyKey} {
+		t.Run("missing "+key, func(t *testing.T) {
+			setValidFreshness(t)
+			if err := os.Unsetenv(key); err != nil {
+				t.Fatalf("unset %s: %v", key, err)
+			}
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("missing %s must fail loud", key)
+			}
+			if !strings.Contains(err.Error(), key) {
+				t.Fatalf("missing-value error must name %s: %v", key, err)
+			}
+		})
+
+		for _, value := range []string{"   ", "0", "-1", "not-seconds"} {
+			t.Run(key+" rejects "+value, func(t *testing.T) {
+				setValidFreshness(t)
+				t.Setenv(key, value)
+				_, err := Load()
+				if err == nil {
+					t.Fatalf("%s=%q must fail loud", key, value)
+				}
+				if !strings.Contains(err.Error(), key) {
+					t.Fatalf("invalid-value error must name %s: %v", key, err)
+				}
+			})
+	}
+
+	t.Run("valid distinct daily and weekly values parse", func(t *testing.T) {
+		setValidFreshness(t)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("load distinct synthesis freshness values: %v", err)
+		}
+		if cfg.Synthesis.DailyFreshness != 36*time.Hour {
+			t.Fatalf("daily freshness=%s, want 36h", cfg.Synthesis.DailyFreshness)
+		}
+		if cfg.Synthesis.WeeklyFreshness != 8*24*time.Hour {
+			t.Fatalf("weekly freshness=%s, want 8d", cfg.Synthesis.WeeklyFreshness)
+		}
+		if cfg.Synthesis.DailyFreshness == cfg.Synthesis.WeeklyFreshness {
+			t.Fatal("daily and weekly freshness must remain independently configured")
+		}
+	})
+}
+
 func TestValidate_TelegramChatIDs_Empty(t *testing.T) {
 	setRequiredEnv(t)
 	t.Setenv("TELEGRAM_CHAT_IDS", "")

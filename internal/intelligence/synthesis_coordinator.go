@@ -307,6 +307,219 @@ func (c *SynthesisCoordinator) ReclaimExpiredLeases(ctx context.Context, now tim
 	return tag.RowsAffected(), nil
 }
 
+// SynthesisStartupReconciliation reports the terminal facts appended before
+// readers, readiness, or schedulers are admitted during process startup.
+type SynthesisStartupReconciliation struct {
+	ExpiredAttempts  int64
+	ReadbackFailures int64
+}
+
+type synthesisStartupAttempt struct {
+	attempt       SynthesisAttempt
+	outputID      string
+	insightCount  int
+	citationCount int
+}
+
+// ReconcileStartup closes crash boundaries for one configured actor/cadence.
+// A readable output is still unverified when no successful terminal event was
+// durably appended before the crash, so startup records readback_failed rather
+// than reconstructing a success that history cannot prove.
+func (c *SynthesisCoordinator) ReconcileStartup(
+	ctx context.Context,
+	principal string,
+	cadence SynthesisCadence,
+	now time.Time,
+) (SynthesisStartupReconciliation, error) {
+	var summary SynthesisStartupReconciliation
+	if err := validateSynthesisReadScope(principal, cadence); err != nil {
+		return summary, err
+	}
+	if now.IsZero() {
+		return summary, errors.New("synthesis startup reconciliation requires an observation time")
+	}
+
+	unverified, err := c.startupUnverifiedOutputs(ctx, principal, cadence)
+	if err != nil {
+		return summary, err
+	}
+	for _, candidate := range unverified {
+		agg, readErr := c.persistence.ReadAggregate(ctx, candidate.outputID)
+		if readErr == nil {
+			readErr = verifyAggregateReadback(agg, candidate.attempt)
+		}
+		included := []string{}
+		omitted := []string{}
+		if readErr == nil {
+			included = agg.IncludedClasses
+			omitted = agg.OmittedClasses
+			candidate.insightCount = agg.InsightCount
+			candidate.citationCount = agg.CitationCount
+		}
+		if err := c.persistence.finishAttempt(
+			ctx,
+			candidate.attempt,
+			EventReadbackFailed,
+			candidate.outputID,
+			"",
+			string(FailureReadback),
+			FailureTransient,
+			included,
+			omitted,
+			candidate.insightCount,
+			candidate.citationCount,
+			now,
+		); err != nil {
+			return summary, fmt.Errorf("reconcile unverified synthesis output: %w", err)
+		}
+		summary.ReadbackFailures++
+	}
+
+	expired, err := c.startupExpiredAttempts(ctx, principal, cadence, now)
+	if err != nil {
+		return summary, err
+	}
+	for _, attempt := range expired {
+		if err := c.persistence.FinishAttemptFailure(
+			ctx,
+			attempt,
+			EventFailed,
+			string(FailureLeaseExpired),
+			FailureTransient,
+			now,
+		); err != nil {
+			return summary, fmt.Errorf("reconcile expired synthesis attempt: %w", err)
+		}
+		summary.ExpiredAttempts++
+	}
+	return summary, nil
+}
+
+func (c *SynthesisCoordinator) startupUnverifiedOutputs(
+	ctx context.Context,
+	principal string,
+	cadence SynthesisCadence,
+) ([]synthesisStartupAttempt, error) {
+	rows, err := c.persistence.pool.Query(ctx, `
+		SELECT a.run_id, a.logical_key, a.attempt_no, a.trigger_kind,
+		       a.started_at, r.window_start, r.window_end, r.policy_version,
+		       o.id, o.insight_count, o.citation_count
+		FROM synthesis_outputs o
+		JOIN synthesis_runs r ON r.id = o.run_id
+		JOIN LATERAL (
+			SELECT candidate.*
+			FROM synthesis_run_attempts candidate
+			WHERE candidate.run_id = r.id AND candidate.state = 'running'
+			  AND NOT EXISTS (
+				SELECT 1 FROM synthesis_run_events terminal
+				WHERE terminal.run_id = candidate.run_id
+				  AND terminal.attempt_no = candidate.attempt_no
+				  AND terminal.event_type IN (
+					'idempotent', 'persisted', 'quiet', 'partial', 'rolled_back',
+					'retryable_failure', 'failed', 'readback_failed', 'recovered'
+				  )
+			  )
+			ORDER BY candidate.attempt_no DESC
+			LIMIT 1
+		) a ON TRUE
+		WHERE r.principal = $1 AND r.cadence = $2
+		  AND o.lifecycle_state = 'current'
+		  AND NOT EXISTS (
+			SELECT 1 FROM synthesis_run_events verified
+			WHERE verified.output_id = o.id
+			  AND verified.event_type IN ('idempotent', 'persisted', 'quiet', 'partial', 'recovered')
+		  )
+		ORDER BY a.run_id, a.attempt_no
+	`, principal, string(cadence))
+	if err != nil {
+		return nil, fmt.Errorf("find unverified synthesis outputs: %w", err)
+	}
+	defer rows.Close()
+
+	var candidates []synthesisStartupAttempt
+	for rows.Next() {
+		var candidate synthesisStartupAttempt
+		var trigger string
+		candidate.attempt.Key.Principal = principal
+		candidate.attempt.Key.Cadence = cadence
+		if err := rows.Scan(
+			&candidate.attempt.RunID,
+			&candidate.attempt.LogicalKey,
+			&candidate.attempt.AttemptNo,
+			&trigger,
+			&candidate.attempt.StartedAt,
+			&candidate.attempt.Key.WindowStart,
+			&candidate.attempt.Key.WindowEnd,
+			&candidate.attempt.Key.PolicyVersion,
+			&candidate.outputID,
+			&candidate.insightCount,
+			&candidate.citationCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan unverified synthesis output: %w", err)
+		}
+		candidate.attempt.TriggerKind = SynthesisTriggerKind(trigger)
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate unverified synthesis outputs: %w", err)
+	}
+	return candidates, nil
+}
+
+func (c *SynthesisCoordinator) startupExpiredAttempts(
+	ctx context.Context,
+	principal string,
+	cadence SynthesisCadence,
+	now time.Time,
+) ([]SynthesisAttempt, error) {
+	rows, err := c.persistence.pool.Query(ctx, `
+		SELECT a.run_id, a.logical_key, a.attempt_no, a.trigger_kind,
+		       a.started_at, r.window_start, r.window_end, r.policy_version
+		FROM synthesis_run_attempts a
+		JOIN synthesis_runs r ON r.id = a.run_id
+		WHERE r.principal = $1 AND r.cadence = $2
+		  AND a.state = 'running'
+		  AND r.lease_expires_at IS NOT NULL AND r.lease_expires_at <= $3
+		  AND NOT EXISTS (
+			SELECT 1 FROM synthesis_run_events terminal
+			WHERE terminal.run_id = a.run_id AND terminal.attempt_no = a.attempt_no
+			  AND terminal.event_type IN (
+				'idempotent', 'persisted', 'quiet', 'partial', 'rolled_back',
+				'retryable_failure', 'failed', 'readback_failed', 'recovered'
+			  )
+		  )
+		ORDER BY a.run_id, a.attempt_no
+	`, principal, string(cadence), now.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("find expired synthesis attempts: %w", err)
+	}
+	defer rows.Close()
+
+	var attempts []SynthesisAttempt
+	for rows.Next() {
+		attempt := SynthesisAttempt{Key: SynthesisRunKey{Principal: principal, Cadence: cadence}}
+		var trigger string
+		if err := rows.Scan(
+			&attempt.RunID,
+			&attempt.LogicalKey,
+			&attempt.AttemptNo,
+			&trigger,
+			&attempt.StartedAt,
+			&attempt.Key.WindowStart,
+			&attempt.Key.WindowEnd,
+			&attempt.Key.PolicyVersion,
+		); err != nil {
+			return nil, fmt.Errorf("scan expired synthesis attempt: %w", err)
+		}
+		attempt.TriggerKind = SynthesisTriggerKind(trigger)
+		attempts = append(attempts, attempt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate expired synthesis attempts: %w", err)
+	}
+	return attempts, nil
+}
+
 // RunWithRetry executes op, retrying ONLY transient failures within budget.
 //
 // Every attempt is recorded, including the ones that fail, and the failure kind

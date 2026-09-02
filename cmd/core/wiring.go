@@ -336,6 +336,9 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, sy
 		KnowledgeStore:                  svc.knowledgeStore,
 		KnowledgeConceptSearchThreshold: cfg.KnowledgeConceptSearchThreshold,
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
+		SynthesisReadModel:              synthesisRT.readModel,
+		SynthesisReadPrincipal:          cfg.Synthesis.ActorUserID,
+		SynthesisReadCadence:            intelligence.CadenceDaily,
 		IntelligenceHealthCacheTTL:      time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		TrustedProxies:                  cfg.RuntimeTrustedProxies,
@@ -371,8 +374,16 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, sy
 	// inside that gate meant an operator who turned off an unrelated integration
 	// also silently lost the synthesis API, the Today/Status synthesis section,
 	// and every honest never-run / stale / failed signal with it.
-	handlers := api.NewSynthesisHandlers(synthesisRT.readModel, synthesisRT.persistence).
-		WithProducer(synthesisRT.producer)
+	handlers, err := api.NewSynthesisHandlers(
+		synthesisRT.readModel,
+		synthesisRT.persistence,
+		cfg.Synthesis.ActorUserID,
+		time.Duration(cfg.DigestStaleAfterHours)*time.Hour,
+	)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("construct synthesis handlers: %w", err)
+	}
+	handlers.WithProducer(synthesisRT.producer)
 	deps.SynthesisHandlers = handlers
 
 	// Today and Status read the SAME durable state the API serves.
@@ -382,6 +393,8 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, sy
 	if svc.webHandler != nil {
 		svc.webHandler.SynthesisReader = synthesisRT.readModel
 		svc.webHandler.SynthesisAggregates = synthesisRT.persistence
+		svc.webHandler.SynthesisPrincipal = cfg.Synthesis.ActorUserID
+		svc.webHandler.SynthesisCadence = intelligence.CadenceWeekly
 		svc.webHandler.SynthesisFreshnessBudget = time.Duration(cfg.DigestStaleAfterHours) * time.Hour
 	}
 

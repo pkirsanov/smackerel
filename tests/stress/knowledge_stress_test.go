@@ -30,12 +30,12 @@ import (
 )
 
 const (
-	knowledgeLintMaxDuration         = 5 * time.Minute
-	knowledgeLintRunTimeout          = knowledgeLintMaxDuration
-	knowledgeLintDatabaseTimeout     = 30 * time.Second
-	knowledgeLintArtifactCount int64 = 1000
-	knowledgeLintContextItemLimit    = 50
-	knowledgeLintContentCharacterCap = 8000
+	knowledgeLintMaxDuration               = 5 * time.Minute
+	knowledgeLintRunTimeout                = knowledgeLintMaxDuration
+	knowledgeLintDatabaseTimeout           = 30 * time.Second
+	knowledgeLintArtifactCount       int64 = 1000
+	knowledgeLintContextItemLimit          = 50
+	knowledgeLintContentCharacterCap       = 8000
 )
 
 type knowledgeLintCardinality struct {

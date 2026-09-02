@@ -40,9 +40,10 @@ const (
 )
 
 const (
-	FailureTransaction SynthesisFailureCode = "transaction_failed"
-	FailureReadback    SynthesisFailureCode = "readback_failed"
-	FailureAudit       SynthesisFailureCode = "audit_persistence_failed"
+	FailureTransaction  SynthesisFailureCode = "transaction_failed"
+	FailureReadback     SynthesisFailureCode = "readback_failed"
+	FailureAudit        SynthesisFailureCode = "audit_persistence_failed"
+	FailureLeaseExpired SynthesisFailureCode = "lease_expired"
 )
 
 // SynthesisAttempt identifies one execution attempt for one logical run.

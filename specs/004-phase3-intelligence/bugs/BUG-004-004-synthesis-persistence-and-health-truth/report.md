@@ -162,6 +162,206 @@ $ git diff --stat 8671533c~1..HEAD -- internal/ cmd/ tests/ web/pwa/tests/
 
 <!-- bubbles:evidence-legitimacy-skip-end -->
 
+## 2026-09-02 Final Scope 7 Test-Owner Evidence Reconciliation
+
+**Phase:** test
+**Claim Source:** executed in the current repository-binding session; the
+compact receipt headers below are inherited from the same-session execution
+handoff and are copied literally. They were not re-executed while authoring
+this subsection.
+**Evidence session:** `vscode-2b49884c25993aa20da4c0e72f87c63e`
+
+The actionable packet
+`.specify/runtime/binding-packet-smackerel-delivery-20260902.json` validated
+against
+`.specify/runtime/scenario-plan-smackerel-bug004004-main-deploy-20260902.json`,
+node `smackerel-delivery`, and control revision 1 before this report edit. The
+validator returned `REPOSITORY PACKET SCOPED actionable=true` for repository
+`smackerel`. No preflight was run.
+
+The earlier integration RED, formatter RED, and all earlier corrective prose
+remain in this report. The compact records below do not reconstruct omitted
+first/last output or infer any line that the capture did not retain. Each
+SHA-256 covers the complete output produced by its named command.
+
+### Final Canonical Test Receipts
+
+<a id="corrective-scope-03a-evidence"></a>
+
+```text
+# SCOPE-03A canonical full unit lane
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test unit
+exit: 0
+lines: 532
+sha256: eae2f9bb84921d6c5c14502c56170cff8faff97ceed096da0a0a363a95b4c510
+
+# SCOPE-03A canonical full E2E lane
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 2400 ./smackerel.sh test e2e
+exit: 0
+lines: 5404
+sha256: 475a767b185a680548f3cb039f63ced84c45cf58522a529104573d32ac9bd56d
+
+# SCOPE-03A focused synthesis race stress
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test stress --go-run ^TestSynthesisSameAndChangedSourceRacesLeaveOneCurrentAndCompleteEventChains$
+exit: 0
+lines: 432
+sha256: db0e7f638dc058789db03d6feacbaeeea1a32c1ad6defc981f581c743fb12ac9
+
+# SCOPE-03A canonical full stress lane
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 2400 ./smackerel.sh test stress
+exit: 0
+lines: 2257
+sha256: 3e209db283e03c3b85ad1598bd058afc5770ca7c6eefb351a6d5633d37cbe8d1
+```
+
+The full E2E capture contains one failure-shaped line,
+`FAIL: Services did not become healthy within 8s`. That line is the intentional
+negative readiness path. The lane itself exited zero, ends with
+`PASS: go-e2e-corpus-enforce`, and completed disposable-stack teardown. The
+focused race and full stress receipts support the simultaneous same-source and
+changed-source race contract without replacing the full stress lane.
+
+### Regression Quality Receipt
+
+```text
+# SCOPE-03A corrective regression-quality guard
+$ bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/synthesis_api_e2e_test.go tests/e2e/synthesis_scheduler_cadence_e2e_test.sh tests/e2e/synthesis_restart_durability_e2e_test.sh tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh
+exit: 0
+lines: 21
+sha256: dda8b6d29f5884551fc17c3809f56a3880ab09a2823bf4e2c8e866b52c4159e1
+violations: 0
+warnings: 0
+adversarial-signal files: 4
+```
+
+All four required E2E files carried adversarial signals. No skip, bailout, or
+tautological-regression finding was reported by the guard.
+
+### Formatter RED To GREEN And Focused Revalidation
+
+```text
+# SCOPE-03A canonical check before formatter application
+$ ./smackerel.sh check
+exit: 0
+lines: 6
+sha256: 234605991ba867dbc2e15eff9853fa2eb372317e053bfae22b33a89d285c45c3
+
+# SCOPE-03A canonical lint before formatter application
+$ ./smackerel.sh lint
+exit: 0
+lines: 157
+sha256: 1f955b761e12e7d0ac0a24d269d4622fa600949d43b78d7d66ebf1a714aef798
+
+# SCOPE-03A canonical format RED
+$ ./smackerel.sh format --check
+exit: 1
+lines: 3
+sha256: a3ad427ac81552e067f1874102e32c9641844fdc0a15b28d08762825a9f9b2e2
+unformatted: tests/integration/synthesis_migration_test.go
+unformatted: tests/stress/knowledge_stress_test.go
+unformatted: tests/stress/qf_decisions_sync_stress_test.go
+
+# SCOPE-03A canonical formatter application
+$ ./smackerel.sh format
+exit: 0
+lines: 136
+sha256: a68e4d99d08b77083c1a4166e10dfc1d73ebe2bbbc37172c6cd986db340dc153
+
+# SCOPE-03A canonical format GREEN
+$ ./smackerel.sh format --check
+exit: 0
+lines: 136
+sha256: 042d5aa1ed06ddf86fdc049fe93f5df3f10d5aaa13e9f677929fc26c78370dfd
+```
+
+The formatter changed only the three files named by the RED. Each formatter-owned
+test file was then re-executed through its owning live lane:
+
+```text
+# SCOPE-03A formatted synthesis migrations focused integration
+exit: 0
+lines: 685
+sha256: 2cf5504eb2451fe43ea3b7b4ef2f61c6cfe3b30deffc055f8562839d27481b61
+
+# SCOPE-03A formatted knowledge stress focused revalidation
+exit: 0
+lines: 458
+sha256: f440398344a053d446ce15d5933489f215e549388852f9df8137d2c32988eda9
+
+# SCOPE-03A formatted QF decisions stress focused revalidation
+exit: 0
+lines: 2951
+sha256: 1f94befdc9dbab453d4ebe89b5caf42b55ed239a694a48826c2fa504e007414f
+```
+
+These focused receipts establish post-format execution for the exact files the
+formatter touched. They supplement rather than replace the full integration and
+full stress receipts.
+
+### Post-Scope-Index Governance Receipts
+
+```text
+# BUG-004-004 post-scope-index implementation reality
+exit: 0
+files: 21
+warnings: 0
+sha256: e2bcd965bb2c730c557325ae7c0f03bfbcf1957e73f8b68cd8b14b73fe996b4c
+
+# BUG-004-004 post-scope-index child artifact lint
+exit: 0
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+
+# BUG-004-004 post-scope-index child traceability
+exit: 0
+warnings: 0
+sha256: f9ddc457813e8c2a9f67b976863d23c505739a8088429239802c3d25616cfacf
+```
+
+The post-scope-index receipts are retained as pre-report-edit governance
+evidence. Current post-edit executions follow in the next subsection and are
+the controlling report-content checks.
+
+### Scope 7 Support Boundary Before Post-Edit Gates
+
+The current-session unit, integration, scheduler/restart/prior-source E2E, full
+E2E, focused/full stress, regression-quality, and formatter-focused receipts
+support every test-plan row mirrored by parent Scope 7 and child SCOPE-03A.
+DoD checkbox ownership remains with `bubbles.plan`; this test pass does not edit
+or check any row.
+
+`F-S03A-OUT-OF-SCOPE-STALE-TEMP-ASSERTION` remains unresolved and routed to
+`bubbles.bug` / `bubbles.plan`. The obsolete fixed-name temporary-file assertion
+is not silently treated as coverage. It is also not described as blocking the
+behavioral Scope 7 rows unless a current required mechanical gate reports that
+it does.
+
+No Scope 8/SCOPE-04A candidate deployment, pointer, backup, restore, strict live
+health, or rollback claim is made here.
+
+### Success Signal Status
+
+**Success Signal:** Current Scope 7 evidence demonstrates only the local
+data-path portion of the Outcome Contract.
+
+The full E2E receipt, SHA-256
+`475a767b185a680548f3cb039f63ced84c45cf58522a529104573d32ac9bd56d`,
+demonstrates real-stack global-corpus synthesis and grant-authorized read
+behavior. The stable full-integration receipts, SHA-256
+`5135bcc172ed568a60f726eb32f06cd1ebd161bf70971b502915ac095c77aac8`
+and `88f7dc7e1d735762333b1f467271394b3fe847229122b0b894d8c3dd7f084c3d`,
+demonstrate exact persisted-row/readback, idempotency, and local failed-replacement
+rollback. The focused synthesis race receipt, SHA-256
+`db0e7f638dc058789db03d6feacbaeeea1a32c1ad6defc981f581c743fb12ac9`,
+and full stress receipt, SHA-256
+`3e209db283e03c3b85ad1598bd058afc5770ca7c6eefb351a6d5633d37cbe8d1`,
+extend the local replacement proof across concurrent same-source and
+changed-source behavior.
+
+Matching cadence health and alerts remain unproven. Target deployment and
+target rollback also remain unproven. Scope 8/SCOPE-04A owns those proofs.
+Whole-bug certification is NOT claimed. This report does not claim the full
+spec Success Signal.
+
 ## Corrective Planning Reconciliation - 2026-08-30
 
 ### Status And Evidence Boundary
@@ -272,7 +472,7 @@ This planning run did not execute the command below. The operator supplied the f
 
 That diagnostic described the pre-correction test. The current shell test no longer calls `/api/health?strict=true` in the C15 path. `assert_failure_not_surfaced_in_read_apis()` checks only latest, history, and detail API truth before and after restart. T004-C20-STRICT remains the dedicated strict-health API E2E row in SCOPE-04A.
 
-### Corrective Scope 03A Evidence
+### Historical Corrective Scope 03A Evidence
 
 **Phase:** test
 **Claim Source:** executed
@@ -380,6 +580,280 @@ Scope 7 local implementation and test evidence is complete only through the chec
 Operator pointer deployment, backup and restore, and rollback remain owned by Scope 8/SCOPE-04A. They are not Scope 7 claims.
 
 DoD checkbox and status ownership remains with `bubbles.plan`. Certification remains with `bubbles.validate`.
+
+#### 2026-09-02 Focused Integration Reconciliation
+
+**Phase:** test
+**Claim Source:** executed for the focused discriminator; interpreted for the three interrupted-run records identified below
+**Evidence session:** `vscode-2b49884c25993aa20da4c0e72f87c63e`
+
+The actionable repository packet at `.specify/runtime/binding-packet-smackerel-delivery-20260902.json` validated against scenario `.specify/runtime/scenario-plan-smackerel-bug004004-main-deploy-20260902.json`, node `smackerel-delivery`, and authoritative control revision 1 before this reconciliation ran.
+
+The exact focused selector ran once after the interruption. The evidence wrapper completed with exit `0`, captured 660 lines, and produced full-output SHA-256 `0e8fea04c02148137e28bb3612608ad6ed054201a0918a195e8fcdf316efd7ec`.
+
+**Executed:** YES (in this evidence session)
+**Command:** `timeout 2000 bash .github/bubbles/scripts/evidence-capture.sh --label 'SCOPE-03A focused config-validation integration discriminator' -- env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration --go-run '^(TestConfigValidate_AC5c_BinaryRejectsOversizedModel|TestConfigValidate_AC5c_WrapperPropagatesRejection|TestOllamaConfigGenerateAndRuntimeValidationStayInSync)$'`
+**Exit Code:** 0
+**Output:**
+
+```text
+# SCOPE-03A focused config-validation integration discriminator
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration --go-run ^(TestConfigValidate_AC5c_BinaryRejectsOversizedModel|TestConfigValidate_AC5c_WrapperPropagatesRejection|TestOllamaConfigGenerateAndRuntimeValidationStayInSync)$
+exit: 0
+lines: 660
+sha256: 0e8fea04c02148137e28bb3612608ad6ed054201a0918a195e8fcdf316efd7ec
+--- first 20 ---
+oom-preflight: OK — 41429 MB available (need 6000 MB; swap used 0 MB).
+disk-preflight: OVERRIDE set — skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.1073426 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 41424 MB (required >= 6000 MB)
+  Disk available: 553988 MB / 541.0 GB (required >= 15 GB)
+--- failure-shaped lines from the omitted region ---
+        ERROR: config-generate-time validation failed for env=test (see above)
+--- omitted 620 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-intent-compiler-provider-1  Removed
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS
+
+The failure-shaped line is the expected nested config-generator rejection, not a failed Go assertion. `TestConfigValidate_AC5c_WrapperPropagatesRejection` deliberately supplies the oversized `bug-045-fixture-llm-20gib` model under an 8 GiB envelope, requires the nested generator to exit non-zero, requires the rejection to name `OLLAMA_MEMORY_LIMIT` and the model, and rejects a stale temporary file. The outer focused lane exited `0`, so the selected Go tests accepted that nested rejection and the disposable stack teardown completed.
+
+The interruption handoff also identified these earlier executions from the same evidence session. Their compact wrapper output is no longer retained in an actionable artifact, so the table preserves only the observed exit, supplied line count, and supplied digest prefix. It does not invent unrecoverable digest suffixes or replay these runs as newly executed evidence.
+
+| Evidence | Inner command | Exit | Lines | Retained SHA-256 reference | Reconciliation |
+|---|---|---:|---:|---|---|
+| Scheduler cadence E2E | `./smackerel.sh test e2e --shell-run synthesis_scheduler_cadence_e2e_test.sh` | 0 | not retained | `ff10e8...` | Observed GREEN before interruption. Full wrapper block was not retained. |
+| Restart durability E2E | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | 0 | 337 | `25eecd...` | Observed GREEN before interruption. Full wrapper block was not retained. |
+| Canonical full integration lane | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration` | 1 | 10390 | `29f761...` | Observed RED before interruption. This broad lane remains the controlling integration result. |
+
+The focused GREEN falsifies the local hypothesis that one of the three selected config-validation assertions independently owns the broad failure. The broad-only RED is therefore a likely suite-interaction defect, but the retained evidence is insufficient to name its exact root cause. Route finding `F-S03A-BROAD-INTEGRATION-INTERACTION` to `bubbles.implement` to reproduce the full integration interaction, identify the controlling implementation path, and return a narrow RED-to-GREEN proof before another broad lane runs.
+
+No source, test, scope, DoD, or state artifact changed in this reconciliation. The broad integration requirement remains RED, no corrective DoD checkbox is checked, and Scope 7 / SCOPE-03A remains In Progress.
+
+#### 2026-09-02 Implement Return And Resumed Test-Owner Reconciliation
+
+**Phase:** test
+**Claim Source:** interpreted for the current-session `bubbles.implement` receipt records; executed for the recovered scheduler and restart captures
+**Evidence session:** `vscode-2b49884c25993aa20da4c0e72f87c63e`
+
+The actionable packet was revalidated against scenario node `smackerel-delivery` and authoritative control revision 1 before this reconciliation. The records below supersede the earlier conclusion that the broad integration RED controlled the lane. They do not erase that RED.
+
+##### Current-Session Implement Execution Receipts
+
+The following capture metadata is copied literally from the current-session `bubbles.implement` return. These are same-session execution receipts, not commands re-executed by `bubbles.test` in this subsection.
+
+```text
+# SCOPE-03A canonical full integration reproduction
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration
+exit: 0
+lines: 11052
+sha256: 5135bcc172ed568a60f726eb32f06cd1ebd161bf70971b502915ac095c77aac8
+```
+
+```text
+# SCOPE-03A focused config-validation integration discriminator
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration --go-run ^(TestConfigValidate_AC5c_BinaryRejectsOversizedModel|TestConfigValidate_AC5c_WrapperPropagatesRejection|TestOllamaConfigGenerateAndRuntimeValidationStayInSync)$
+exit: 0
+lines: 666
+sha256: 88ec7f7715a053c01029d7c010a95159afeaca155a47bde577efdcbf040205eb
+```
+
+```text
+# SCOPE-03A canonical full integration stability rerun
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration
+exit: 0
+lines: 10385
+sha256: 88f7dc7e1d735762333b1f467271394b3fe847229122b0b894d8c3dd7f084c3d
+```
+
+```text
+# BUG-004-004 child artifact lint
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+```
+
+Both unfiltered integration executions include the named SCOPE-03A migration, immutable-event, causal-linkage, replacement, actor/cadence isolation, runtime-config, and read-back test functions present under `tests/integration/`. Neither later full-lane run reproduced the earlier package-level failure.
+
+##### Preserved Transient Broad RED
+
+The earlier broad run remains a real current-session failure record:
+
+```text
+# SCOPE-03A canonical full integration lane
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test integration
+exit: 1
+lines: 10390
+sha256: 29f761978018c4df9ac1d14438da34a118a10e46992b7c883cb74b4c26e82a21
+--- failure-shaped lines from the omitted region ---
+        ERROR: config-generate-time validation failed for env=test (see above)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/integration        90.589s
+FAIL
+ERROR: go-integration: go test failed (exit 1).
+FAIL: go-integration (exit=1)
+```
+
+The bounded capture retained no failing test title or assertion. The exact full lane then passed twice, with a focused config-selector pass between those full runs. The RED is therefore preserved as transient and unreproduced. No implementation change is attributed to its disappearance.
+
+Finding `F-S03A-BROAD-INTEGRATION-INTERACTION` is addressed by the two independent full-lane stability passes, SHA-256 `5135bcc172ed568a60f726eb32f06cd1ebd161bf70971b502915ac095c77aac8` and `88f7dc7e1d735762333b1f467271394b3fe847229122b0b894d8c3dd7f084c3d`, not by a code fix.
+
+##### Recovered Scheduler Cadence E2E Capture
+
+**Executed:** YES (in this evidence session)
+**Command:** `timeout 1400 bash .github/bubbles/scripts/evidence-capture.sh --label 'SCOPE-03A daily and weekly scheduler cadence E2E' -- env DISK_PREFLIGHT_OVERRIDE=1 timeout 1300 ./smackerel.sh test e2e --shell-run synthesis_scheduler_cadence_e2e_test.sh`
+**Exit Code:** 0
+**Output:**
+
+```text
+# SCOPE-03A daily and weekly scheduler cadence E2E
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1300 ./smackerel.sh test e2e --shell-run synthesis_scheduler_cadence_e2e_test.sh
+exit: 0
+lines: 344
+sha256: ff10e8e3f02ff03ad7a5f14111d9b5cc8398e832566aaa71aff756811fde5da2
+--- first 20 ---
+oom-preflight: OK - 42799 MB available (need 6000 MB; swap used 0 MB).
+disk-preflight: OVERRIDE set - skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.413124 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 42803 MB (required >= 6000 MB)
+  Disk available: 521340 MB / 509.1 GB (required >= 15 GB)
+Running targeted shell E2E: synthesis_scheduler_cadence_e2e_test.sh
+Running project-scoped test stack teardown (before targeted shared-stack shell E2E, timeout 180s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.420208 OK
+oom-preflight: OK - 42761 MB available (need 6000 MB; swap used 0 MB).
+disk-preflight: OVERRIDE set - skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.423928 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 42758 MB (required >= 6000 MB)
+  Disk available: 521338 MB / 509.1 GB (required >= 15 GB)
+Preparing disposable test stack...
+Building disposable test stack images before up (freshness convention)...
+Compose can now delegate builds to bake for better performance.
+ To do so, set COMPOSE_BAKE=true.
+#0 building with "default" instance using docker driver
+--- omitted 304 line(s); sha256 above covers the full output ---
+--- last 20 ---
+ Container smackerel-test-postgres-1  Removing
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-intent-compiler-provider-1  Stopped
+ Container smackerel-test-intent-compiler-provider-1  Removing
+ Container smackerel-test-intent-compiler-provider-1  Removed
+ Container smackerel-test-smackerel-ml-1  Stopped
+ Container smackerel-test-smackerel-ml-1  Removing
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-postgres-data  Removing
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-ollama-data  Removing
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+**Result:** PASS
+
+##### Recovered Restart Durability E2E Capture
+
+**Executed:** YES (in this evidence session)
+**Command:** `timeout 2000 bash .github/bubbles/scripts/evidence-capture.sh --label 'SCOPE-03A committed-unverified restart durability E2E' -- env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh`
+**Exit Code:** 0
+**Output:**
+
+```text
+# SCOPE-03A committed-unverified restart durability E2E
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 1900 ./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh
+exit: 0
+lines: 337
+sha256: 25eecd458a011c0c0eac1b2cbe8bef3969058a665ff5af5f6da7f5743b333dc4
+--- first 20 ---
+oom-preflight: OK - 42700 MB available (need 6000 MB; swap used 0 MB).
+disk-preflight: OVERRIDE set - skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.482131 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 42632 MB (required >= 6000 MB)
+  Disk available: 521331 MB / 509.1 GB (required >= 15 GB)
+Running targeted shell E2E: synthesis_restart_durability_e2e_test.sh
+=== T004-02-RESTART / T004-06-RECOVERY: durability across a real restart ===
+oom-preflight: OK - 42612 MB available (need 6000 MB; swap used 0 MB).
+disk-preflight: OVERRIDE set - skipping disk gate.
+config-validate: ~/smackerel/config/generated/test.env.tmp.500741 OK
+Smackerel pre-flight resource check: OK
+  RAM  available: 42598 MB (required >= 6000 MB)
+  Disk available: 521337 MB / 509.1 GB (required >= 15 GB)
+Preparing disposable test stack...
+Building disposable test stack images before up (freshness convention)...
+Compose can now delegate builds to bake for better performance.
+ To do so, set COMPOSE_BAKE=true.
+#0 building with "default" instance using docker driver
+--- omitted 297 line(s); sha256 above covers the full output ---
+--- last 20 ---
+NOTICE:  trigger "e2e_c15_canonical_artifact_fence" for relation "artifacts" does not exist, skipping
+NOTICE:  function e2e_c15_canonical_artifact_fence_guard() does not exist, skipping
+FENCE: canonical artifact insert fence status=inactive lifecycle=cleanup
+NOTICE:  trigger "e2e_c15_break_synthesis_readback_relation" for relation "synthesis_citations" does not exist, skipping
+NOTICE:  function e2e_c15_break_synthesis_readback_relation() does not exist, skipping
+PASS: T004-C15-RESTART committed-unverified durability and verified recovery
+
+=========================================
+  Shell E2E Test Results
+=========================================
+  PASS: synthesis_restart_durability_e2e_test.sh
+
+  Total:  1
+  Passed: 1
+  Failed: 0
+  Skipped: 0
+=========================================
+
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp.571274 OK
+```
+
+**Result:** PASS
+
+##### Prior-Source Compatibility Lifecycle E2E
+
+**Executed:** YES (in this evidence session)
+**Capture label:** `SCOPE-03A prior-source compatibility lifecycle E2E`
+**Command:** `env DISK_PREFLIGHT_OVERRIDE=1 timeout 2400 ./smackerel.sh test e2e --shell-run synthesis_prior_source_compatibility_e2e_test.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+# SCOPE-03A prior-source compatibility lifecycle E2E
+$ env DISK_PREFLIGHT_OVERRIDE=1 timeout 2400 ./smackerel.sh test e2e --shell-run synthesis_prior_source_compatibility_e2e_test.sh
+exit: 0
+lines: 446
+sha256: 779b91efef4967e8ff8fbc39b65f96d39d0e6b1ad576c85048ee4726b18f2dd8
+```
+
+The capture's first retained output proves a detached build from full SHA `7c3838e3b2de9ecba2e6a7764493a0412c4ed268` and config generation. Its last retained output proves `containers=0`, `volumes=0`, `networks=0`, `image_refs=0`, `worktrees=0`, and `fixed_tags=restored`. The terminal summary ends with `PASS`, `Total: 1`, `Passed: 1`, `Failed: 0`, and `Skipped: 0`. No omitted output line is reconstructed or inferred here; the SHA-256 covers all 446 captured lines.
+
+##### Current Missing-Proof Decision
+
+The two full integration passes cover T004-C11-MIGRATE, T004-C11-IMMUTABLE, T004-C11-CAUSAL, T004-C13-REPLACE, T004-C13-ROLLBACK, T004-C14-ACTOR-CADENCE, T004-C14-CONFIG-RUNTIME, and T004-C15-READBACK because each named assertion exists in the unfiltered integration package. The recovered focused E2E captures cover T004-C11-WEEKLY and T004-C15-RESTART.
+
+Current-session executable proof is still required for the full unit lane, T004-C12-AUDIT-RED plus T004-C03-BROAD through the full E2E lane, focused and full stress, regression quality, check, lint, format, post-report artifact lint, traceability, implementation reality, and the final change-boundary check. Those lanes remain sequential and may not overlap a live stack.
+
+Finding `F-S03A-OUT-OF-SCOPE-STALE-TEMP-ASSERTION` remains unresolved and is routed to `bubbles.plan` / `bubbles.bug`. `tests/integration/config_validate_test.go` checks obsolete `config/generated/test.env.tmp`, while the generator stages `config/generated/test.env.tmp.<pid>`. This report-only phase does not alter that foreign test or silently treat the stale assertion as coverage.
+
+The global scenario resolver exited 1 only for five SCOPE-04A linked titles in SCN-004-004-C16 through C19. Every linked SCOPE-03A title resolved. The SCOPE-04A planning defects remain outside this Scope 7 execution pass and are not represented as Scope 03A test failures.
 
 ### Corrective Scope 04A Evidence
 
@@ -2278,5 +2752,316 @@ recorded in `uservalidation.md` under an operator sign-off dated 2026-08-27,
 with the basis stated in the record rather than implied.
 
 <!-- bubbles:evidence-legitimacy-skip-end -->
+
+## 2026-09-02 Post-Edit Test-Owner Closeout
+
+**Phase:** test
+**Claim Source:** executed
+**Evidence session:** `vscode-2b49884c25993aa20da4c0e72f87c63e`
+
+These executions occurred after the 2026-09-02 report update. They are the
+controlling report-content, governance, change-boundary, and cleanup checks for
+this test-owner handoff. No source, test, scope, state, DoD checkbox, build,
+commit, push, or deployment action occurred during this closeout.
+
+### Canonical Post-Edit Quality Checks
+
+```text
+# BUG-004-004 post-report-edit check
+$ timeout 240 ./smackerel.sh check
+exit: 0
+lines: 6
+sha256: 915a2e43a7c8877772962111d5ff49b472c5c69512c42d01129b2038ca752d8e
+--- output ---
+config-validate: ~/smackerel/config/generated/dev.env.tmp.<pid> OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+```
+
+The path and PID in the first line above are rendered with the repository's
+required PII-safe placeholders. The capture SHA-256 covers the literal six-line
+command output.
+
+```text
+# BUG-004-004 post-report-edit lint
+$ timeout 840 ./smackerel.sh lint
+exit: 0
+lines: 157
+sha256: e0437e4161865ddbbe54815d2227b1536257fe8d6095d448756ba0bd32bfe473
+--- first output signals ---
+Obtaining file:///workspace/ml
+Installing build dependencies: finished with status 'done'
+Checking if build backend supports build_editable: finished with status 'done'
+Getting requirements to build editable: finished with status 'done'
+Preparing editable metadata (pyproject.toml): finished with status 'done'
+--- last output signals ---
+OK: web/pwa/app.js
+OK: web/pwa/sw.js
+OK: web/pwa/lib/queue.js
+OK: web/extension/background.js
+OK: web/extension/popup/popup.js
+OK: web/extension/lib/queue.js
+OK: web/extension/lib/browser-polyfill.js
+OK: Extension versions match (1.0.0)
+Web validation passed
+```
+
+```text
+# BUG-004-004 post-report-edit format check
+$ timeout 840 ./smackerel.sh format --check
+exit: 0
+lines: 136
+sha256: a71631bb6df0ae07d35e1d3e97537eed04c7397636debc2252e9d708487829e1
+--- first output signals ---
+Obtaining file:///workspace/ml
+Installing build dependencies: finished with status 'done'
+Checking if build backend supports build_editable: finished with status 'done'
+Getting requirements to build editable: finished with status 'done'
+Preparing editable metadata (pyproject.toml): finished with status 'done'
+--- last output signals ---
+Building editable for smackerel-ml (pyproject.toml): started
+Building editable for smackerel-ml (pyproject.toml): finished with status 'done'
+Successfully built smackerel-ml
+Successfully installed smackerel-ml
+78 files already formatted
+```
+
+### Child Post-Edit Governance Checks
+
+```text
+# BUG-004-004 post-report-edit child artifact lint
+$ timeout 360 bash .github/bubbles/scripts/artifact-lint.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+required artifacts: present
+scope DoD checkbox syntax: valid
+uservalidation checklist syntax: valid
+state status: in_progress
+workflow mode: bugfix-fastlane
+checked DoD evidence blocks: valid
+unfilled evidence placeholders: none
+repo-CLI bypass in report evidence: none
+result: Artifact lint PASSED
+```
+
+```text
+# BUG-004-004 post-report-edit child traceability guard
+$ timeout 660 bash .github/bubbles/scripts/traceability-guard.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth
+exit: 0
+lines: 222
+sha256: 32714cd7bdde6e770c31d5ef36c7a358cfcae934b972a235050e5748969efc08
+scenarios checked: 29
+test rows checked: 79
+scenario-to-row mappings: 29
+concrete test file references: 29
+report evidence references: 29
+DoD fidelity scenarios: 29
+mapped: 29
+unmapped: 0
+declared edges: 58
+inferred edges: 0
+ambiguous edges: 0
+result: PASSED (0 warnings)
+```
+
+```text
+# BUG-004-004 post-report-edit child implementation reality
+$ timeout 660 bash .github/bubbles/scripts/implementation-reality-scan.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth --verbose
+exit: 0
+lines: 35
+sha256: e2bcd965bb2c730c557325ae7c0f03bfbcf1957e73f8b68cd8b14b73fe996b4c
+implementation files resolved: 21
+files scanned: 21
+violations: 0
+warnings: 0
+gateway/backend stub patterns: none
+endpoint placeholder responses: none
+frontend hardcoded data patterns: none
+default/fallback value patterns: none
+live-system test interception: none
+IDOR/auth bypass findings: none
+silent decode failure findings: none
+result: PASSED
+```
+
+The child linked-test resolver was also executed. It exited 1 with five missing
+titles, all owned by Scope 8/SCOPE-04A: two SCN-004-004-C16 titles and one title
+each for SCN-004-004-C17, C18, and C19. It reported nine checked references.
+Every Scope 7/SCOPE-03A linked title resolved. The resolver result therefore
+remains a planning finding for Scope 8 and is not converted into a Scope 7
+behavioral failure.
+
+```text
+# BUG-004-004 final linked-test resolver
+exit: 1
+lines: 13
+sha256: cbb6773cb81930c9aa671c9d1acab7ac5e2d3db7df9ec96f961cfb596e5a4278
+Scope 7 unresolved references: 0
+Scope 8 unresolved references: 5
+SCN-004-004-C16 unresolved titles: 2
+SCN-004-004-C17 unresolved titles: 1
+SCN-004-004-C18 unresolved titles: 1
+SCN-004-004-C19 unresolved titles: 1
+owner: bubbles.plan
+```
+
+### Final Change Boundary
+
+Direct `git diff --check` execution exited zero with empty output. The first
+attempt to wrap this empty-output command exposed an existing presentation bug
+in `evidence-capture.sh`: its zero-line counter rendered `0` twice and caused an
+internal arithmetic diagnostic. That wrapper diagnostic is not represented as
+a Git failure. The direct Git command and the nonempty porcelain inventory are
+the controlling boundary evidence.
+
+```text
+# BUG-004-004 final porcelain boundary inventory
+$ timeout 20 git status --porcelain=v2 --branch --untracked-files=all
+exit: 0
+lines: 9
+sha256: 4ebbc7721a39aa4d92747b4086d5f1d4ff7b531ce1404a61b3aed0c22aeff4aa
+# branch.oid 114d896d5f9d9a1b18e07d2f58752914a7d701c5
+# branch.head main
+# branch.upstream origin/main
+# branch.ab +0 -0
+1 .M N... specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md
+1 .M N... specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md
+1 .M N... tests/integration/synthesis_migration_test.go
+1 .M N... tests/stress/knowledge_stress_test.go
+1 .M N... tests/stress/qf_decisions_sync_stress_test.go
+```
+
+The porcelain inventory has no `?` entry, and the explicit
+`git ls-files --others --exclude-standard` check exited zero with empty output.
+There are no untracked files.
+
+```text
+# BUG-004-004 final name-status inventory
+$ timeout 20 git --no-pager diff --name-status
+exit: 0
+lines: 5
+sha256: b68effdd950e5ad5bc33ca6502ef03def412cb267600ac238aa11b680a1e3016
+M specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md
+M specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md
+M tests/integration/synthesis_migration_test.go
+M tests/stress/knowledge_stress_test.go
+M tests/stress/qf_decisions_sync_stress_test.go
+```
+
+The five paths exactly match the authorized child report/scopes pair and the
+three formatter-owned test files. No excluded file family differs.
+
+```text
+# BUG-004-004 final worktree inventory
+$ timeout 20 git worktree list --porcelain
+exit: 0
+lines: 4
+sha256: fb21cba013cd9e9f3b92a461889f9ed1e122e97a08d7242c11418e08eea5a2c2
+worktree ~/smackerel
+HEAD 114d896d5f9d9a1b18e07d2f58752914a7d701c5
+branch refs/heads/main
+<blank separator>
+
+# BUG-004-004 final branch inventory
+$ timeout 20 git branch --format=%(refname:short)
+exit: 0
+lines: 1
+sha256: 6403203dd5a0867eb14d104ee8a73730bd72dd9ad92e78d996a6dba0a5dcfc01
+main
+```
+
+The repository has one worktree and one local branch, both `main`.
+
+### Final Process, Container, And Lease Check
+
+The task-specific process search returned no match after excluding the checker
+itself. The Compose-project container, volume, and network inventories for
+`smackerel-test` were empty. The only container whose name contains
+`smackerel` is the persistent buildx BuildKit helper; it is not a product or
+test-lane container.
+
+The three Smackerel suite lock files exist but each accepted a nonblocking
+`flock`, proving none is held. Concurrent evidence-capture writers found under
+`/tmp` were attributed through `/proc/<pid>/cwd` to the `research-lab` and
+`bubbles` repositories and were left untouched. No Smackerel test process,
+test container, test volume, test network, evidence-capture process, or active
+suite lease remains.
+
+### Exact Unsupported Scope 7 Rows And Routing
+
+**Remaining unsupported parent Scope 7 / child SCOPE-03A test-owned DoD rows:**
+none.
+
+All 17 mirrored Scope 7 test-plan rows have current-session executable support.
+The nine mirrored scenario, boundary, and build-quality rows have current-session
+support from those lane receipts and the post-edit gates above. This report does
+not check them because DoD and scope-status ownership belongs to `bubbles.plan`.
+
+`F-S03A-OUT-OF-SCOPE-STALE-TEMP-ASSERTION` remains unresolved. Route it to
+`bubbles.bug` / `bubbles.plan`; it is not claimed to block the supported Scope 7
+behavioral rows because no required Scope 7 mechanical gate reported that
+effect.
+
+The five unresolved Scope 8 linked titles remain planning-owned and outside this
+test pass. Next owner for the supported Scope 7 rows is `bubbles.plan`.
+
+### Final-Report Rerun Receipts
+
+After the closeout text above was appended, the child gates were rerun against
+the resulting report bytes:
+
+```text
+# BUG-004-004 final-report child artifact lint
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+result: Artifact lint PASSED
+
+# BUG-004-004 final-report child traceability guard
+exit: 0
+lines: 222
+sha256: b8aff8ad6812201e7ef4502a9ae4b69a8f2c7c3f696127c63a54bfad9c2753b9
+scenarios checked: 29
+test rows checked: 79
+report evidence references: 29
+unmapped scenarios: 0
+warnings: 0
+result: PASSED
+
+# BUG-004-004 final-report child implementation reality
+exit: 0
+lines: 35
+sha256: e2bcd965bb2c730c557325ae7c0f03bfbcf1957e73f8b68cd8b14b73fe996b4c
+files scanned: 21
+violations: 0
+warnings: 0
+result: PASSED
+```
+
+### Terminal Handoff Sanity
+
+The supplied packet was validated once more against scenario node
+`smackerel-delivery`; it remained actionable at control revision 1. No preflight
+was run. Direct `git diff --check` again exited zero with empty output.
+
+The final porcelain inventory still names only the authorized child report and
+scopes plus the three formatter-owned test files. It contains no untracked-file
+entry. `git worktree list --porcelain` still reports one worktree on `main`, and
+`git branch --format=%(refname:short)` still reports only `main`.
+
+```text
+smackerel_test_processes=0
+smackerel_test_containers=0
+smackerel_test_volumes=0
+smackerel_test_networks=0
+smackerel_held_suite_leases=0
+```
+
+No task-owned process, container, disposable Docker resource, or held suite
+lease remains at handoff.
 
 

@@ -299,10 +299,10 @@ func TestQFDecisionsStressCleanupChildReturnsZeroOwnedRows(t *testing.T) {
 		t.Fatalf("count unowned control rows after child cleanup: %v", err)
 	}
 	wantControlCounts := qfDecisionsStressCleanupCounts{
-		Artifacts: 1,
+		Artifacts:   1,
 		Annotations: 1,
-		Edges: 1,
-		SyncState: 1,
+		Edges:       1,
+		SyncState:   1,
 	}
 	if controlCounts != wantControlCounts {
 		t.Fatalf("unowned control rows changed during child cleanup: got %+v, want %+v", controlCounts, wantControlCounts)

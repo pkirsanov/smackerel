@@ -268,6 +268,9 @@ type Dependencies struct {
 	// the IntelligenceEngine pool, for data that updates at most once per
 	// 24h (synthesis) or every 15 min (alert sweep). Reuses the same SST
 	// TTL contract as KnowledgeHealthCacheTTL (ML_HEALTH_CACHE_TTL_S).
+	SynthesisReadModel         *intelligence.SynthesisReadModel
+	SynthesisReadPrincipal     string
+	SynthesisReadCadence       intelligence.SynthesisCadence
 	IntelligenceHealthCacheTTL time.Duration
 	intelligenceHealthMu       sync.RWMutex
 	intelligenceHealthCache    *intelligenceHealthSnapshot
@@ -762,7 +765,7 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 
 	// Slow path: compute fresh snapshot with no locks held.
 	snapshot := &intelligenceHealthSnapshot{}
-	if d.IntelligenceEngine.Pool == nil {
+	if d.SynthesisReadModel == nil {
 		snapshot.intelligenceStatus = "down"
 	} else {
 		// Route the queryable synthesis run-state through the single HEALTH-TRUTH
@@ -778,12 +781,18 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 		// reported never-run indefinitely while real output accumulated, which is
 		// the same divergence between the report and the store that this packet
 		// exists to close, only pointing the other way.
+		readSnapshot, readErr := d.SynthesisReadModel.ReadSnapshot(ctx, intelligence.SynthesisReadQuery{
+			Principal:       d.SynthesisReadPrincipal,
+			Cadence:         d.SynthesisReadCadence,
+			FreshnessBudget: intelligenceSynthesisFreshnessBudget,
+			ObservedAt:      time.Now().UTC(),
+		})
 		var outcome intelligence.SynthesisPersistenceOutcome
-		if readModel, rmErr := intelligence.NewSynthesisReadModel(d.IntelligenceEngine.Pool); rmErr != nil {
-			slog.Warn("intelligence read model unavailable", "error", rmErr)
+		if readErr != nil {
+			slog.Warn("intelligence read snapshot unavailable", "error", readErr)
 			outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseProbeError}
 		} else {
-			outcome = readModel.LatestOutcome(ctx, intelligenceSynthesisFreshnessBudget, time.Now())
+			outcome = readSnapshot.Outcome
 		}
 		snapshot.intelligenceStatus = intelligence.DeriveSynthesisHealth(outcome).IntelligenceStatus
 
@@ -791,14 +800,8 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 		// field is something an operator has to go and look at; a gauge is
 		// something a rule can fire on while nobody is looking.
 		metrics.SynthesisState.Set(float64(intelligence.MetricStateFor(outcome)))
-		if latest, found, latestErr := func() (intelligence.SynthesisLatest, bool, error) {
-			model, mErr := intelligence.NewSynthesisReadModel(d.IntelligenceEngine.Pool)
-			if mErr != nil {
-				return intelligence.SynthesisLatest{}, false, mErr
-			}
-			return model.Latest(ctx)
-		}(); latestErr == nil && found {
-			metrics.SynthesisLastVerifiedOutputUnixtime.Set(float64(latest.CreatedAt.Unix()))
+		if readErr == nil && readSnapshot.CurrentOutput != nil {
+			metrics.SynthesisLastVerifiedOutputUnixtime.Set(float64(readSnapshot.CurrentOutput.Latest.CreatedAt.Unix()))
 		} else {
 			// Zero rather than leaving the previous value: a stale reading that
 			// looks recent is worse than an obviously-absent one.

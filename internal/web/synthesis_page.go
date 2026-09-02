@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -17,12 +16,11 @@ import (
 // story than the API does.
 
 // SynthesisOutcomeReader is the observation seam for durable synthesis state.
-// It mirrors the two methods the read model already exposes, so production
-// injects *intelligence.SynthesisReadModel directly and tests can substitute a
-// deterministic double without a database.
+// Production injects *intelligence.SynthesisReadModel directly. One scoped
+// snapshot prevents a page from pairing an attempt and output from different
+// actors or cadences.
 type SynthesisOutcomeReader interface {
-	LatestOutcome(ctx context.Context, freshnessBudget time.Duration, now time.Time) intelligence.SynthesisPersistenceOutcome
-	Latest(ctx context.Context) (intelligence.SynthesisLatest, bool, error)
+	ReadSnapshot(ctx context.Context, query intelligence.SynthesisReadQuery) (intelligence.SynthesisReadSnapshot, error)
 }
 
 // SynthesisAggregateReader supplies the persisted insight text for a state that
@@ -49,15 +47,23 @@ func (h *Handler) synthesisModel(ctx context.Context, authorized bool) Synthesis
 	}
 
 	now := h.now()
-	outcome := h.SynthesisReader.LatestOutcome(ctx, h.SynthesisFreshnessBudget, now)
-
-	latest, found, err := h.SynthesisReader.Latest(ctx)
+	snapshot, err := h.SynthesisReader.ReadSnapshot(ctx, intelligence.SynthesisReadQuery{
+		Principal:       h.SynthesisPrincipal,
+		Cadence:         h.SynthesisCadence,
+		FreshnessBudget: h.SynthesisFreshnessBudget,
+		ObservedAt:      now,
+	})
 	if err != nil {
 		// A failed read is never presented as an absence of work.
 		return SynthesisPageModel{State: SynthesisViewUnavailable}
 	}
+	var latest intelligence.SynthesisLatest
+	found := snapshot.CurrentOutput != nil
+	if found {
+		latest = snapshot.CurrentOutput.Latest
+	}
 
-	model := ClassifySynthesisView(authorized, outcome, latest, found, now)
+	model := ClassifySynthesisView(authorized, snapshot.Outcome, latest, found, now)
 
 	// Text is loaded ONLY for a state that is allowed to show it. Asking
 	// HasContent rather than listing states means a state added later without a

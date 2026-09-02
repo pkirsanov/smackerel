@@ -6,6 +6,30 @@ The operator authorized unattended reconciliation after post-certification runti
 
 **Active corrective sequence:** SCOPE-03 must restore durable causal event, retry, restart, and supersession truth before SCOPE-04 restores cadence-scoped read, health, recovery, readiness, and deploy truth. SCOPE-05 requires regression revalidation after both corrective scopes complete; its prior UI delivery record remains historical until then.
 
+### Implementation Files
+
+- `config/smackerel.yaml`
+- `scripts/lib/runtime.sh`
+- `docker-compose.synthesis-cadence-e2e.override.yml`
+- `internal/config/validate_test.go`
+- `internal/deploy/synthesis_cadence_overlay_contract_test.go`
+- `tests/e2e/run_all.sh`
+- `tests/e2e/synthesis_api_e2e_test.go`
+- `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh`
+- `tests/e2e/synthesis_restart_durability_e2e_test.sh`
+- `tests/e2e/synthesis_scheduler_cadence_e2e_test.sh`
+- `tests/integration/synthesis_coordinator_test.go`
+- `tests/integration/synthesis_event_ledger_test.go`
+- `tests/integration/synthesis_health_test.go`
+- `tests/integration/synthesis_migration_test.go`
+- `tests/integration/synthesis_persistence_test.go`
+- `tests/integration/synthesis_runtime_config_test.go`
+- `tests/integration/synthesis_telemetry_test.go`
+- `tests/stress/synthesis_retry_stress_test.go`
+- `tests/unit/cli/runtime_compose_stdin_test.sh`
+- `tests/unit/cli/synthesis_test_harness_contract_test.sh`
+- `web/pwa/tests/synthesis_truth.spec.ts`
+
 ### Corrective Phase Order
 
 1. **SCOPE-03A - Causal run-event ledger and replacement lifecycle:** add the immutable event relation and refactor claim, attempt, terminal, read-back, recovery, and changed-source replacement into one causal run/attempt/output model.
@@ -75,7 +99,7 @@ flowchart LR
 |---|---|---|---|---|
 | SCOPE-01 | Synthesis output is atomically durable and readable | migrations, PostgreSQL repository, transaction/read-back | - | Done |
 | SCOPE-02 | Only validated source-cited candidates reach persistence | daily/weekly producers, source/schema policy | SCOPE-01 | Done |
-| SCOPE-03 | Retries and lifecycle are durable and idempotent | scheduler, coordinator, claims, retention | SCOPE-02 | In Progress - corrective revalidation |
+| SCOPE-03 | Retries and lifecycle are durable and idempotent | scheduler, coordinator, claims, retention | SCOPE-02 | Done |
 | SCOPE-04 | APIs, health, and alerts derive from durable truth | authenticated API, health, metrics, alerts | SCOPE-03 | In Progress - blocked by SCOPE-03 corrective completion |
 | SCOPE-05 | Today/Status expose truthful accessible behavior | `/digest`, `/status`, Playwright, privacy | SCOPE-04 | Done historically; revalidation required |
 
@@ -304,7 +328,7 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 ## Scope 3: Durable Scheduler Retry And Lifecycle
 
 **Scope ID:** SCOPE-03  
-**Status:** In Progress - corrective revalidation
+**Status:** Done
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-02
 
@@ -337,18 +361,18 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 
 1. Add explicit fail-loud SST for actor, cadence freshness, retry budget/backoff, policy, source classes, lease, and retention.
 2. Keep the process-local guard as a cheap optimization, but make advisory lock plus durable logical-run claim authoritative across replicas/restarts.
-3. Route daily/weekly scheduled jobs and operator retry requests through the coordinator; remove success logs/delivery based solely on in-memory return.
+3. Route daily/weekly scheduled jobs and operator retry requests through the coordinator. Stop emitting success logs or delivery based solely on an in-memory return.
 4. Implement typed transient versus terminal failures, bounded cancellation-aware retries, attempt increments, stale-lease recovery, and restart continuity.
 5. Implement current-to-stale/superseded/archived lifecycle without hard-deleting attempts or citation provenance.
 6. Gate surfacing/delivery on persisted read-back. Treat delivery failure separately from synthesis durability.
 
 ### 2026-08-30 Corrective Extension - Causal Event Ledger And Replacement Lifecycle (SCOPE-03A)
 
-**Corrective Status:** In Progress
+**Corrective Status:** Done
 **Corrective Depends On:** SCOPE-02 historical foundation; SCOPE-04A is blocked until this extension is Done.
 **Priority:** P0
 
-The original SCOPE-03 implementation record remains historical. The following scenarios and unchecked DoD rows are the active contract for recertification.
+The original SCOPE-03 implementation record remains historical. The following scenarios and corrective DoD rows are the active contract for recertification.
 
 Post-evidence reconciliation is scope-local: a corrective DoD row is eligible for completion only when its linked report anchor contains current-session executable evidence for that exact claim. SCOPE-04A remains outside this reconciliation.
 
@@ -409,10 +433,10 @@ Scenario: SCN-004-004-C21 The certified prior source remains locally compatible 
 3. Restore the design's identity split. `source_set_digest` and policy version identify same-input replay. A separately derived actor/cadence/window key owns the advisory lock. Never solve changed-source replacement by removing the source-set from logical identity or by allowing unrelated actors/cadences to share a lock.
 4. Replace fire-and-forget `recordAttempt` and `recordFailedAttempt` calls with error-returning persistence operations. A required attempt or terminal-event failure propagates to scheduler/API callers and blocks delivery/healthy claims. Preserve committed content for forensic recovery, but classify it committed-unverified until the event and read-back contracts complete.
 5. Move terminal summary mutation and its matching immutable event into one short transaction. Move supersede-before-insert, replacement output, terminal event, superseded event, and one-current verification into the serializable content transaction under the actor/cadence/window lock.
-6. Make same-source replay append an idempotent attempt/event against the existing output. Make changed-source rerun append a distinct run/output and invoke the production supersession path. Remove the test-only reachability condition in which `MarkSuperseded` has no runtime caller.
+6. Make same-source replay append an idempotent attempt/event against the existing output. Make changed-source rerun append a distinct run/output and invoke the production supersession path. Replace the test-only reachability condition so `MarkSuperseded` has a production caller.
 7. Append `readback_failed` when post-commit aggregate verification fails. Append `recovered` only when the same actor/cadence has a later complete/quiet output whose production aggregate read verifies output, insight, citation, and event counts.
 8. Route both daily and weekly scheduler jobs through the coordinator and persistence/read-back path. Persist the design-defined cadence payload rather than delivering `GenerateWeeklySynthesis` memory directly. No scheduler log or Telegram delivery may precede the terminal event plus read-back gate.
-9. Implement the existing design's fail-loud actor, retry budget/backoff, lease, policy version, source-class policy, and retention SST fields through generated configuration and runtime wiring. Remove hardcoded principals and retry/lease values from scheduler, API, producer, and `cmd/core` wiring.
+9. Implement the existing design's fail-loud actor, retry budget/backoff, lease, policy version, source-class policy, and retention SST fields through generated configuration and runtime wiring. Replace hardcoded principals and retry/lease values in scheduler, API, producer, and `cmd/core` wiring with SST-derived values.
 10. Emit bounded attempt/run/event metrics and spans for claim, attempt, transaction, read-back, recovery, and supersession. Attributes may contain cadence, trigger, safe state/code, attempt number, bounded counts, and authorized operator run identity. They must not contain prose, titles, artifact/source IDs, fingerprints, SQL, raw errors, or credentials.
 11. Preserve `scripts/lib/runtime.sh::smackerel_compose` as the shared Compose boundary: an `exec` launched from terminal stdin receives `/dev/null`, an `exec` launched with piped or redirected stdin receives that input unchanged, and non-`exec` commands retain their existing argv and stdin behavior.
 12. Add `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh` and register it as `lifecycle` and `required` in `tests/e2e/run_all.sh`. The test must require the full pinned SHA `7c3838e3b2de9ecba2e6a7764493a0412c4ed268` in the local object database, refuse any runtime fetch, create a detached worktree, build through that revision's `./smackerel.sh`, record the final local image digest and resolved build inputs, boot the old core against a disposable database migrated through 067, perform authenticated liveness/read checks plus old daily and weekly write-or-fail-closed checks, switch to the current candidate, prove 067 data retention plus one strict candidate causal write, and remove every owned resource on success, failure, or interruption.
@@ -460,34 +484,34 @@ SCOPE-03A does not run or claim the operator's pre-deploy pointer rollback, writ
 | T004-C21-PRIOR-SOURCE | Prior-source compatibility lifecycle E2E | `e2e-api` | SCN-004-004-C21 | `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh` - `pinned local prior source and current candidate preserve migration 067 without fabricated causal history`; lifecycle/required in `tests/e2e/run_all.sh`, authenticated live API, old daily and weekly write-or-fail-closed, candidate causal write, full cleanup | `./smackerel.sh test e2e --shell-run synthesis_prior_source_compatibility_e2e_test.sh` | Yes |
 | T004-C03-BROAD | Broad Regression E2E | `e2e-api` | SCN-004-004-C11..C15, C21 | existing synthesis API, restart, state-matrix, scheduler, and prior-source lifecycle E2E tests plus the event-failure test | `./smackerel.sh test e2e` | Yes |
 
-#### Corrective Definition of Done - Unchecked Until New Execution
+#### Corrective Definition of Done - Reconciled Against Current-Session Execution
 
-- [ ] SCN-004-004-C11: every scheduled/operator trigger has one run-linked, attempt-numbered `attempt_started` event and exactly one terminal event; history is immutable and content-free. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] SCN-004-004-C12: required attempt/terminal-event persistence errors propagate and prevent delivery, persisted, recovered, and healthy claims. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] SCN-004-004-C13: changed-source/policy reruns supersede-before-insert under the actor/cadence/window lock, leave exactly one current output, and retain both run histories. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] SCN-004-004-C14: same-source races converge idempotently while actors, cadences, runs, and attempts cannot cross-pair. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] SCN-004-004-C15: read-back failure appends a durable failure state and only a later coherent aggregate read appends `recovered`. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] SCN-004-004-C21: exact local source `7c3838e3b2de9ecba2e6a7764493a0412c4ed268` builds in an isolated detached worktree, runs by final local digest without runtime fetch, proves authenticated prior-source read and daily/weekly write-or-fail-closed behavior through 067, then yields to a current-candidate causal write with all resources removed. No deployment pointer or restore claim is inferred. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C11-MIGRATE executes the exact legacy 064, 065, and 066 attempt/output INSERT shapes after 067 and proves output projection, nullable legacy causal fields, zero fabricated legacy events, strict new linked-writer constraints, and fresh-bootstrap compatibility. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C11-IMMUTABLE passes and proves UPDATE/DELETE rejection plus event-content redaction. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C11-CAUSAL passes and proves start/terminal linkage to one run attempt. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C11-WEEKLY passes and proves both scheduler cadences persist/read back before any delivery or success log. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C11-COMPOSE-STDIN passes through the canonical unit lane and directly proves that piped stdin reaches `docker compose exec`, terminal-backed `exec` sees closed stdin, and non-`exec` Compose behavior and argv remain unchanged. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C12-AUDIT-RED fails against swallowed event-write errors and passes only when the typed error reaches the real trigger boundary. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C13-REPLACE passes for a changed-source replacement under the window lock. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C13-ROLLBACK passes and proves a failed replacement restores the prior current output. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C14-RACE passes under simultaneous same-source and changed-source triggers. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C14-ACTOR-CADENCE passes with deliberately interleaved actors, daily/weekly cadences, run IDs, attempt numbers, and timestamps. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C14-CONFIG-UNIT passes with missing, empty, zero, negative, malformed, and unknown values refused without fallback. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C14-CONFIG-RUNTIME passes with distinct configured actor/retry/lease/policy values observed in both cadence paths. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C15-READBACK passes with a forced production-reader failure followed by a newly verified recovery. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C15-RESTART passes across a real core restart. It proves durable committed-unverified event and latest/history/detail API truth, followed by `recovered` only after a later coherent read-back. Strict-health certification belongs exclusively to T004-C20-STRICT in SCOPE-04A. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C21-HARNESS enforces the full pinned SHA, local-object-only/no-fetch rule, old-revision CLI build, final digest and resolved-input recording, runtime-network denial, lifecycle/required registration, unique resource references, and cleanup traps. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C21-PRIOR-SOURCE passes as a live `e2e-api` lifecycle test and proves prior-source compatibility or fail-closed writes, zero fabricated causal events, retained 067 data, one current-candidate causal write, and complete owned-resource cleanup. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] T004-C03-BROAD passes with zero required skips and no internal request interception. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] SCOPE-03A completion evidence remains limited to local migration and source compatibility. Operator pre-deploy pointer rollback, write freeze, backup, and exceptional restore remain SCOPE-04A/operator acceptance contracts and are not Scope 7 prerequisites. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] Change Boundary is respected and zero excluded file families change. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
-- [ ] Build Quality Gate passes: unit/integration/E2E/stress/security checks, check/lint/format, migration integrity, content-free observability, artifact lint, traceability, documentation alignment, zero warnings, and zero required skips. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCN-004-004-C11: every scheduled/operator trigger has one run-linked, attempt-numbered `attempt_started` event and exactly one terminal event; history is immutable and content-free. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCN-004-004-C12: required attempt/terminal-event persistence errors propagate and prevent delivery, persisted, recovered, and healthy claims. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCN-004-004-C13: changed-source/policy reruns supersede-before-insert under the actor/cadence/window lock, leave exactly one current output, and retain both run histories. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCN-004-004-C14: same-source races converge idempotently while actors, cadences, runs, and attempts cannot cross-pair. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCN-004-004-C15: read-back failure appends a durable failure state and only a later coherent aggregate read appends `recovered`. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCN-004-004-C21: exact local source `7c3838e3b2de9ecba2e6a7764493a0412c4ed268` builds in an isolated detached worktree, runs by final local digest without runtime fetch, proves authenticated prior-source read and daily/weekly write-or-fail-closed behavior through 067, then yields to a current-candidate causal write with all resources removed. No deployment pointer or restore claim is inferred. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C11-MIGRATE executes the exact legacy 064, 065, and 066 attempt/output INSERT shapes after 067 and proves output projection, nullable legacy causal fields, zero fabricated legacy events, strict new linked-writer constraints, and fresh-bootstrap compatibility. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C11-IMMUTABLE passes and proves UPDATE/DELETE rejection plus event-content redaction. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C11-CAUSAL passes and proves start/terminal linkage to one run attempt. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C11-WEEKLY passes and proves both scheduler cadences persist/read back before any delivery or success log. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C11-COMPOSE-STDIN passes through the canonical unit lane and directly proves that piped stdin reaches `docker compose exec`, terminal-backed `exec` sees closed stdin, and non-`exec` Compose behavior and argv remain unchanged. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C12-AUDIT-RED fails against swallowed event-write errors and passes only when the typed error reaches the real trigger boundary. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C13-REPLACE passes for a changed-source replacement under the window lock. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C13-ROLLBACK passes and proves a failed replacement restores the prior current output. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C14-RACE passes under simultaneous same-source and changed-source triggers. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C14-ACTOR-CADENCE passes with deliberately interleaved actors, daily/weekly cadences, run IDs, attempt numbers, and timestamps. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C14-CONFIG-UNIT passes with missing, empty, zero, negative, malformed, and unknown values refused without fallback. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C14-CONFIG-RUNTIME passes with distinct configured actor/retry/lease/policy values observed in both cadence paths. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C15-READBACK passes with a forced production-reader failure followed by a newly verified recovery. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C15-RESTART passes across a real core restart. It proves durable committed-unverified event and latest/history/detail API truth, followed by `recovered` only after a later coherent read-back. Strict-health certification belongs exclusively to T004-C20-STRICT in SCOPE-04A. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C21-HARNESS enforces the full pinned SHA, local-object-only/no-fetch rule, old-revision CLI build, final digest and resolved-input recording, runtime-network denial, lifecycle/required registration, unique resource references, and cleanup traps. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C21-PRIOR-SOURCE passes as a live `e2e-api` lifecycle test and proves prior-source compatibility or fail-closed writes, zero fabricated causal events, retained 067 data, one current-candidate causal write, and complete owned-resource cleanup. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] T004-C03-BROAD passes with zero required skips and no internal request interception. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] SCOPE-03A completion evidence remains limited to local migration and source compatibility. Operator pre-deploy pointer rollback, write freeze, backup, and exceptional restore remain SCOPE-04A/operator acceptance contracts and are not Scope 7 prerequisites. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] Change Boundary is respected and zero excluded file families change. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [x] Build Quality Gate passes: unit/integration/E2E/stress/security checks, check/lint/format, migration integrity, content-free observability, artifact lint, traceability, documentation alignment, zero warnings, and zero required skips. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
 
 #### Historical Executed Test Plan
 
@@ -533,7 +557,7 @@ SCOPE-03A does not run or claim the operator's pre-deploy pointer rollback, writ
 ## Scope 4: Canonical Read Health Alert And API Truth
 
 **Scope ID:** SCOPE-04  
-**Status:** In Progress - blocked by SCOPE-03 corrective completion
+**Status:** In Progress
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-03
 
@@ -579,7 +603,7 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 
 ### 2026-08-30 Corrective Extension - Cadence-Scoped Health, Startup Reconciliation, And Release Proof (SCOPE-04A)
 
-**Corrective Status:** In Progress - blocked by SCOPE-03A
+**Corrective Status:** In Progress
 **Corrective Depends On:** SCOPE-03A
 **Priority:** P0
 
