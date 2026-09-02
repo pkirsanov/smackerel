@@ -5,6 +5,31 @@ import (
 	"testing"
 )
 
+const synthesisReadbackRelationFailureProfileID = "synthesis_readback_relation_failure"
+
+func TestSynthesisReadbackRelationFailureProfileIsCanonicalAndProductionInert(t *testing.T) {
+	reg, err := LoadCanonicalRegistry()
+	if err != nil {
+		t.Fatalf("LoadCanonicalRegistry() error = %v; want nil", err)
+	}
+
+	profile, err := reg.Resolve(PostureTest, synthesisReadbackRelationFailureProfileID)
+	if err != nil {
+		t.Fatalf("Resolve(test, %q) error = %v; want registered profile", synthesisReadbackRelationFailureProfileID, err)
+	}
+	if profile.StableID != synthesisReadbackRelationFailureProfileID || profile.Journey != "synthesis" {
+		t.Fatalf("resolved profile identity/journey = %q/%q; want %q/synthesis",
+			profile.StableID, profile.Journey, synthesisReadbackRelationFailureProfileID)
+	}
+	if profile.NoFirstPartyInterception == nil || !*profile.NoFirstPartyInterception {
+		t.Fatal("synthesis read-back relation profile must prohibit first-party interception")
+	}
+	if _, err := reg.Resolve(PostureProduction, synthesisReadbackRelationFailureProfileID); !errors.Is(err, ErrFaultInertInProduction) {
+		t.Fatalf("Resolve(production, %q) error = %v; want errors.Is ErrFaultInertInProduction",
+			synthesisReadbackRelationFailureProfileID, err)
+	}
+}
+
 func TestProductionRoutesConfigRequestsAndUIExposeNoFaultSelectorOrTrigger(t *testing.T) {
 	// Adversarial: under the production posture NO fault is activatable, even a
 	// valid registered stableId. This proves a production build/config is

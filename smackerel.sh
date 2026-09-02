@@ -1817,7 +1817,7 @@ case "$COMMAND" in
           local shell_test_target="$1"
 
           case "$shell_test_target" in
-            test_timeout_process_cleanup.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh)
+            test_timeout_process_cleanup.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh|synthesis_restart_durability_e2e_test.sh|synthesis_prior_source_compatibility_e2e_test.sh)
               printf '%s\n' "$E2E_LIFECYCLE_SHELL_TIMEOUT_S"
               ;;
             *)
@@ -1830,7 +1830,7 @@ case "$COMMAND" in
           local shell_test_target="$1"
 
           case "$shell_test_target" in
-            fixtures/test_timeout_child_fixture.sh|test_timeout_process_cleanup.sh|test_deploy_target_status.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh)
+            fixtures/test_timeout_child_fixture.sh|test_timeout_process_cleanup.sh|test_deploy_target_status.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh|synthesis_restart_durability_e2e_test.sh|synthesis_prior_source_compatibility_e2e_test.sh)
               return 0
               ;;
             *)
@@ -1989,6 +1989,10 @@ case "$COMMAND" in
           test_digest.sh
           test_digest_quiet.sh
           test_digest_telegram.sh
+          synthesis_scheduler_cadence_e2e_test.sh
+          synthesis_state_matrix_e2e_test.sh
+          synthesis_restart_durability_e2e_test.sh
+          synthesis_prior_source_compatibility_e2e_test.sh
           test_web_ui.sh
           test_web_detail.sh
           test_web_settings.sh
@@ -2137,6 +2141,8 @@ case "$COMMAND" in
             test_persistence.sh
             test_postgres_readiness_gate.sh
             test_config_fail.sh
+            synthesis_restart_durability_e2e_test.sh
+            synthesis_prior_source_compatibility_e2e_test.sh
           )
           for e2e_script in "${e2e_lifecycle_scripts[@]}"; do
             echo "Running isolated lifecycle shell E2E: $e2e_script"
@@ -2171,6 +2177,8 @@ case "$COMMAND" in
             test_digest.sh
             test_digest_quiet.sh
             test_digest_telegram.sh
+            synthesis_scheduler_cadence_e2e_test.sh
+            synthesis_state_matrix_e2e_test.sh
             # Scope 08: Web UI
             test_web_ui.sh
             test_web_detail.sh

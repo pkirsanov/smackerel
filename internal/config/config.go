@@ -331,6 +331,7 @@ type Config struct {
 	OperatorUserIDs []string
 
 	// Shared typed config blocks (SST-compliant — from smackerel.yaml via config generate)
+	Synthesis       SynthesisConfig
 	Drive           DriveConfig
 	Photos          PhotosConfig
 	Recommendations RecommendationsConfig
@@ -1140,6 +1141,12 @@ func Load() (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
+	synthesisCfg, err := loadSynthesisConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Synthesis = synthesisCfg
 
 	driveCfg, err := loadDriveConfig()
 	if err != nil {

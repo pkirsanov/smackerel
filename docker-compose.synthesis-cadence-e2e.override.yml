@@ -1,0 +1,17 @@
+# docker-compose.synthesis-cadence-e2e.override.yml
+#
+# TEST-ONLY, production-inert overlay for T004-C11-WEEKLY / SCN-004-004-C11.
+# It is loaded only when the targeted E2E process sets the existing
+# SMACKEREL_COMPOSE_OVERRIDE_FILE lane selector to this repo-local file.
+# Default, development, production, deployment-adapter, and unrelated test
+# paths do not name or activate it.
+#
+# The overlay overrides exactly the two required synthesis cadence values on
+# the existing core service. It adds no service, port, volume, network, route,
+# secret, or runtime bypass. The bounded @every expressions exercise the same
+# robfig parser and scheduler registration used by the production schedules.
+services:
+  smackerel-core:
+    environment:
+      SYNTHESIS_DAILY_CRON: "@every 8s"
+      SYNTHESIS_WEEKLY_CRON: "@every 11s"

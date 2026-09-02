@@ -2,7 +2,9 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,41 @@ import (
 	"github.com/smackerel/smackerel/internal/topics"
 )
 
+// SynthesisRunner is the scheduler's narrow durable-run boundary. Both daily
+// and weekly jobs must use this path so scheduling cannot bypass persistence.
+type SynthesisRunner interface {
+	RunAndPersist(context.Context, intelligence.SynthesisCadence, intelligence.SynthesisTriggerKind, time.Time) (*intelligence.SynthesisAggregate, error)
+}
+
+// SynthesisSchedule is the required scheduler cadence contract. Both values
+// originate in the synthesis SST and are validated before any cron entry is
+// registered. Standard cron expressions and robfig descriptors such as
+// @every are accepted through the same parser used by cron.AddFunc.
+type SynthesisSchedule struct {
+	DailyCron  string
+	WeeklyCron string
+}
+
+func (c SynthesisSchedule) validated() (SynthesisSchedule, error) {
+	c.DailyCron = strings.TrimSpace(c.DailyCron)
+	c.WeeklyCron = strings.TrimSpace(c.WeeklyCron)
+	for _, cadence := range []struct {
+		name       string
+		expression string
+	}{
+		{name: "daily", expression: c.DailyCron},
+		{name: "weekly", expression: c.WeeklyCron},
+	} {
+		if cadence.expression == "" {
+			return SynthesisSchedule{}, fmt.Errorf("required %s synthesis cron is empty", cadence.name)
+		}
+		if _, err := cron.ParseStandard(cadence.expression); err != nil {
+			return SynthesisSchedule{}, fmt.Errorf("required %s synthesis cron %q is invalid: %w", cadence.name, cadence.expression, err)
+		}
+	}
+	return c, nil
+}
+
 // Scheduler manages cron-triggered tasks.
 type Scheduler struct {
 	cron      *cron.Cron
@@ -25,7 +62,8 @@ type Scheduler struct {
 	// synthesisProducer persists synthesis output. Nil until wired by cmd/core;
 	// when nil the job reports UNAVAILABLE rather than logging a count, because
 	// "ran and stored nothing" was the defect BUG-004-004 repairs.
-	synthesisProducer         *intelligence.SynthesisProducer
+	synthesisProducer         SynthesisRunner
+	synthesisSchedule         SynthesisSchedule
 	lifecycle                 *topics.Lifecycle
 	mu                        sync.Mutex // protects digestPendingRetry and digestPendingDate
 	digestPendingRetry        bool
@@ -112,6 +150,11 @@ func New(digestGen *digest.Generator, bot *telegram.Bot, engine *intelligence.En
 
 // Start begins running scheduled tasks.
 func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
+	if s.engine != nil {
+		if _, err := s.synthesisSchedule.validated(); err != nil {
+			return fmt.Errorf("validate required synthesis schedule before scheduler start: %w", err)
+		}
+	}
 	if _, err := s.cron.AddFunc(cronExpr, s.runDigestJob); err != nil {
 		return err
 	}
@@ -121,7 +164,9 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 	}
 	if s.engine != nil {
-		s.scheduleEngineJobs()
+		if err := s.scheduleEngineJobs(); err != nil {
+			return err
+		}
 	}
 	if s.knowledgeLinter != nil && s.knowledgeLintCron != "" {
 		if _, err := s.cron.AddFunc(s.knowledgeLintCron, s.runKnowledgeLintJob); err != nil {
@@ -145,33 +190,58 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	return nil
 }
 
-// scheduleEngineJobs registers all intelligence-engine-backed cron jobs.
-func (s *Scheduler) scheduleEngineJobs() {
-	entries := []struct {
-		name string
-		cron string
-		fn   func()
-	}{
-		{"synthesis", "0 2 * * *", s.runSynthesisJob},
-		{"resurfacing", "0 8 * * *", s.runResurfacingJob},
-		{"pre-meeting briefs", "*/5 * * * *", s.runPreMeetingBriefsJob},
-		{"weekly synthesis", "0 16 * * 0", s.runWeeklySynthesisJob},
-		{"monthly report", "0 3 1 * *", s.runMonthlyReportJob},
-		{"subscription detection", "0 3 * * 1", s.runSubscriptionDetectionJob},
-		{"frequent lookup detection", "0 4 * * *", s.runFrequentLookupsJob},
-		{"alert delivery sweep", "*/15 * * * *", s.runAlertDeliveryJob},
-		{"daily alert production", "0 6 * * *", s.runAlertProductionJob},
-		{"relationship cooling alert production", "0 7 * * 1", s.runRelationshipCoolingJob},
+type engineJobEntry struct {
+	name     string
+	cron     string
+	fn       func()
+	required bool
+}
+
+func (s *Scheduler) engineJobEntries() []engineJobEntry {
+	return []engineJobEntry{
+		{name: "synthesis", cron: s.synthesisSchedule.DailyCron, fn: s.runSynthesisJob, required: true},
+		{name: "resurfacing", cron: "0 8 * * *", fn: s.runResurfacingJob},
+		{name: "pre-meeting briefs", cron: "*/5 * * * *", fn: s.runPreMeetingBriefsJob},
+		{name: "weekly synthesis", cron: s.synthesisSchedule.WeeklyCron, fn: s.runWeeklySynthesisJob, required: true},
+		{name: "monthly report", cron: "0 3 1 * *", fn: s.runMonthlyReportJob},
+		{name: "subscription detection", cron: "0 3 * * 1", fn: s.runSubscriptionDetectionJob},
+		{name: "frequent lookup detection", cron: "0 4 * * *", fn: s.runFrequentLookupsJob},
+		{name: "alert delivery sweep", cron: "*/15 * * * *", fn: s.runAlertDeliveryJob},
+		{name: "daily alert production", cron: "0 6 * * *", fn: s.runAlertProductionJob},
+		{name: "relationship cooling alert production", cron: "0 7 * * 1", fn: s.runRelationshipCoolingJob},
 	}
+}
+
+// scheduleEngineJobs registers all intelligence-engine-backed cron jobs.
+// Synthesis cadences are required and fail scheduler startup if registration
+// fails. Existing optional jobs preserve their warn-and-continue behavior.
+func (s *Scheduler) scheduleEngineJobs() error {
+	entries := s.engineJobEntries()
 	for _, e := range entries {
 		if _, err := s.cron.AddFunc(e.cron, e.fn); err != nil {
+			if e.required {
+				return fmt.Errorf("schedule required %s job: %w", e.name, err)
+			}
 			slog.Warn("failed to schedule "+e.name, "error", err)
 		}
 	}
+	return nil
 }
 
 // SetSynthesisProducer wires durable synthesis persistence. Until it is called
 // the synthesis job has nowhere to store output and says so explicitly.
-func (s *Scheduler) SetSynthesisProducer(p *intelligence.SynthesisProducer) {
+func (s *Scheduler) SetSynthesisProducer(p SynthesisRunner) {
 	s.synthesisProducer = p
+}
+
+// SetSynthesisSchedule validates and stores both required synthesis cadences.
+// It must be called before Start; Start validates again so an omitted setter
+// cannot silently fall back to an in-source schedule.
+func (s *Scheduler) SetSynthesisSchedule(schedule SynthesisSchedule) error {
+	validated, err := schedule.validated()
+	if err != nil {
+		return err
+	}
+	s.synthesisSchedule = validated
+	return nil
 }

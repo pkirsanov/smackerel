@@ -2,6 +2,8 @@
 
 Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
+> **Corrective status, 2026-08-30:** This packet is reopened for implementation and revalidation. The report below is preserved as the historical certification record. Its completion statements and passing evidence do not satisfy the corrective SCN-004-004-C11 through SCN-004-004-C20 contracts. See [Corrective Planning Reconciliation - 2026-08-30](#corrective-planning-reconciliation---2026-08-30).
+
 ## Summary
 
 Synthesis ran, produced insights, and told the operator nothing had happened.
@@ -159,6 +161,331 @@ $ git diff --stat 8671533c~1..HEAD -- internal/ cmd/ tests/ web/pwa/tests/
 ```
 
 <!-- bubbles:evidence-legitimacy-skip-end -->
+
+## Corrective Planning Reconciliation - 2026-08-30
+
+### Status And Evidence Boundary
+
+This section records planning diagnosis, not implementation or behavioral proof. No production source, migration, runtime configuration, test, deployment adapter, host, or prior report evidence was changed by this planning pass. The prior evidence remains byte-preserved throughout this report as historical evidence. All corrective DoD rows remain unchecked.
+
+The operator reported that candidate release `7ce32d70` remained `intelligence=down` for more than 600 seconds, that the target adapter refused it, and that the prior release was restored. That report is diagnostic input only. It is not restated as this planning agent's execution evidence. SCOPE-04A requires the delivery owner to capture the candidate refusal, verified recovery, and rollback through the normal deploy path before recertification.
+
+### Current-Tree Findings
+
+The following findings were established by reading the current repository artifacts and implementation during this planning run:
+
+| Finding | Current source | Corrective owner |
+|---|---|---|
+| `synthesis_run_events` is absent, although the design names it as authoritative immutable history. | `internal/db/migrations/064_synthesis_durable_persistence.sql`, `065_synthesis_output_kind.sql`, and `066_synthesis_run_lifecycle.sql` create only run, attempt, output, insight, citation, source-class, lease, and lifecycle structures. | SCOPE-03A / SCN-004-004-C11 |
+| Attempt rows are not causal. They carry a free logical key and global timestamp, not run ID plus attempt number plus output link. | `internal/intelligence/synthesis_persistence.go::RecordAttempt` and `RecordAttemptWithKind`; migration 064 attempt table. | SCOPE-03A / SCN-004-004-C11, C14 |
+| Required terminal audit failures are discarded. | `internal/intelligence/synthesis_producer.go::recordAttempt` ignores `RecordAttempt`; `internal/intelligence/synthesis_coordinator.go::recordFailedAttempt` ignores `RecordAttemptWithKind`. | SCOPE-03A / SCN-004-004-C12 |
+| `LatestOutcome` can synthesize a state that never existed. It reads the newest successful output and newest attempt with two uncorrelated global queries across every actor and cadence. | `internal/intelligence/synthesis_readmodel.go::LatestOutcome`. | SCOPE-04A / SCN-004-004-C16 |
+| `PhaseRunning` exists in the pure state mapper but cannot be selected by the database read model. | `internal/intelligence/synthesis_health.go` defines and maps `PhaseRunning`; `SynthesisReadModel.LatestOutcome` has no running-attempt branch. | SCOPE-04A / SCN-004-004-C17 |
+| A committed output has no durable read-back verdict. The post-commit reader can return an error after the output stands, but no immutable `readback_failed` fact is written. | `internal/intelligence/synthesis_persistence.go::Commit`. | SCOPE-03A / SCN-004-004-C15 |
+| Changed-source work cannot follow the design's replacement contract. `LogicalKey` deliberately excludes the source set, so a same-window source change resolves as idempotent; no production caller invokes `MarkSuperseded`. | `internal/intelligence/synthesis_persistence.go::SynthesisRunKey.LogicalKey`; `internal/intelligence/synthesis_coordinator.go::MarkSuperseded`; repository usage search found callers only in the coordinator integration test. | SCOPE-03A / SCN-004-004-C13, C14 |
+| Lease reclamation is not a startup recovery path. It has no production caller, mutates a run summary directly to failed, and appends no causal event. | `internal/intelligence/synthesis_coordinator.go::ReclaimExpiredLeases`; repository usage search found only the integration-test caller. | SCOPE-04A / SCN-004-004-C18 |
+| Weekly scheduler execution still bypasses the durable producer/coordinator and delivers `GenerateWeeklySynthesis` output directly. | `internal/scheduler/jobs.go::doWeeklySynthesisJob`. | SCOPE-03A / SCN-004-004-C11, C14 |
+| Retry/lease coordination uses hardcoded runtime policy and actor values rather than the fail-loud design contract. | `cmd/core/main.go` constructs `MaxAttempts: 3`, `InitialDelay: 2s`, `MaxDelay: 30s`, `LeaseTTL: 10m`; scheduler/API use literal synthesis principals; `synthesis_producer.go` hardcodes policy/source class. | SCOPE-03A / SCN-004-004-C11, C14 |
+| Synthesis freshness has two runtime answers. Health uses a hardcoded 48 hours, while the web projection aliases the Digest SST value, currently 24 hours. | `internal/api/health.go::intelligenceSynthesisFreshnessBudget`; `cmd/core/wiring.go` assigns `DigestStaleAfterHours` to `SynthesisFreshnessBudget`; `config/smackerel.yaml::runtime.digest_stale_after_hours`. | SCOPE-04A / SCN-004-004-C19 |
+| Strict `/api/health` already degrades on `intelligence=down`; this fail-closed direction must remain intact while the causal model changes. | `internal/api/health.go::HealthHandler` aggregate status and `healthStrictRequested`. | SCOPE-04A / SCN-004-004-C20 |
+
+### Corrective Scope Decision
+
+No second bug packet is created. The missing behavior is already normative in this packet's `spec.md` and `design.md`, and the current claims sit in SCOPE-03 and SCOPE-04. The active plan therefore extends those scopes as SCOPE-03A and SCOPE-04A while retaining their existing IDs for dependency and traceability purposes. SCOPE-05 receives regression revalidation after the corrected reader lands, but no UI redesign is planned.
+
+### Corrective Traceability
+
+| Scenario | Normative contract | Implementation ownership | Required proof |
+|---|---|---|---|
+| SCN-004-004-C11 | SYNTH-003, SYNTH-006, SYNTH-010; design `SynthesisRunEventLedger` | migration, persistence, producer, coordinator, daily/weekly scheduler | immutable run-linked event chain per trigger |
+| SCN-004-004-C12 | SYNTH-002, SYNTH-008, SYNTH-009 | producer, persistence, scheduler/API trigger | adversarial event-write failure reaches caller and blocks success |
+| SCN-004-004-C13 | SYNTH-003, SYNTH-006 | actor/cadence/window lock, replacement transaction, lifecycle | changed-source replacement, one current output, rollback safety |
+| SCN-004-004-C14 | SYNTH-003 | coordinator, persistence, configured actor/policy | concurrent same-source idempotency with no cross-pairing |
+| SCN-004-004-C15 | SYNTH-001, SYNTH-002, SYNTH-009 | commit/read-back/event path | durable `readback_failed`, later verified `recovered` |
+| SCN-004-004-C16 | SYNTH-007, SYNTH-008, SYNTH-012 | canonical read snapshot, API, Today, Status | per-actor/per-cadence causal result under adversarial interleaving |
+| SCN-004-004-C17 | SYNTH-008, SYNTH-009 | read model, health policy, metrics, alerts | running/failure/recovery precedence and retained history |
+| SCN-004-004-C18 | SYNTH-006, SYNTH-008, SYNTH-009 | startup wiring and coordinator reconciliation | restart reconciliation without success-shaped fabrication |
+| SCN-004-004-C19 | SYNTH-008 | Smackerel SST, generator, config, runtime consumers | distinct daily/weekly values and zero hidden constants/aliases |
+| SCN-004-004-C20 | Outcome Failure Condition, SYNTH-008, SYNTH-009 | strict health, product deploy contract, operator-owned target adapter | refusal before recovery, acceptance after verified recovery, safe rollback |
+
+### Historical Test-File Evidence Index
+
+These existing files belong to the historical execution record. The links point to the report sections that already carry their executed evidence. This index does not recertify any reopened scope.
+
+| Existing test file | Historical evidence |
+|---|---|
+| `tests/integration/synthesis_migration_test.go` | [SCOPE-01 implementation phase](#scope-01-implementation-phase) |
+| `tests/integration/synthesis_persistence_test.go` | [SCOPE-01 implementation phase](#scope-01-implementation-phase) |
+| `tests/integration/synthesis_producer_test.go` | [SCOPE-02 implementation phase](#scope-02-implementation-phase) |
+| `tests/integration/synthesis_coordinator_test.go` | [SCOPE-03 implementation phase](#scope-03-implementation-phase) |
+| `tests/integration/synthesis_health_test.go` | [SCOPE-04 health truth phase](#scope-04-health-truth-phase) |
+| `tests/integration/synthesis_telemetry_test.go` | [SCOPE-04 alert and telemetry phase](#scope-04-alert-and-telemetry-phase) |
+| `tests/e2e/synthesis_api_e2e_test.go` | [SCOPE-04 read API phase](#scope-04-read-api-phase) |
+| `tests/e2e/synthesis_restart_durability_e2e_test.sh` | [SCOPE-03 restart durability phase](#scope-03-restart-durability-phase) |
+| `tests/e2e/synthesis_state_matrix_e2e_test.sh` | [SCOPE-05 browser rendering phase](#scope-05-browser-rendering-phase) |
+| `tests/stress/synthesis_retry_stress_test.go` | [SCOPE-03 implementation phase](#scope-03-implementation-phase) |
+| `internal/config/validate_test.go` | [Historical packet closeout](#scope-05-packet-closeout) |
+| `web/pwa/tests/synthesis_truth.spec.ts` | [SCOPE-05 browser rendering phase](#scope-05-browser-rendering-phase) |
+
+### Corrective Planned-Test Inventory - No Execution Claim
+
+The rows below are planning obligations only. Paths that do not yet exist are intended test locations, not evidence that a test was written or run. Every corrective scenario has one primary Test Plan row and one matching unchecked DoD row in `scopes.md`; additional rows remain in `test-plan.json` and the detailed corrective Test Plan tables.
+
+| Scenario | Primary Test Plan mapping | Planned test file | Matching unchecked DoD mapping |
+|---|---|---|---|
+| SCN-004-004-C11 | T004-C11-CAUSAL | `tests/integration/synthesis_event_ledger_test.go` | `SCN-004-004-C11: every scheduled/operator trigger has one run-linked...` |
+| SCN-004-004-C12 | T004-C12-AUDIT-RED | `tests/e2e/synthesis_api_e2e_test.go` | `SCN-004-004-C12: required attempt/terminal-event persistence errors propagate...` |
+| SCN-004-004-C13 | T004-C13-REPLACE | `tests/integration/synthesis_persistence_test.go` | `SCN-004-004-C13: changed-source/policy reruns supersede-before-insert...` |
+| SCN-004-004-C14 | T004-C14-RACE | `tests/stress/synthesis_retry_stress_test.go` | `SCN-004-004-C14: same-source races converge idempotently...` |
+| SCN-004-004-C15 | T004-C15-READBACK | `tests/integration/synthesis_persistence_test.go` | `SCN-004-004-C15: read-back failure appends a durable failure state...` |
+| SCN-004-004-C16 | T004-C16-CROSSPAIR-RED | `tests/e2e/synthesis_api_e2e_test.go` | `SCN-004-004-C16: latest attempt and output are selected causally...` |
+| SCN-004-004-C17 | T004-C17-PRECEDENCE | `tests/integration/synthesis_health_test.go` | `SCN-004-004-C17: running and failure remain visible...` |
+| SCN-004-004-C18 | T004-C18-STARTUP | `tests/integration/synthesis_coordinator_test.go` | `SCN-004-004-C18: startup reconciles expired-running and committed-unverified work...` |
+| SCN-004-004-C19 | T004-C19-RUNTIME | `tests/integration/synthesis_freshness_sst_test.go` | `SCN-004-004-C19: one required cadence-specific SST contract reaches every freshness consumer...` |
+| SCN-004-004-C20 | T004-C20-STRICT | `tests/e2e/synthesis_api_e2e_test.go` | `SCN-004-004-C20: strict readiness and deployment verification refuse non-green synthesis...` |
+
+Additional planned files are `tests/integration/synthesis_event_ledger_test.go`, `tests/e2e/synthesis_scheduler_cadence_e2e_test.sh`, `tests/integration/synthesis_runtime_config_test.go`, `tests/e2e/synthesis_recovery_health_e2e_test.sh`, `tests/integration/synthesis_freshness_sst_test.go`, and `internal/intelligence/synthesis_freshness_contract_test.go`. Existing files extended by corrective rows are `tests/integration/synthesis_migration_test.go`, `tests/integration/synthesis_persistence_test.go`, `tests/integration/synthesis_coordinator_test.go`, `tests/integration/synthesis_health_test.go`, `tests/e2e/synthesis_api_e2e_test.go`, `tests/e2e/synthesis_restart_durability_e2e_test.sh`, `tests/stress/synthesis_retry_stress_test.go`, `internal/config/validate_test.go`, `tests/integration/synthesis_telemetry_test.go`, and `web/pwa/tests/synthesis_truth.spec.ts`.
+
+The machine-readable counterparts are `scenario-manifest.json` and `test-plan.json`. Both contain no corrective evidence references. The operator-supplied failed run below is diagnostic input and does not satisfy a planned row.
+
+### 2026-08-31 SCOPE-03A/SCOPE-04A Test-Plan Dependency Correction
+
+SCOPE-03A T004-C15-RESTART now proves durable `readback_failed` event truth across a real core restart. It also proves latest, history, and detail API refusal until a later coherent read appends `recovered`.
+
+T004-C15-RESTART does not certify strict health. SCOPE-04A T004-C20-STRICT retains the strict-health contract for never-run, running, stale, partial, failed, read-degraded, and recovered states.
+
+This correction removes the SCOPE-03A dependency on SCOPE-04A. It preserves every C15 and C20 requirement in its owning scope. The parent and child scopes, test plans, and scenario manifests carry the same mapping.
+
+#### Operator-Supplied Failing Diagnostic - Planning Input Only
+
+**Phase:** plan
+**Claim Source:** not-run
+This planning run did not execute the command below. The operator supplied the failing result as diagnostic input.
+
+- Reported command: `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh`
+- Reported exit code: `1`
+- Reported signal: `FAIL: T004-C15 stage=before_restart strict_health false_success`
+- Reported full-output SHA-256: `2eb6cf097b2fbfd72b3fb73875f5ca97ab70b07b67f6f0f3d556afa4e0eb493c`
+- Planning interpretation: the C15 shell test reached a strict-health assertion owned by C20.
+- Completion effect: T004-C15-RESTART remains unchecked and has no passing evidence.
+- Test ownership boundary: this planning pass did not modify `tests/e2e/synthesis_restart_durability_e2e_test.sh`.
+
+That diagnostic described the pre-correction test. The current shell test no longer calls `/api/health?strict=true` in the C15 path. `assert_failure_not_surfaced_in_read_apis()` checks only latest, history, and detail API truth before and after restart. T004-C20-STRICT remains the dedicated strict-health API E2E row in SCOPE-04A.
+
+### Corrective Scope 03A Evidence
+
+**Phase:** test
+**Claim Source:** executed
+**Evidence session:** `vscode-5635c92b9aa63bde3a330e31237e5578`
+
+This section records only current-session executions. Each SHA-256 came from the named `evidence-capture.sh` block and covers its complete command output. A line count of `not supplied` means the current-session handoff supplied no count. No count or output excerpt was inferred.
+
+Passing corrective C15 evidence now exists. The final focused restart E2E passed after the fence-order correction. Its capture has 346 lines and SHA-256 `42d756fe6f1a6a8b05c8f9e225a4bb7138f8e0798c7a7b0e8b388ea58d4ffbca`.
+
+#### RED → GREEN 1: Fresh-Schema Migration Constraint Resolution
+
+**Claim Source:** executed
+
+| Stage | Exact command | Exit | Lines | Full-output SHA-256 | Observed outcome |
+|---|---|---:|---:|---|---|
+| RED | `DISK_PREFLIGHT_OVERRIDE=1 ./smackerel.sh test e2e --go-run '^TestSpec076MigrationsSurviveFreshStack$'` | 1 | not supplied | `41fcc672784cbb486fe225653956fbb90434f9e8f91c8411850a473b7d4e7e2c` | Migration 067 failed with SQLSTATE `42830`: `no unique constraint matching given keys`. |
+| GREEN | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test e2e --go-run '^TestSpec076MigrationsSurviveFreshStack$'` | 0 | not supplied | `84f59b7115d4a34fc95beff614c6dc12c77c266e881ee381ca4b10313ac50ae6` | The fresh-schema E2E passed. Capture anchor: `# SCOPE-03A migration 067 relation-scoping focused E2E GREEN`. |
+| GREEN | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test integration --go-run '^TestSynthesisMigration_(AddsImmutableCausalEventLedgerFrom066AndFreshBootstrap|PreservesLegacy064Through066InsertShapesAndEnforcesCausal067Writes)$'` | 0 | not supplied | `713dc6fd8130b5d64f22f48d1f0378d5305398baf57fa9ea841d89427c880b25` | Both focused migration integration contracts passed. Capture anchor: `# SCOPE-03A migration 067 focused integration GREEN`. |
+
+The fix relation-scoped all 13 migration-067 constraint guards. The RED run proves the same-name cross-schema collision was observable before that correction.
+
+#### RED → GREEN 2: Broad Restart Harness Race
+
+**Claim Source:** executed
+
+| Stage | Exact command | Exit | Lines | Full-output SHA-256 | Observed outcome |
+|---|---|---:|---:|---|---|
+| RED | `./smackerel.sh test e2e` | 1 | 5449 | `89a3af972587cfd5c83215e375d87c0b8bb737ea70caef5d22a1d5be71742a39` | The broad suite failed with `historical restart source-set precondition status=invalid count=4`. |
+| GREEN | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test unit` | 0 | 532 | `a2d288e856e97da9637f4e34493312d995d37517ab0dbaf2cebfa355793c40ce` | The full unit lane passed. It includes `tests/unit/cli/synthesis_test_harness_contract_test.sh`, including its mutation-backed ordering contract. |
+| GREEN | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | 0 | 346 | `42d756fe6f1a6a8b05c8f9e225a4bb7138f8e0798c7a7b0e8b388ea58d4ffbca` | The focused C15 restart lifecycle passed. Capture anchor: `# Scope 7 focused restart durability E2E GREEN attempt 1`. |
+| GREEN | `./smackerel.sh test e2e` | 0 | 5506 | `0ffe2ff2f9071d686bd7b12ee9aec18f27d68cc11e963ca122d36bcebf4d6cc3` | The final broad E2E lane passed. Its lone failure-shaped line is the intentional stopped-PostgreSQL negative-path diagnostic. End anchor: `PASS: go-e2e-corpus-enforce`. |
+
+The fix installed the canonical insert fence before both reset and seed calls. The unit ordering contract supplies the deterministic negative control for this race.
+
+#### RED → GREEN 3: Stale Health Fixture Identity
+
+**Claim Source:** executed
+
+| Stage | Exact command | Exit | Lines | Full-output SHA-256 | Observed outcome |
+|---|---|---:|---:|---|---|
+| RED | `./smackerel.sh test integration-light --go-run '^TestNeverRunAndProbeFailureAreNeverUp$'` | 1 | 305 | `7b2cc4b0656ca96731a995c0b93543eef8b21ae6936458b9d1052ab3a80b4719` | The fixture failed with SQLSTATE `23514` because independently evaluated run and output windows disagreed. |
+| GREEN | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test integration-light --go-run '^TestNeverRunAndProbeFailureAreNeverUp$'` | 0 | 303 | `ccece12bb4cedfea52aebe24a57ff594bd614fe6c71eecde3dc65cada6f7f828` | The stores-only focused health fixture passed. Capture anchor: `# Scope 7 SCOPE-03A health fixture projected identity GREEN`. |
+| GREEN | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test integration --go-run '^TestNeverRunAndProbeFailureAreNeverUp$'` | 0 | 652 | `97ade234be8c19ed785499251be3bc1113fff58b3cbb05c37519d4dfdc503e4d` | The same fixture passed through the full-stack integration lane. Capture anchor: `# Scope 7 SCOPE-03A health fixture selected full integration GREEN`. |
+| GREEN | `./smackerel.sh test integration` | 0 | 10391 | `166b11ebe13e39865377fdf99844d44b4e8465d9bb957d64142e40047eac6669` | The final full integration lane passed. Its config-validation error line is an intentional negative test within the passing lane. |
+
+The fixture now omits duplicate output identity. Migration 067 projects the exact identity from the referenced run. The SQLSTATE `23514` RED proves that mismatched explicit identity remains rejected.
+
+#### Additional GREEN Execution Ledger
+
+**Claim Source:** executed
+
+| Evidence | Exact command | Exit | Lines | Full-output SHA-256 | Observed outcome |
+|---|---|---:|---:|---|---|
+| C21 prior-source lifecycle | `./smackerel.sh test e2e --shell-run synthesis_prior_source_compatibility_e2e_test.sh` | 0 | not supplied | `613cabc646a655544621655d44dd3950cd24d7a281e24f5284fb3833bc850133` | The prior-source compatibility lifecycle passed. Capture anchor: `# c21-prior-source-compatibility-green`. |
+| Ten causal integration canaries | `./smackerel.sh test integration --go-run '^(TestSynthesisMigration_PreservesLegacy064Through066InsertShapesAndEnforcesCausal067Writes|TestSynthesisRunEvents_RejectUpdateDeleteAndContentLeakage|TestSynthesisRunEvents_LinkStartedAndTerminalEventToOneAttempt|TestSynthesisReplacement_ChangedSourceSupersedesUnderWindowLock|TestSynthesisReplacement_MigratedLegacyCurrentYieldsToCausalProducer|TestSynthesisReplacement_FailedReplacementRestoresPriorCurrentAndAppendsFailure|TestSynthesisReplacement_TerminalEventFailureRestoresPriorCurrent|TestSynthesisAttempts_DoNotCrossPairActorsCadencesRunsOrAttempts|TestSynthesisRunPolicyReachesCoordinatorAndBothCadences|TestSynthesisReadbackFailurePersistsFailureBeforeVerifiedRecovery)$'` | 0 | not supplied | `3f53b1950ea3ea56f02cc73d65eeb9d67a35cb0dc3a4a4f8a1665710526e0696` | All ten causal canaries passed. Capture anchor: `# Scope 7 ten integration canaries after fixture repair`. |
+| Scheduler cadence E2E | `./smackerel.sh test e2e --shell-run synthesis_scheduler_cadence_e2e_test.sh` | 0 | not supplied | `f9a726c95e40581da96684d09a30bbf6f137bb19c9edc913597e63fc75004d8d` | Daily and weekly scheduler persistence/read-back E2E passed. Capture anchor: `# scope7-scheduler-cadence-e2e`. |
+| Focused restart before broad-race discovery | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | 0 | not supplied | `a4bb1d97e169d76eebdb73e12d394e7e349dff1e82ccf3791d6e56e64bff4d68` | The focused lifecycle passed before the broad suite exposed the race. This is not the final race-closure proof. |
+| Focused synthesis race stress | `./smackerel.sh test stress --go-run '^TestSynthesisSameAndChangedSourceRacesLeaveOneCurrentAndCompleteEventChains$'` | 0 | not supplied | `32899d22ef1d0da81d9fc947d38b9f0e550e1c068db89d8ddd5322e9f26a8662` | The same-source and changed-source race stress canary passed. Capture anchor: `# scope7-synthesis-race-stress`. |
+| Final full stress | `./smackerel.sh test stress` | 0 | 2197 | `b852de411a1d9cd9977916e0aa5c89cc45cfa700e4db37150762f909e8b5019d` | The complete stress lane passed. Capture anchor: `# scope7-full-stress-after-integration-fixes`. |
+| Check | `./smackerel.sh check` | 0 | 6 | `8ee6ba89271a70c9588c1a7bc39fc569443e2c3f0d545ac34027359b8b549f4b` | The canonical check passed. Capture anchor: `# scope7-check`. |
+| Lint | `./smackerel.sh lint` | 0 | 157 | `915fa2010fbb2d76b8eb2e1a2a82afaa0817d7cf904155c94f3b61407679c4d9` | The canonical lint lane passed. Capture anchor: `# scope7-lint`. |
+| Focused nil-source unit after formatting | `env DISK_PREFLIGHT_OVERRIDE=1 timeout 1800 ./smackerel.sh test unit --go --go-run '^TestNonNilSynthesisSourceClasses_NormalizesNilAndPreservesNonNil$' --verbose` | 0 | not supplied | `74bc784e24191a407251fbcc55b3c5678efec21ee64f5a6be0d61ba304d2ab5f` | The focused source-class normalization unit passed. Capture anchor: `# narrow non-nil synthesis source classes focused unit`. |
+| Regression quality | `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/synthesis_api_e2e_test.go tests/e2e/synthesis_scheduler_cadence_e2e_test.sh tests/e2e/synthesis_restart_durability_e2e_test.sh tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh` | 0 | 21 | `0fa93410d7d77879ccad50799b6617fcd65b2b29a257ac8efcdb81448f884af1` | Zero violations and zero warnings. All four files carried adversarial coverage. |
+| Child artifact lint before report update | `bash .github/bubbles/scripts/artifact-lint.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth` | 0 | 41 | `d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada` | The child artifact lint passed before this report update. |
+| Parent artifact lint before report update | `bash .github/bubbles/scripts/artifact-lint.sh specs/004-phase3-intelligence` | 0 | 41 | `f07d2c3b0167e7a02fb753cf2157f1eff7b07a7fb5277ab9cfa293feb6ef33ba` | The parent artifact lint passed before this report update. |
+
+#### Formatting Quality Remediation
+
+**Claim Source:** executed
+
+| Stage | Exact command | Exit | Lines | Full-output SHA-256 | Observed outcome |
+|---|---|---:|---:|---|---|
+| RED | `./smackerel.sh format --check` | 1 | 1 | `35e5acdb218409a1954a59bb19b9b4a717cba60796a5805bb48c74c55f1d1109` | The formatter named only `internal/intelligence/synthesis_events_test.go`. |
+| GREEN | `timeout 900 ./smackerel.sh format --check` | 0 | not supplied | `759249e1cbb66d7b5cc4922bf94596d971d19f4fab1f25ea0c6e7057d64d0c40` | Format verification passed after a final-newline-only remediation. Capture anchor: `# narrow test format final check`. |
+
+#### Expected Traceability Evidence-Link RED
+
+**Claim Source:** executed
+
+| Exact command | Exit | Lines | Full-output SHA-256 | Observed outcome |
+|---|---:|---:|---|---|
+| `bash .github/bubbles/scripts/traceability-guard.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth` | 1 | 222 | `c91be002fd1550bf491deb607642fce622b4efdc63221dcf7c7dcde70a8986aa` | The guard failed only because this report lacked a reference to `tests/unit/cli/synthesis_test_harness_contract_test.sh`. |
+
+This report update adds that missing evidence reference. The parent must rerun traceability after this edit. This section does not claim that rerun is green.
+
+#### 2026-09-01 Planning-Owner Post-Evidence Reconciliation
+
+**Phase:** plan
+**Claim Source:** executed
+
+The planning owner reran the current non-Docker gates after the evidence-reference edit. Child artifact lint passed with 41 lines and SHA-256 `d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada`. Child traceability passed with 222 lines, 29 scenarios, 79 test rows, 29 report evidence references, zero warnings, and SHA-256 `c5538b28a79fcfd702a82e91eae8df82a5d1e0417af9af7efb6287ec0cbc00bf`. Child implementation reality exited zero with no violations, one warning that only three files were resolved through the design fallback, and SHA-256 `9de419637037725be1b9889944e54c47260a4bcab9064c3bf1d33a534a26a9f3`.
+
+The parent traceability guard initially failed because the parent report omitted `tests/unit/cli/synthesis_test_harness_contract_test.sh`. After adding the T004-C21-HARNESS and T004-C21-PRIOR-SOURCE references, the rerun passed with 329 lines, 38 scenarios, 81 test rows, 38 report evidence references, zero warnings, and SHA-256 `cbba952bac6348710556fe9b54745dfb0ef5c92f69366bba9808e18802ab88b3`. Parent implementation reality passed with 16 files, zero violations, zero warnings, and SHA-256 `2312a1d36f3bf246a37522aade62217a76ea1a0b6c317d6387c4d4f6c30471de`.
+
+The stale C15 prose is reconciled against the current test. `bash -n tests/e2e/synthesis_restart_durability_e2e_test.sh` exited zero. A source check found no `/api/health?strict=true` reference and found `assert_failure_not_surfaced_in_read_apis` at its definition and both before-restart and after-restart calls. T004-C20-STRICT therefore remains exclusively in SCOPE-04A.
+
+The current-session attempt to verify the inherited C15 capture by SHA did not reproduce it. The bounded verification exited 124 and reported observed SHA-256 `ca26e6ae872cc0ed5553e0c61bb1f410a186be59875a28191308723d5808977d` instead of recorded SHA-256 `42d756fe6f1a6a8b05c8f9e225a4bb7138f8e0798c7a7b0e8b388ea58d4ffbca`. This attempt does not convert the prior run into current-session green evidence.
+
+The full working-tree boundary is not clean. The current tracked change list contains 52 paths and SHA-256 `fe3f08e324b7da668e0361602f5666934083f836c0fd53113e4bb1f6833090db`. The 17 untracked paths have SHA-256 `b6f3809a3c28186f0a39005e15fc85f641284509d9592fa22d08e73605169947`. They include excluded or SCOPE-04A-adjacent families such as `internal/knowledge/lint.go`, `internal/nats/client.go`, broad non-synthesis stress tests, and `docker-compose.synthesis-cadence-e2e.override.yml`. The Change Boundary row remains unchecked.
+
+No corrective DoD checkbox is changed in this reconciliation. The inherited test evidence is useful diagnostic input, but it belongs to evidence session `vscode-5635c92b9aa63bde3a330e31237e5578`. It is not current-session execution evidence for this invocation. The current invocation reran only non-Docker artifact, traceability, implementation-reality, syntax, source-boundary, and working-tree checks. Scope 7 and SCOPE-03A therefore remain In Progress.
+
+Scope 7 local implementation and test evidence is complete only through the checks listed above. This section does not mark Scope 7 or SCOPE-03A Done.
+
+Operator pointer deployment, backup and restore, and rollback remain owned by Scope 8/SCOPE-04A. They are not Scope 7 claims.
+
+DoD checkbox and status ownership remains with `bubbles.plan`. Certification remains with `bubbles.validate`.
+
+### Corrective Scope 04A Evidence
+
+**Phase:** plan
+**Claim Source:** not-run
+No passing SCOPE-04A strict-readiness recovery, candidate deployment, or rollback proof exists. This planning run did not execute those workflows. Execution agents append evidence here only after SCN-004-004-C16 through SCN-004-004-C20 complete through the repository and target-owned command surfaces.
+
+### Corrective Planning Checks
+
+The following current-session checks prove artifact structure and traceability only. They do not prove the runtime fix, candidate recovery, deployment admission, or rollback.
+
+#### Artifact lint
+
+**Phase:** plan
+**Command:** `timeout 300 bash .github/bubbles/scripts/artifact-lint.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+# BUG-004-004 corrective planning artifact lint pass 2
+$ timeout 300 bash .github/bubbles/scripts/artifact-lint.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth
+exit: 0
+lines: 41
+sha256: d0fcc3d00860e2793d6f53a8434292f1a505ecf38ce4456d8d8db5bf25097ada
+--- first 20 ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ All checklist bullet items use checkbox syntax
+✅ uservalidation separates automation readiness from human acceptance
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+--- omitted 1 line(s); sha256 above covers the full output ---
+--- last 20 ---
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+#### Traceability guard
+
+**Phase:** plan
+**Command:** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+# BUG-004-004 corrective planning traceability pass 3
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth
+exit: 0
+lines: 216
+sha256: a61be57c8894eb9a98a776bb9577eb4b203e0ccfcd1100b7fafc8589d05af416
+--- last 20 of 216 ---
+✅ Scope 5: Today Status UI And Real-Stack Regression scenario maps to DoD item: SCN-004-004-01 Today renders only durable cited output
+ℹ️  Scope 5: Today Status UI And Real-Stack Regression scenario→DoD match confidence: declared
+✅ Scope 5: Today Status UI And Real-Stack Regression scenario maps to DoD item: SCN-004-004-05 through SCN-004-004-08 Reader and operator states are exclusive
+ℹ️  Scope 5: Today Status UI And Real-Stack Regression scenario→DoD match confidence: declared
+✅ Scope 5: Today Status UI And Real-Stack Regression scenario maps to DoD item: SCN-004-004-09 Authorization loss clears synthesis content
+ℹ️  Scope 5: Today Status UI And Real-Stack Regression scenario→DoD match confidence: declared
+✅ Scope 5: Today Status UI And Real-Stack Regression scenario maps to DoD item: SCN-004-004-10 Synthesis states and Retry are accessible and responsive
+ℹ️  Scope 5: Today Status UI And Real-Stack Regression scenario→DoD match confidence: declared
+ℹ️  DoD fidelity: 28 scenarios checked, 28 mapped to DoD, 0 unmapped
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 28
+ℹ️  Test rows checked: 76
+ℹ️  Scenario-to-row mappings: 28
+ℹ️  Concrete test file references: 28
+ℹ️  Report evidence references: 28
+ℹ️  DoD fidelity scenarios: 28 (mapped: 28, unmapped: 0)
+ℹ️  Edge confidence (IMP-015 Scope B): declared=56 inferred=0 ambiguous=0
+
+RESULT: PASSED (0 warnings)
+```
+
+## Historical Implementation Record - Continued
 
 | Commit | Surface | What changed |
 |---|---|---|

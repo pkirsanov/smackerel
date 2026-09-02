@@ -532,6 +532,22 @@ proactive:
 #   - dedup_window_days: do not re-alert a contact whose cooling nudge is still
 #     pending/delivered within this many days (anti-spam).
 intelligence:
+  # Spec 004 Scope 7 — durable synthesis run policy. Every field is REQUIRED
+  # and emitted by scripts/commands/config.sh as SYNTHESIS_* configuration.
+  # Missing, empty, malformed, or unsupported values abort generation or core
+  # startup. There are no generator or runtime defaults.
+  synthesis:
+    actor_user_id: "global-corpus"
+    daily_cron: "0 2 * * *"
+    weekly_cron: "0 16 * * 0"
+    retry_budget: 2 # retries after the first attempt; MaxAttempts = budget + 1
+    retry_backoff_seconds: 2
+    retry_max_backoff_seconds: 30
+    lease_seconds: 600
+    policy_version: "synthesis/v1"
+    required_source_classes: [ "canonical-graph" ]
+    optional_source_classes: []
+    retention_seconds: 7776000 # 90 days
   relationship_cooling:
     max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
     confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the nudge is withheld

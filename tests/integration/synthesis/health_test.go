@@ -13,23 +13,20 @@
 //
 // This test drives the REAL api.Dependencies.HealthHandler against the live
 // disposable test PostgreSQL (DATABASE_URL). There is NO request interception
-// and NO canned response: GetLastSynthesisTime executes its real
-//
-//	SELECT COALESCE(MAX(created_at), '1970-01-01') FROM synthesis_insights
-//
-// query against the real database, and the intelligence TTL cache is disabled
-// (IntelligenceHealthCacheTTL: 0) so every probe reflects the CURRENT durable
-// table state rather than a cached snapshot.
+// and NO canned response: SynthesisReadModel executes its real output/run and
+// attempt queries against the durable synthesis ledger. The intelligence TTL
+// cache is disabled (IntelligenceHealthCacheTTL: 0) so every probe reflects the
+// CURRENT durable state rather than a cached snapshot.
 //
 // Adversarial truths asserted — each would FAIL against the pre-fix mapping,
 // so this test is a live regression guard for the "falsely healthy" bug:
 //
-//	1. never-run   (empty synthesis_insights)          => intelligence != "up" (== "down")
-//	2. probe error (query against a closed pool)         => intelligence != "up" (== "down")
-//	3. fresh insight (created_at = NOW(), within budget) => intelligence == "up"
+//	1. never-run (empty durable ledger) => intelligence != "up" (== "down")
+//	2. probe error (closed pool) => intelligence != "up" (== "down")
+//	3. fresh linked output within budget => intelligence == "up"
 //
-// The disposable test DB is mutated (DELETE/INSERT synthesis_insights); the
-// inserted row is removed on cleanup (ephemeral-store hygiene). The focused
+// The disposable test DB is mutated (TRUNCATE/INSERT on the durable ledger);
+// the inserted rows are removed on cleanup (ephemeral-store hygiene). The focused
 // `--go-run TestNeverRunAndProbeFailureAreNeverUp` invocation runs only this
 // test, so the table reset does not clobber a concurrently-running test.
 
@@ -53,7 +50,7 @@ import (
 func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		t.Skip("integration: DATABASE_URL not set — live stack not available")
+		t.Fatal("integration: DATABASE_URL not set — canonical integration lane configuration is required")
 	}
 
 	ctx := context.Background()
@@ -70,9 +67,9 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	// intelligenceStatus drives the REAL /api/health handler in-process against
 	// the given engine and returns the reported "intelligence" service status.
 	// IntelligenceHealthCacheTTL: 0 forces the always-fresh slow path so each
-	// call re-queries the durable synthesis_insights state instead of serving a
-	// cached snapshot. DB/NATS/ML deps are nil — HealthHandler is nil-safe for
-	// them and we assert only on the intelligence status under test.
+	// call re-queries the durable synthesis run/output/attempt state instead of
+	// serving a cached snapshot. DB/NATS/ML deps are nil — HealthHandler is
+	// nil-safe for them and we assert only on the intelligence status under test.
 	intelligenceStatus := func(engine *intelligence.Engine) string {
 		t.Helper()
 		deps := &api.Dependencies{
@@ -95,8 +92,12 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 
 	// ---- Truth 1: NEVER-RUN must never be "up" ----
 	// Ensure the durable never-run state on the ephemeral test DB.
-	if _, err := pool.Exec(ctx, "DELETE FROM synthesis_insights"); err != nil {
-		t.Fatalf("clear synthesis_insights for never-run state: %v", err)
+	if _, err := pool.Exec(ctx, `
+		TRUNCATE synthesis_run_events, synthesis_citations,
+			synthesis_output_insights, synthesis_output_source_classes,
+			synthesis_outputs, synthesis_run_attempts, synthesis_runs
+		RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("clear durable synthesis ledger for never-run state: %v", err)
 	}
 	neverRun := intelligenceStatus(liveEngine)
 	t.Logf("never-run: GET /api/health services.intelligence.status = %q", neverRun)
@@ -108,8 +109,8 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	}
 
 	// ---- Truth 2: a synthesis freshness PROBE ERROR must never be "up" ----
-	// A closed (non-nil) pool makes GetLastSynthesisTime's query return an
-	// error (not the nil-pool short-circuit), exercising the real error branch
+	// A closed (non-nil) pool makes SynthesisReadModel's query return an error
+	// (not the nil-pool short-circuit), exercising the real error branch
 	// that the pre-fix code mapped to "up".
 	badPool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
@@ -134,14 +135,14 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	t.Cleanup(func() {
 		cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		// Migration 067 links attempts to runs with ON DELETE RESTRICT, so the
+		// attempt must be removed before the run and its cascading output.
+		if _, err := pool.Exec(cctx, "DELETE FROM synthesis_run_attempts WHERE logical_key = $1", runID); err != nil {
+			t.Logf("cleanup synthesis_run_attempts for %s failed: %v", runID, err)
+		}
 		// synthesis_outputs cascades on the run delete.
 		if _, err := pool.Exec(cctx, "DELETE FROM synthesis_runs WHERE id = $1", runID); err != nil {
 			t.Logf("cleanup synthesis_runs row %s failed: %v", runID, err)
-		}
-		// Attempts are keyed by logical_key and are not a foreign key, so they
-		// do not cascade.
-		if _, err := pool.Exec(cctx, "DELETE FROM synthesis_run_attempts WHERE logical_key = $1", runID); err != nil {
-			t.Logf("cleanup synthesis_run_attempts for %s failed: %v", runID, err)
 		}
 	})
 	if _, err := pool.Exec(ctx,
@@ -156,7 +157,8 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO synthesis_outputs
-		   (id, run_id, insight_count, citation_count, output_kind, evaluated_artifact_count, created_at)
+		   (id, run_id, insight_count, citation_count, output_kind,
+		    evaluated_artifact_count, created_at)
 		 VALUES ($1, $2, 1, 1, 'full', 1, NOW())`,
 		outputID, runID,
 	); err != nil {
@@ -167,9 +169,13 @@ func TestNeverRunAndProbeFailureAreNeverUp(t *testing.T) {
 	// failed-with-prior-output and report "down". Record a succeeded attempt so
 	// the newest attempt belongs to this row.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO synthesis_run_attempts (logical_key, outcome, recorded_at)
-		 VALUES ($1, 'succeeded', NOW())`,
-		runID,
+		`INSERT INTO synthesis_run_attempts
+		   (logical_key, outcome, recorded_at, run_id, attempt_no, trigger_kind,
+		    state, output_id, started_at, finished_at, included_source_classes,
+		    omitted_source_classes, insight_count, citation_count)
+		 VALUES ($1, 'succeeded', NOW(), $1, 1, 'scheduled', 'persisted', $2,
+		         NOW(), NOW(), '{}'::text[], '{}'::text[], 1, 1)`,
+		runID, outputID,
 	); err != nil {
 		t.Fatalf("insert succeeded synthesis_run_attempts row: %v", err)
 	}

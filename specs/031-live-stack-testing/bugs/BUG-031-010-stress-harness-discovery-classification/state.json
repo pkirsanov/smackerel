@@ -1,0 +1,156 @@
+{
+  "version": 3,
+  "bugId": "BUG-031-010",
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-010-stress-harness-discovery-classification",
+  "parentFeatureDir": "specs/031-live-stack-testing",
+  "featureName": "Stress Harness Discovery and Classification Fail-Open",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": ["specs/031-live-stack-testing"],
+  "relatedBugs": [
+    {
+      "bugId": "BUG-031-005",
+      "path": "specs/031-live-stack-testing/bugs/BUG-031-005-stress-stack-health-readiness",
+      "status": "done",
+      "relationship": "Terminal predecessor that established readiness, checked output capture, and workload failure propagation"
+    },
+    {
+      "bugId": "BUG-031-006",
+      "path": "specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift",
+      "status": "done",
+      "relationship": "Terminal predecessor that established run-selector discovery and current canary coverage"
+    }
+  ],
+  "workBoundary": {
+    "repositoryRoots": ["smackerel"],
+    "specTargets": ["specs/031-live-stack-testing/bugs/BUG-031-010-stress-harness-discovery-classification"],
+    "allowedPaths": [
+      "scripts/runtime/go-stress.sh",
+      "tests/stress/readiness/canary_test.go",
+      "internal/nats/client.go",
+      "internal/nats/client_test.go",
+      "specs/031-live-stack-testing/bugs/BUG-031-010-stress-harness-discovery-classification/**"
+    ],
+    "crossRepoPolicy": "forbidden"
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "createdAt": "2026-09-02T00:00:00Z",
+  "createdBy": "bubbles.bug",
+  "execution": {
+    "goalContractRef": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "scope-1-stress-harness-discovery-classification",
+    "runStartedAt": "2026-09-02T00:00:00Z",
+    "completedPhaseClaims": ["select", "bootstrap"],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "scope-1-stress-harness-discovery-classification",
+        "name": "Make Stress Discovery and Output Classification Fail Loud",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "recordedAt": "2026-09-02T00:00:00Z",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"mode": "off", "source": "user-constraint"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "workflow-forced"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["select", "bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-09-02T00:00:00Z",
+      "runEndedAt": "2026-09-02T01:53:11Z",
+      "executionModel": "direct-authorized-runner",
+      "summary": "Created one focused planning and root-cause bug packet from current source inspection. Defined six scenario-first contracts, eight exact test-plan rows, and a two-file implementation boundary. Artifact lint and traceability guard passed with zero warnings; editor diagnostics reported no packet errors. No source, test, sibling bug, Docker, project-test, certification, commit, or push work is claimed."
+    }
+  ],
+  "activeBugs": [
+    {
+      "bugId": "BUG-031-010",
+      "status": "in_progress",
+      "summary": "Stress selector discovery and output classification can fail open or report misleading outcomes."
+    }
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "id": "BUG-031-010-F01",
+      "source": "scripts/runtime/go-stress.sh::go_stress_package_has_selected_tests",
+      "summary": "Process-substitution go test -list status is unchecked and the caller treats every helper failure as selector no-match."
+    },
+    {
+      "id": "BUG-031-010-F02",
+      "source": "scripts/runtime/go-stress.sh::go_stress_classify_output",
+      "summary": "Classifier misses direct JSON WARN records, can match quoted benign text, and treats grep execution failure as no-match."
+    },
+    {
+      "id": "BUG-031-010-F03",
+      "source": "tests/stress/readiness/canary_test.go",
+      "summary": "Adversarial list, JSON, quoted-literal, grep, capture, and cleanup coverage is absent."
+    }
+  ],
+  "lastUpdatedAt": "2026-09-02T02:23:04Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "The single scope is ready after the implementation owner records red-stage failures for the planned adversarial tests.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All eight Test Plan rows have current-session evidence, all DoD items are checked, no E2E overlap occurred, and bubbles.validate certifies the transition."
+  },
+  "routing": {
+    "nextOwner": "bubbles.implement",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetScope": "scope-1-stress-harness-discovery-classification",
+    "reason": "Planning and static root-cause analysis are complete. The next phase must add and execute the scenario-first red tests before changing the two-file harness boundary."
+  }
+}

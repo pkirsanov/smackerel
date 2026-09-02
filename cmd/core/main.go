@@ -17,7 +17,6 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/transportidentity"
 	"github.com/smackerel/smackerel/internal/backup"
 	"github.com/smackerel/smackerel/internal/config"
-	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/intelligence/surfacing"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
@@ -137,13 +136,22 @@ func run() error {
 		return err
 	}
 
+	// BUG-004-004 Scope 7 — build one synthesis runtime before any consumer
+	// is wired. The API retry path and both scheduler cadences must share the
+	// same producer and in-process coordinator; PostgreSQL remains the
+	// cross-process authority.
+	synthesisRT, err := newSynthesisRuntime(cfg, svc)
+	if err != nil {
+		return fmt.Errorf("construct synthesis runtime: %w", err)
+	}
+
 	// Register and start all connectors
 	if err := registerConnectors(ctx, cfg, svc); err != nil {
 		return err
 	}
 
 	// Build API dependencies (annotations, lists, etc.)
-	deps, listResolver, listStore, err := buildAPIDeps(ctx, cfg, svc, corpusGrantEnforce)
+	deps, listResolver, listStore, err := buildAPIDeps(ctx, cfg, svc, synthesisRT, corpusGrantEnforce)
 	if err != nil {
 		return fmt.Errorf("buildAPIDeps: %w", err)
 	}
@@ -373,42 +381,13 @@ func run() error {
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)
-
-	// BUG-004-004 — durable synthesis. Without this the daily job would run,
-	// report a count and store nothing. Construction failure is fatal rather
-	// than degraded: a synthesis job that cannot persist should not run at all,
-	// because its log line would claim work the database never received.
-	synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool)
-	if err != nil {
-		return fmt.Errorf("construct synthesis persistence: %w", err)
+	sched.SetSynthesisProducer(synthesisRT.producer)
+	if err := sched.SetSynthesisSchedule(scheduler.SynthesisSchedule{
+		DailyCron:  cfg.Synthesis.DailyCron,
+		WeeklyCron: cfg.Synthesis.WeeklyCron,
+	}); err != nil {
+		return fmt.Errorf("configure required synthesis schedule: %w", err)
 	}
-	synthesisProducer, err := intelligence.NewSynthesisProducer(svc.intEngine, synthesisPersistence)
-	if err != nil {
-		return fmt.Errorf("construct synthesis producer: %w", err)
-	}
-
-	// The holder must identify THIS process, not the product, or two instances
-	// would each think they already hold the lease and both run the window.
-	synthesisHolder, err := os.Hostname()
-	if err != nil || synthesisHolder == "" {
-		synthesisHolder = fmt.Sprintf("smackerel-core-%d", os.Getpid())
-	} else {
-		synthesisHolder = fmt.Sprintf("%s-%d", synthesisHolder, os.Getpid())
-	}
-	synthesisCoordinator, err := intelligence.NewSynthesisCoordinator(
-		synthesisPersistence,
-		intelligence.SynthesisRetryPolicy{
-			MaxAttempts:  3,
-			InitialDelay: 2 * time.Second,
-			MaxDelay:     30 * time.Second,
-			LeaseTTL:     10 * time.Minute,
-		},
-		synthesisHolder,
-	)
-	if err != nil {
-		return fmt.Errorf("construct synthesis coordinator: %w", err)
-	}
-	sched.SetSynthesisProducer(synthesisProducer.WithCoordinator(synthesisCoordinator))
 
 	// Spec 021 Scope 4 — Unified Surfacing Controller. Wires the
 	// SST-validated daily-budget / dedupe / suppression / urgent-
@@ -468,7 +447,7 @@ func run() error {
 	wireCardRewardsScheduler(cfg, svc, sched)
 
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
-		slog.Warn("digest scheduler failed to start", "error", err)
+		return fmt.Errorf("start scheduler: %w", err)
 	}
 
 	// Spec 048 — background poll of BACKUP_STATUS_FILE so

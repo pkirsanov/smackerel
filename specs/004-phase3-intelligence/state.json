@@ -2,15 +2,20 @@
   "version": 3,
   "featureDir": "specs/004-phase3-intelligence",
   "featureName": "Phase 3: Intelligence",
-  "status": "done",
-  "certifiedAt": "2026-06-06T17:00:00Z",
-  "certifiedBy": "bubbles.workflow",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Reopened on 2026-08-30 so parent Scope 7 and Scope 8 can route implementation of the authoritative BUG-004-004 corrective contracts SCN-004-004-C11 through SCN-004-004-C20.",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "requiresRevalidation": true,
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": null,
-    "currentPhase": "finalize",
-    "currentScope": null,
-    "runStartedAt": "2026-04-10T00:00:00Z",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "7",
+    "substate": "needs_reverification",
+    "runStartedAt": "2026-08-30T08:22:30Z",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -31,7 +36,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",
@@ -40,23 +45,7 @@
       "5",
       "6"
     ],
-    "certifiedCompletedPhases": [
-      "select",
-      "bootstrap",
-      "implement",
-      "test",
-      "validate",
-      "audit",
-      "docs",
-      "harden",
-      "regression",
-      "simplify",
-      "gaps",
-      "stabilize",
-      "security",
-      "chaos",
-      "spec-review"
-    ],
+    "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
         "scope": 1,
@@ -121,12 +110,82 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-07T14:35:00Z"
+      },
+      {
+        "scope": 7,
+        "scopeId": "SCOPE-07",
+        "name": "Causal Synthesis Event Ledger And Replacement Lifecycle",
+        "status": "In Progress",
+        "dependsOn": [
+          1,
+          5
+        ],
+        "scopeDir": null,
+        "evidenceFile": "bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md",
+        "certifiedAt": null,
+        "authoritativeChildScope": "SCOPE-03A"
+      },
+      {
+        "scope": 8,
+        "scopeId": "SCOPE-08",
+        "name": "Causal Synthesis Health, Recovery, And Deployment Acceptance",
+        "status": "Not Started",
+        "dependsOn": [
+          7
+        ],
+        "scopeDir": null,
+        "evidenceFile": "bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md",
+        "certifiedAt": null,
+        "authoritativeChildScope": "SCOPE-04A"
       }
     ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
-    }
+    },
+    "invalidationLedger": [
+      {
+        "invalidatedAt": "2026-08-30T08:28:34Z",
+        "invalidatedBy": "explicit done-spec recertification after operator-authorized parent routing reconciliation",
+        "claimSource": "operator requirement, child corrective packet, and done-spec-audit current-session execution",
+        "priorStatus": "done",
+        "priorCertifiedAt": "2026-06-06T17:00:00Z",
+        "priorCertifiedBy": "bubbles.workflow",
+        "priorCompletedScopes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "priorCertifiedCompletedPhases": [
+          "select",
+          "bootstrap",
+          "implement",
+          "test",
+          "validate",
+          "audit",
+          "docs",
+          "harden",
+          "regression",
+          "simplify",
+          "gaps",
+          "stabilize",
+          "security",
+          "chaos",
+          "spec-review"
+        ],
+        "reason": "The child BUG-004-004 packet is reopened for causal synthesis event, replacement, health, recovery, and deployment acceptance work, but the terminal parent exposed no eligible implementation scope.",
+        "reopenedScopes": [
+          "SCOPE-07",
+          "SCOPE-08"
+        ],
+        "evidenceRef": "report.md#corrective-parent-routing-bridge---2026-08-30",
+        "childPacketRef": "bugs/BUG-004-004-synthesis-persistence-and-health-truth",
+        "nextRequiredOwner": "bubbles.implement"
+      }
+    ]
   },
   "policySnapshot": {
     "grill": {
@@ -434,30 +493,62 @@
     },
     {
       "agent": "bubbles.spec-review",
-      "phasesExecuted": ["spec-review"],
+      "phasesExecuted": [
+        "spec-review"
+      ],
       "reviewStatus": "CURRENT",
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit fb2a4266 (2026-06-01, 'spec 064: open-ended knowledge agent + supporting work'): added a single 15-line 'Successor Notice' cross-ref banner to spec.md ONLY (no scopes.md/design.md), pointing at spec 064 (open-ended knowledge Q&A) and spec 065 (generic micro-tools) and explicitly stating intelligence-production semantics — connection discovery, alert triggers, brief content — remain owned by this spec, which stays done; only the user entry path is reshaped. Incidental reconciliation (category b): no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "id": "20",
+      "agent": "bubbles.plan",
+      "workflowMode": "full-delivery",
+      "startedAt": "2026-09-01T20:00:00Z",
+      "completedAt": "2026-09-01T20:16:54Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "scopesCompleted": [],
+      "claimSource": "executed",
+      "outcome": "route_required",
+      "evidenceRef": "report.md#2026-09-01-parent-scope-7-post-evidence-reconciliation",
+      "summary": "Reconciled parent Scope 7 after the child test evidence handoff. Corrected stale C15 prose, added missing parent lifecycle-test references, and reran artifact lint, traceability, and implementation reality. No corrective DoD row was checked because the inherited test evidence belongs to a different session, the bounded C15 receipt verification did not reproduce before timeout, and the current tree crosses the declared Scope 7 boundary. Scope 7 remains In Progress; Scope 8 is untouched.",
+      "nextRequiredOwner": "bubbles.test"
     }
   ],
-  "activeBugs": [],
+  "activeBugs": [
+    "BUG-004-004"
+  ],
   "resolvedBugs": [
     "BUG-004-002",
     "BUG-004-H1-silent-query-error-swallowing",
     "BUG-004-003-governance-baseline-drift"
   ],
-  "failures": [],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "failures": [
+    {
+      "phase": "transition-guard",
+      "summary": "25 blocking failures detected by state-transition-guard.sh",
+      "detectedAt": "2026-08-30T08:28:34Z"
+    }
+  ],
+  "lastUpdatedAt": "2026-09-01T20:16:54Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
     "scopes": "scopes.md",
     "report": "report.md",
-    "uservalidation": "uservalidation.md"
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
   },
-  "notes": "Phase 3: Synthesis engine, commitment tracking, pre-meeting briefs, contextual alerts, weekly synthesis, enhanced daily digest."
+  "notes": "Scopes 1 through 6 remain historically completed. Scope 7 routes child SCOPE-03A and is active. Scope 8 routes child SCOPE-04A and waits for Scope 7.",
+  "nextRequiredOwner": "bubbles.test",
+  "progressNote": "Parent Scope 7 post-evidence planning reconciliation is complete, but no corrective DoD row is current-session eligible. The test owner must supply reproducible current-session Scope 7 evidence and resolve or classify the crossed change boundary. Scope 8 remains Not Started and untouched."
 }

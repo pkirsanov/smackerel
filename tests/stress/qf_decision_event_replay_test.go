@@ -41,7 +41,7 @@ import (
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
-// TestQFDecisionsFreshnessSLAP95IngestRender (spec 041 Scope 2 DoD line 321)
+// The ingest freshness stress regression (spec 041 Scope 2 DoD line 321)
 // drives 500+ packets over 60+ seconds against the live test stack with
 // realistic 0–500ms jitter per packet, samples the ingest p95 gauge at
 // completion, and asserts the documented budget.
@@ -63,11 +63,11 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		t.Skip("stress: DATABASE_URL not set — live stack DB not available")
+		t.Fatal("stress: DATABASE_URL not set — live stack DB is required")
 	}
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
-		t.Skip("stress: NATS_URL not set — live stack not available")
+		t.Fatal("stress: NATS_URL not set — live stack NATS is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -77,13 +77,13 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect stress database: %v", err)
 	}
-	defer pool.Close()
+	t.Cleanup(pool.Close)
 
 	natsClient, err := smacknats.Connect(ctx, natsURL, cfg.AuthToken)
 	if err != nil {
 		t.Fatalf("connect stress NATS: %v", err)
 	}
-	defer natsClient.Close()
+	t.Cleanup(natsClient.Close)
 
 	sourceID := fmt.Sprintf("qf-decisions-freshness-stress-%d", time.Now().UnixNano())
 	t.Cleanup(func() { qfDecisionsStressCleanup(t, pool, sourceID) })
@@ -183,7 +183,11 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, qfdecisions.DecisionPacketsPath+"/"):
 			packetCalls.Add(1)
 			packetID := strings.TrimPrefix(r.URL.Path, qfdecisions.DecisionPacketsPath+"/")
-			_ = json.NewEncoder(w).Encode(stressEnvelope(packetID, "trace-"+packetID))
+			_ = json.NewEncoder(w).Encode(stressEnvelope(
+				packetID,
+				"trace-"+packetID,
+				time.Now().UTC().Format(time.RFC3339Nano),
+			))
 		default:
 			http.NotFound(w, r)
 		}
@@ -264,7 +268,7 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 		cycle, totalArtifacts, packetCalls.Load(), eventCalls.Load(), ingestP95)
 }
 
-// TestQFDecisionsFreshnessSLAP95RenderAndCombined (spec 041 Scope 5 DoD
+// The render-and-combined freshness stress regression (spec 041 Scope 5 DoD
 // V4 + Scope 2 cross-scope dependency C-S2-321B-SCOPE-5-RENDER) drives
 // 500+ packets over 60+ seconds against the live test stack, drives
 // RenderPacketCard on every materialized artifact to populate the
@@ -273,7 +277,7 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 // asserts:
 //
 //   - ingest p95 ≤ 30s (preserves the Scope 2 ingest proof established
-//     by TestQFDecisionsFreshnessSLAP95IngestRender — render-driving
+//     by the ingest freshness regression — render-driving
 //     MUST NOT regress the ingest budget)
 //   - render p95 ≤ 30s (Scope 5 render-stage budget, recorded via
 //     RecordFreshnessObservation(FreshnessStageRender, ...) inside
@@ -306,11 +310,11 @@ func TestQFDecisionsFreshnessSLAP95RenderAndCombined(t *testing.T) {
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		t.Skip("stress: DATABASE_URL not set — live stack DB not available")
+		t.Fatal("stress: DATABASE_URL not set — live stack DB is required")
 	}
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
-		t.Skip("stress: NATS_URL not set — live stack not available")
+		t.Fatal("stress: NATS_URL not set — live stack NATS is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -320,13 +324,13 @@ func TestQFDecisionsFreshnessSLAP95RenderAndCombined(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect stress database: %v", err)
 	}
-	defer pool.Close()
+	t.Cleanup(pool.Close)
 
 	natsClient, err := smacknats.Connect(ctx, natsURL, cfg.AuthToken)
 	if err != nil {
 		t.Fatalf("connect stress NATS: %v", err)
 	}
-	defer natsClient.Close()
+	t.Cleanup(natsClient.Close)
 
 	sourceID := fmt.Sprintf("qf-decisions-render-combined-stress-%d", time.Now().UnixNano())
 	t.Cleanup(func() { qfDecisionsStressCleanup(t, pool, sourceID) })
@@ -334,7 +338,7 @@ func TestQFDecisionsFreshnessSLAP95RenderAndCombined(t *testing.T) {
 
 	// Reset shared freshness gauges so this test's assertions only reflect
 	// observations driven by THIS test, not residual state from
-	// TestQFDecisionsFreshnessSLAP95IngestRender (which also runs in this
+	// the ingest freshness regression (which also runs in this
 	// package's test binary).
 	metrics.QFFreshnessP95Seconds.Reset()
 
@@ -561,10 +565,9 @@ func TestQFDecisionsFreshnessSLAP95RenderAndCombined(t *testing.T) {
 // freshness observation (observedAt - artifact.CapturedAt) and the
 // combined-stage freshness observation (observedAt - parsed qf_created_at)
 // both stay within the Scope 5 budgets. Used by
-// TestQFDecisionsFreshnessSLAP95RenderAndCombined only — the existing
-// TestQFDecisionsFreshnessSLAP95IngestRender uses stressEnvelope (defined
-// in qf_decisions_sync_stress_test.go) which intentionally fixes its
-// timestamps to a deterministic past instant for its ingest-only proof.
+// render-and-combined freshness regression only. The existing ingest
+// freshness regression passes response-time timestamps
+// to stressEnvelope so both freshness paths measure current execution.
 func stressRenderEnvelope(packetID, traceID string, now time.Time) qfdecisions.QFDecisionPacketEnvelope {
 	stamp := now.UTC().Format(time.RFC3339)
 	return qfdecisions.QFDecisionPacketEnvelope{

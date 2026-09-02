@@ -1283,3 +1283,100 @@ exit 0, evidence block above). Spec
 status remains `done` (the closure is an alert-coverage + contract + docs change
 to an already-certified spec; no status promotion performed, consistent with how
 the 037 / 038 rounds added alert groups to already-`done` specs).
+
+## Corrective Parent Routing Bridge - 2026-08-30
+
+### Planning Decision
+
+The parent feature now exposes two corrective execution scopes. [Scope 7](scopes.md#scope-7-causal-synthesis-event-ledger-and-replacement-lifecycle) routes to child SCOPE-03A. [Scope 8](scopes.md#scope-8-causal-synthesis-health-recovery-and-deployment-acceptance) routes to child SCOPE-04A. The [BUG-004-004 packet](bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md) remains the detailed corrective contract and evidence owner.
+
+This bridge does not reinterpret parent Scope 3 or Scope 4. Those historical scopes remain Pre-Meeting Briefs and Contextual Alerts. Their completed evidence remains unchanged.
+
+### Live Candidate Diagnostic Boundary
+
+The operator reported that candidate release `7ce32d70` remained `intelligence=down` for more than 600 seconds. The target adapter refused the candidate, and the accepted prior release was restored. The child report records this at [Corrective Planning Reconciliation](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-planning-reconciliation---2026-08-30).
+
+That operator report is diagnostic input. It is not execution evidence produced by this planning run. Scope 8 requires new target-bound refusal, recovery, admission, and rollback evidence before behavioral acceptance.
+
+### Current Working-Tree Inputs
+
+The working tree contains `internal/db/migrations/067_synthesis_causal_event_truth.sql` and corrective test edits. These files are implementation inputs owned by implementation and test specialists. This planning pass did not edit them and makes no pass claim for them.
+
+### Evidence Status
+
+No corrective implementation proof exists yet for SCN-004-004-C11 through SCN-004-004-C20. Parent Scope 7 and Scope 8 DoD rows remain unchecked. New execution evidence belongs in the child report's [Scope 03A](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-03a-evidence) and [Scope 04A](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence) sections.
+
+### Corrective Parent Test Plan Index - Planning Only
+
+This index links parent routing rows to the [authoritative child test plan](bugs/BUG-004-004-synthesis-persistence-and-health-truth/test-plan.json). It records no test execution or pass result.
+
+| Parent scope | Test ID | Planned file or acceptance surface |
+|---|---|---|
+| Scope 7 | T004-C11-MIGRATE | `tests/integration/synthesis_migration_test.go` |
+| Scope 7 | T004-C11-IMMUTABLE | `tests/integration/synthesis_event_ledger_test.go` |
+| Scope 7 | T004-C11-CAUSAL | `tests/integration/synthesis_event_ledger_test.go` |
+| Scope 7 | T004-C11-WEEKLY | `tests/e2e/synthesis_scheduler_cadence_e2e_test.sh` |
+| Scope 7 | T004-C12-AUDIT-RED | `tests/e2e/synthesis_api_e2e_test.go` |
+| Scope 7 | T004-C13-REPLACE | `tests/integration/synthesis_persistence_test.go` |
+| Scope 7 | T004-C13-ROLLBACK | `tests/integration/synthesis_persistence_test.go` |
+| Scope 7 | T004-C14-RACE | `tests/stress/synthesis_retry_stress_test.go` |
+| Scope 7 | T004-C14-ACTOR-CADENCE | `tests/integration/synthesis_event_ledger_test.go` |
+| Scope 7 | T004-C14-CONFIG-UNIT | `internal/config/validate_test.go` |
+| Scope 7 | T004-C14-CONFIG-RUNTIME | `tests/integration/synthesis_runtime_config_test.go` |
+| Scope 7 | T004-C15-READBACK | `tests/integration/synthesis_persistence_test.go` |
+| Scope 7 | T004-C15-RESTART | `tests/e2e/synthesis_restart_durability_e2e_test.sh` |
+| Scope 7 | T004-C21-HARNESS | `tests/unit/cli/synthesis_test_harness_contract_test.sh` |
+| Scope 7 | T004-C21-PRIOR-SOURCE | `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh` |
+| Scope 7 | T004-C03-BROAD | `tests/e2e/` |
+| Scope 8 | T004-C16-QUERY | `tests/integration/synthesis_health_test.go` |
+| Scope 8 | T004-C16-CROSSPAIR-RED | `tests/e2e/synthesis_api_e2e_test.go` |
+| Scope 8 | T004-C17-PRECEDENCE | `tests/integration/synthesis_health_test.go` |
+| Scope 8 | T004-C17-ALERT | `tests/e2e/synthesis_recovery_health_e2e_test.sh` |
+| Scope 8 | T004-C18-STARTUP | `tests/integration/synthesis_coordinator_test.go` |
+| Scope 8 | T004-C18-RESTART | `tests/e2e/synthesis_restart_durability_e2e_test.sh` |
+| Scope 8 | T004-C19-CONFIG | `internal/config/validate_test.go` |
+| Scope 8 | T004-C19-RUNTIME | `tests/integration/synthesis_freshness_sst_test.go` |
+| Scope 8 | T004-C19-STALE-SCAN | `internal/intelligence/synthesis_freshness_contract_test.go` |
+| Scope 8 | T004-C20-STRICT | `tests/e2e/synthesis_api_e2e_test.go` |
+| Scope 8 | T004-C20-DEPLOY | operator-owned target adapter verification |
+| Scope 8 | T004-C20-ROLLBACK | operator-owned target adapter verification |
+| Scope 8 | T004-C20-UI-REVALIDATE | `web/pwa/tests/synthesis_truth.spec.ts` |
+| Scope 8 | T004-C20-STRESS | `tests/stress/synthesis_retry_stress_test.go` |
+| Scope 8 | T004-C20-SECURITY | `tests/integration/synthesis_telemetry_test.go` |
+| Scope 8 | T004-C20-OBS | `.specify/runtime/observability/` |
+| Scope 8 | T004-C04-BROAD | `tests/e2e/` |
+
+## Scope 7/8 Test-Plan Dependency Reconciliation - 2026-08-31
+
+### Planning Correction
+
+Scope 7 T004-C15-RESTART now proves durable `readback_failed` event truth across a real core restart. It also proves latest, history, and detail API refusal until a later coherent read appends `recovered`.
+
+T004-C15-RESTART does not certify strict health. Scope 8 T004-C20-STRICT retains the strict-health contract for never-run, running, stale, partial, failed, read-degraded, and recovered states.
+
+This correction removes the Scope 7 dependency on Scope 8. It preserves every C15 and C20 requirement in its owning scope. The parent and child scopes, test plans, and scenario manifests carry the same mapping.
+
+### Operator-Supplied Failing Diagnostic - Planning Input Only
+
+**Phase:** plan
+**Claim Source:** not-run
+This planning run did not execute the command below. The operator supplied the failing result as diagnostic input.
+
+- Reported command: `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh`
+- Reported exit code: `1`
+- Reported signal: `FAIL: T004-C15 stage=before_restart strict_health false_success`
+- Reported full-output SHA-256: `2eb6cf097b2fbfd72b3fb73875f5ca97ab70b07b67f6f0f3d556afa4e0eb493c`
+- Planning interpretation: the C15 shell test reached a strict-health assertion owned by C20.
+- Completion effect: T004-C15-RESTART remains unchecked and has no passing evidence.
+- Test ownership boundary: this planning pass did not modify `tests/e2e/synthesis_restart_durability_e2e_test.sh`.
+
+That diagnostic described the pre-correction test. The current shell test no longer calls `/api/health?strict=true` in the C15 path. `assert_failure_not_surfaced_in_read_apis()` checks only latest, history, and detail API truth before and after restart. T004-C20-STRICT remains the dedicated strict-health API E2E row in Scope 8.
+
+### 2026-09-01 Parent Scope 7 Post-Evidence Reconciliation
+
+**Phase:** plan
+**Claim Source:** executed
+
+The current parent gates were rerun after correcting the C15 prose and adding the missing lifecycle-test references. Artifact lint passed with 41 lines and SHA-256 `f07d2c3b0167e7a02fb753cf2157f1eff7b07a7fb5277ab9cfa293feb6ef33ba`. Traceability first failed on the missing `tests/unit/cli/synthesis_test_harness_contract_test.sh` parent report reference, then passed after the reference was added. The passing rerun had 329 lines, 38 scenarios, 81 test rows, 38 report evidence references, zero warnings, and SHA-256 `cbba952bac6348710556fe9b54745dfb0ef5c92f69366bba9808e18802ab88b3`. Implementation reality passed with 16 files, zero violations, zero warnings, and SHA-256 `2312a1d36f3bf246a37522aade62217a76ea1a0b6c317d6387c4d4f6c30471de`.
+
+No parent Scope 7 DoD checkbox is changed. The child evidence block names a different evidence session, and the current-session C15 receipt verification did not reproduce its recorded SHA before the bounded command exited 124. The working tree also contains excluded and SCOPE-04A-adjacent paths, so the Change Boundary row is not supported. Parent Scope 7 remains In Progress and Scope 8 remains untouched.

@@ -1,0 +1,107 @@
+{
+  "version": 3,
+  "bugId": "BUG-037-003",
+  "featureDir": "specs/037-llm-agent-tools/bugs/BUG-037-003-replay-nul-error-fidelity",
+  "featureName": "Replay NUL Error Fidelity",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Artifact-only packet created from a source-grounded test-quality finding. No source or test change and no test execution is claimed.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/037-llm-agent-tools"
+  ],
+  "workBoundary": {
+    "repositoryRoots": ["smackerel"],
+    "specTargets": [
+      "specs/037-llm-agent-tools/bugs/BUG-037-003-replay-nul-error-fidelity"
+    ],
+    "allowedPaths": [
+      "specs/037-llm-agent-tools/bugs/BUG-037-003-replay-nul-error-fidelity/**",
+      "tests/stress/agent/chaos_round1_test.go"
+    ],
+    "crossRepoPolicy": "forbidden"
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "goalContractRef": null,
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
+    "currentScope": "SCOPE-01",
+    "substate": "implemented",
+    "runStartedAt": "2026-09-02T01:50:26Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Tighten The Replay NUL Error Oracle",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-mode"},
+    "autoCommit": {"mode": "off", "source": "user-constraint"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "workflow-mode"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug-discovery", "analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-09-02T01:50:26Z",
+      "runEndedAt": "2026-09-02T01:50:26Z",
+      "claimSource": "interpreted",
+      "outcome": "route_required",
+      "summary": "Created a full artifact packet from source inspection. The NUL branch accepts any non-ExitError and does not prove EINVAL, binary existence, or an active context. No source, test, Docker, validation, commit, push, or deployment action occurred."
+    }
+  ],
+  "activeBugs": ["BUG-037-003"],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-09-02T01:50:26Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
+  },
+  "notes": "Immediate route: bubbles.design approves the root-cause design, then bubbles.plan approves scopes and test-plan. bubbles.test owns the test-only implementation and red-green evidence."
+}

@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-011-ml-readiness-oracle-fidelity",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T01:50:26Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-031-011-001",
+      "scope": "SCOPE-01",
+      "title": "Non-ready ML dependency cannot be masked as ready",
+      "gherkin": {
+        "given": "The production ML readiness loop probes an HTTP dependency that always returns HTTP 503",
+        "when": "The bounded readiness wait completes",
+        "then": "The result is not ready and at least one dependency probe occurred"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [{"plannedFile": "tests/stress/ml_readiness_timeout_stress_test.go", "plannedTestId": "TestMLReadinessNonReadyDependencyCannotBeMaskedAsReady", "status": "not-yet-authored", "owner": "bubbles.test"}],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-031-011-002",
+      "scope": "SCOPE-01",
+      "title": "Healthy control distinguishes the harness",
+      "gherkin": {
+        "given": "The same production readiness loop probes an HTTP dependency that returns HTTP 200",
+        "when": "The readiness wait runs",
+        "then": "The result is ready and at least one dependency probe occurred"
+      },
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [{"plannedFile": "tests/stress/ml_readiness_timeout_stress_test.go", "plannedTestId": "TestMLReadinessNonReadyDependencyCannotBeMaskedAsReady/healthy_control", "status": "not-yet-authored", "owner": "bubbles.test"}],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-031-011-003",
+      "scope": "SCOPE-01",
+      "title": "Endpoint identity remains truthful",
+      "gherkin": {
+        "given": "WaitForMLReady probes ML /health and core /readyz is a separate database readiness route",
+        "when": "Current test and scenario metadata describe the dependency",
+        "then": "No current claim describes /ml/readyz as the exercised route"
+      },
+      "behaviorClass": "contract",
+      "changeType": "bugfix",
+      "requiredTestType": "functional",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [{"plannedFile": "tests/stress/ml_readiness_timeout_stress_test.go", "plannedTestId": "TestMLReadinessNonReadyDependencyCannotBeMaskedAsReady", "status": "not-yet-authored", "owner": "bubbles.test"}],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

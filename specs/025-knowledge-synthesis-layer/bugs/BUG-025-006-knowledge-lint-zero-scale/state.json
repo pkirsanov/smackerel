@@ -1,0 +1,163 @@
+{
+  "version": 3,
+  "bugId": "BUG-025-006",
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-006-knowledge-lint-zero-scale",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "featureName": "Knowledge lint can pass at zero scale",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "The authorized stress-test implementation is present. Product and Docker validation is serialized for a later invocation, so no Test Plan or Definition of Done item is complete.",
+  "blockedReason": null,
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": ["specs/025-knowledge-synthesis-layer"],
+  "workBoundary": {
+    "repositoryRoots": ["smackerel"],
+    "specTargets": ["specs/025-knowledge-synthesis-layer/bugs/BUG-025-006-knowledge-lint-zero-scale"],
+    "allowedPaths": ["specs/025-knowledge-synthesis-layer/bugs/BUG-025-006-knowledge-lint-zero-scale/**"],
+    "crossRepoPolicy": "forbidden"
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "goalContractRef": null,
+    "executionModel": "direct-authorized-runner",
+    "substate": "implemented",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "scope-1-prove-knowledge-lint-scale",
+    "runStartedAt": "2026-09-02T01:51:33Z",
+    "runCompletedAt": "2026-09-02T01:51:33Z",
+    "completedScopes": [],
+    "completedPhaseClaims": ["bug"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-09-02T01:51:33Z",
+        "claimSource": "interpreted",
+        "summary": "Created a full documentation-only BUG-025-006 packet after inspecting the dirty stress test, production linter, artifact schema, parent requirement, and current packet contracts. No product command, Docker operation, runtime edit, or test edit occurred."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "certificationReadiness": "not_ready",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "scope-1-prove-knowledge-lint-scale",
+        "name": "Prove knowledge lint at exactly 1000 artifacts",
+        "status": "blocked",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [
+      "Packet-only operator constraint prohibits implementation and Docker execution in this invocation."
+    ],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "workflow-mode"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "user-constraint"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "workflow-mode"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "classification", "documentation"],
+      "statusBefore": "not_started",
+      "statusAfter": "blocked",
+      "runStartedAt": "2026-09-02T01:51:33Z",
+      "runEndedAt": "2026-09-02T01:51:33Z",
+      "outcome": "route_required",
+      "summary": "Documented the zero-scale false-pass defect as a full bug packet. Routed the future one-file stress-test repair to bubbles.implement after explicit operator activation."
+    }
+  ],
+  "activeBugs": [
+    {
+      "bugId": "BUG-025-006",
+      "status": "in_progress",
+      "summary": "TestKnowledge_LintAt1000ArtifactScale creates and counts no artifacts, so the declared 1000-artifact scale is not executable."
+    }
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "current-session source inspection at revision 7ce32d703a17f3cb5a2481a1ebc0cc084a1fac61",
+      "summary": "The dirty test invokes production lint without seeding or counting artifacts. Runtime zero-scale passage was not executed in this packet-only invocation."
+    }
+  ],
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.test",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "reason": "Implementation is authored. The operator serialized product and Docker validation to a later test invocation, followed by certification ownership in bubbles.validate."
+  },
+  "lastUpdatedAt": "2026-09-02T02:11:15Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single scope. Explicit operator activation is required before implementation.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G026", "G057", "G060", "G068"],
+    "specDoneRequires": "All DoD items need current-session evidence and bubbles.validate certification."
+  },
+  "notes": "The authorized stress test is implemented. No Docker command or product test ran in this invocation, and no test, runtime, database, endpoint, cleanup, or timing result is claimed."
+}

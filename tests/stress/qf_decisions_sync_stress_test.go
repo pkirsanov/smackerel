@@ -14,6 +14,7 @@ package stress
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -31,8 +32,8 @@ import (
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
-// TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity
-// drives a long burst of sync cycles against a fake QF bridge that returns
+// The repeated-cursor packet-identity stress regression drives a long burst
+// of sync cycles against a fake QF bridge that returns
 // the same catalog of packets across many cursor pages and replays. The live
 // PostgreSQL row count for the unique test source MUST stay equal to the
 // number of distinct QF packet IDs, and trace_id metadata MUST be preserved
@@ -43,11 +44,11 @@ func TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity(t
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		t.Skip("stress: DATABASE_URL not set — live stack DB not available")
+		t.Fatal("stress: DATABASE_URL not set — live stack DB is required")
 	}
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
-		t.Skip("stress: NATS_URL not set — live stack not available")
+		t.Fatal("stress: NATS_URL not set — live stack NATS is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -57,13 +58,13 @@ func TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity(t
 	if err != nil {
 		t.Fatalf("connect stress database: %v", err)
 	}
-	defer pool.Close()
+	t.Cleanup(pool.Close)
 
 	natsClient, err := smacknats.Connect(ctx, natsURL, cfg.AuthToken)
 	if err != nil {
 		t.Fatalf("connect stress NATS: %v", err)
 	}
-	defer natsClient.Close()
+	t.Cleanup(natsClient.Close)
 
 	sourceID := fmt.Sprintf("qf-decisions-stress-%d", time.Now().UnixNano())
 	t.Cleanup(func() { qfDecisionsStressCleanup(t, pool, sourceID) })
@@ -77,14 +78,15 @@ func TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity(t
 	envelopes := make(map[string]qfdecisions.QFDecisionPacketEnvelope, totalPackets)
 	pages := make(map[string][]qfdecisions.QFDecisionEvent)
 	cursorOrder := []string{"", "qf-page-2", "qf-page-3", "qf-page-4"}
+	runTimestamp := time.Now().UTC().Format(time.RFC3339Nano)
 	for i := 0; i < totalPackets; i++ {
 		pid := fmt.Sprintf("packet-stress-%d", i)
 		tid := fmt.Sprintf("trace-stress-%d", i)
 		packetIDs = append(packetIDs, pid)
 		traceIDs[pid] = tid
-		envelopes[pid] = stressEnvelope(pid, tid)
+		envelopes[pid] = stressEnvelope(pid, tid, runTimestamp)
 		pageKey := cursorOrder[i/packetsPerPage]
-		pages[pageKey] = append(pages[pageKey], stressEvent(pid, tid, i))
+		pages[pageKey] = append(pages[pageKey], stressEvent(pid, tid, i, runTimestamp))
 	}
 
 	var eventCalls atomic.Int32
@@ -222,7 +224,114 @@ func TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity(t
 	}
 }
 
-func stressEnvelope(packetID, traceID string) qfdecisions.QFDecisionPacketEnvelope {
+func TestQFDecisionsStressCleanupChildReturnsZeroOwnedRows(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Fatal("stress: DATABASE_URL not set — live stack DB is required")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect cleanup regression database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	runID := time.Now().UnixNano()
+	ownedSourceID := fmt.Sprintf("test-qf-cleanup-owned-%d", runID)
+	ownedArtifactIDs := [2]string{
+		fmt.Sprintf("test-qf-cleanup-owned-artifact-a-%d", runID),
+		fmt.Sprintf("test-qf-cleanup-owned-artifact-b-%d", runID),
+	}
+	controlSourceID := fmt.Sprintf("test-qf-cleanup-control-%d", runID)
+	controlArtifactID := fmt.Sprintf("test-qf-cleanup-control-artifact-%d", runID)
+	t.Cleanup(func() { qfDecisionsStressCleanup(t, pool, controlSourceID) })
+
+	if err := qfDecisionsStressSeedCleanupFixture(
+		ctx,
+		pool,
+		controlSourceID,
+		[]string{controlArtifactID},
+		fmt.Sprintf("test-qf-cleanup-external-node-%d", runID),
+	); err != nil {
+		t.Fatalf("seed unowned cleanup control: %v", err)
+	}
+
+	if ok := t.Run("owned-child", func(t *testing.T) {
+		t.Cleanup(func() { qfDecisionsStressCleanup(t, pool, ownedSourceID) })
+		if err := qfDecisionsStressSeedCleanupFixture(
+			ctx,
+			pool,
+			ownedSourceID,
+			ownedArtifactIDs[:],
+			controlArtifactID,
+		); err != nil {
+			t.Fatalf("seed source-owned cleanup fixture: %v", err)
+		}
+	}); !ok {
+		t.Fatal("owned child cleanup regression failed before parent verification")
+	}
+
+	ownedCounts, err := qfDecisionsStressCleanupRowCounts(
+		ctx,
+		pool,
+		ownedSourceID,
+		ownedArtifactIDs[0],
+		ownedArtifactIDs[1],
+	)
+	if err != nil {
+		t.Fatalf("count source-owned rows after child cleanup: %v", err)
+	}
+	if ownedCounts != (qfDecisionsStressCleanupCounts{}) {
+		t.Fatalf("source-owned rows survived child cleanup: %+v", ownedCounts)
+	}
+
+	controlCounts, err := qfDecisionsStressCleanupRowCounts(
+		ctx,
+		pool,
+		controlSourceID,
+		controlArtifactID,
+		controlArtifactID,
+	)
+	if err != nil {
+		t.Fatalf("count unowned control rows after child cleanup: %v", err)
+	}
+	wantControlCounts := qfDecisionsStressCleanupCounts{
+		Artifacts: 1,
+		Annotations: 1,
+		Edges: 1,
+		SyncState: 1,
+	}
+	if controlCounts != wantControlCounts {
+		t.Fatalf("unowned control rows changed during child cleanup: got %+v, want %+v", controlCounts, wantControlCounts)
+	}
+}
+
+func TestQFDecisionsStressCleanupReturnsErrorForClosedPool(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Fatal("stress: DATABASE_URL not set — live stack DB is required")
+	}
+
+	pool, err := pgxpool.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatalf("create cleanup regression pool: %v", err)
+	}
+	pool.Close()
+
+	sourceID := fmt.Sprintf("test-qf-cleanup-closed-pool-%d", time.Now().UnixNano())
+	cleanupErr := qfDecisionsStressCleanupSource(pool, sourceID)
+	if cleanupErr == nil {
+		t.Fatal("cleanup with a closed pool returned nil, want contextual error")
+	}
+	if !strings.Contains(cleanupErr.Error(), "begin cleanup transaction") {
+		t.Fatalf("cleanup with a closed pool returned %q, want begin-transaction context", cleanupErr)
+	}
+}
+
+func stressEnvelope(packetID, traceID, createdAt string) qfdecisions.QFDecisionPacketEnvelope {
 	return qfdecisions.QFDecisionPacketEnvelope{
 		ContractVersion:      1,
 		PacketID:             packetID,
@@ -239,12 +348,12 @@ func stressEnvelope(packetID, traceID string) qfdecisions.QFDecisionPacketEnvelo
 		DeepLink:             "https://qf.example.test/packets/" + packetID,
 		PacketVersion:        1,
 		DecisionType:         qfdecisions.DecisionTypeRecommendation,
-		CreatedAt:            "2026-05-06T00:00:00Z",
-		UpdatedAt:            "2026-05-06T00:00:00Z",
+		CreatedAt:            createdAt,
+		UpdatedAt:            createdAt,
 	}
 }
 
-func stressEvent(packetID, traceID string, i int) qfdecisions.QFDecisionEvent {
+func stressEvent(packetID, traceID string, i int, createdAt string) qfdecisions.QFDecisionEvent {
 	return qfdecisions.QFDecisionEvent{
 		ContractVersion: 1,
 		EventID:         fmt.Sprintf("event-stress-%d", i),
@@ -258,7 +367,7 @@ func stressEvent(packetID, traceID string, i int) qfdecisions.QFDecisionEvent {
 		PacketVersion:   1,
 		Cursor:          fmt.Sprintf("event-checkpoint-%d", i),
 		PacketURL:       "https://qf.example.test/packets/" + packetID,
-		CreatedAt:       "2026-05-06T00:00:00Z",
+		CreatedAt:       createdAt,
 	}
 }
 
@@ -299,33 +408,216 @@ func stressLookupTraceForPacket(t *testing.T, ctx context.Context, pool *pgxpool
 
 func qfDecisionsStressCleanup(t *testing.T, pool *pgxpool.Pool, sourceID string) {
 	t.Helper()
+	if err := qfDecisionsStressCleanupSource(pool, sourceID); err != nil {
+		t.Fatalf("cleanup QF decision stress rows for source %s: %v", sourceID, err)
+	}
+}
+
+const qfDecisionsStressDeleteChildrenSQL = `
+	WITH deleted_edges AS (
+		DELETE FROM edges
+		WHERE src_id = ANY($1::text[]) OR dst_id = ANY($1::text[])
+		RETURNING id
+	)
+	DELETE FROM annotations
+	WHERE artifact_id = ANY($1::text[])
+`
+
+func qfDecisionsStressCleanupSource(pool *pgxpool.Pool, sourceID string) (cleanupErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rows, err := pool.Query(ctx, `SELECT id FROM artifacts WHERE source_id = $1`, sourceID)
+
+	tx, err := pool.Begin(ctx)
 	if err != nil {
-		t.Logf("cleanup query artifacts for %s: %v", sourceID, err)
-		return
+		return fmt.Errorf("begin cleanup transaction for source %s: %w", sourceID, err)
 	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if scanErr := rows.Scan(&id); scanErr == nil {
-			ids = append(ids, id)
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer rollbackCancel()
+		if rollbackErr := tx.Rollback(rollbackCtx); rollbackErr != nil {
+			cleanupErr = errors.Join(
+				cleanupErr,
+				fmt.Errorf("rollback cleanup transaction for source %s: %w", sourceID, rollbackErr),
+			)
+		}
+	}()
+
+	var artifactIDs []string
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(array_agg(id ORDER BY id), ARRAY[]::text[])
+		FROM artifacts
+		WHERE source_id = $1
+	`, sourceID).Scan(&artifactIDs); err != nil {
+		return fmt.Errorf("load artifact IDs for source %s: %w", sourceID, err)
+	}
+
+	if _, err := tx.Exec(ctx, qfDecisionsStressDeleteChildrenSQL, artifactIDs); err != nil {
+		return fmt.Errorf("delete edges for source %s: %w", sourceID, err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM artifacts WHERE source_id = $1`, sourceID); err != nil {
+		return fmt.Errorf("delete artifacts for source %s: %w", sourceID, err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM sync_state WHERE source_id = $1`, sourceID); err != nil {
+		return fmt.Errorf("delete sync state for source %s: %w", sourceID, err)
+	}
+	if _, err := tx.Exec(ctx, qfDecisionsStressDeleteChildrenSQL, artifactIDs); err != nil {
+		return fmt.Errorf("delete children created during parent cleanup for source %s: %w", sourceID, err)
+	}
+
+	var artifacts int64
+	var syncState int64
+	if err := tx.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM artifacts WHERE source_id = $1),
+			(SELECT COUNT(*) FROM sync_state WHERE source_id = $1)
+	`, sourceID).Scan(&artifacts, &syncState); err != nil {
+		return fmt.Errorf("verify parent cleanup for source %s: %w", sourceID, err)
+	}
+	if artifacts != 0 || syncState != 0 {
+		return fmt.Errorf(
+			"verify parent cleanup for source %s: artifacts=%d sync_state=%d, want zero",
+			sourceID,
+			artifacts,
+			syncState,
+		)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit cleanup transaction for source %s: %w", sourceID, err)
+	}
+	committed = true
+	return qfDecisionsStressDrainLateChildren(pool, sourceID, artifactIDs)
+}
+
+func qfDecisionsStressDrainLateChildren(pool *pgxpool.Pool, sourceID string, artifactIDs []string) error {
+	if len(artifactIDs) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	const requiredStableScans = 5
+	stableScans := 0
+	var childEdges int64
+	var childAnnotations int64
+	for stableScans < requiredStableScans {
+		if _, err := pool.Exec(ctx, qfDecisionsStressDeleteChildrenSQL, artifactIDs); err != nil {
+			return fmt.Errorf("drain late children for source %s: %w", sourceID, err)
+		}
+		if err := pool.QueryRow(ctx, `
+			SELECT
+				(SELECT COUNT(*) FROM edges WHERE src_id = ANY($1::text[]) OR dst_id = ANY($1::text[])),
+				(SELECT COUNT(*) FROM annotations WHERE artifact_id = ANY($1::text[]))
+		`, artifactIDs).Scan(&childEdges, &childAnnotations); err != nil {
+			return fmt.Errorf("verify late child cleanup for source %s: %w", sourceID, err)
+		}
+		if childEdges == 0 && childAnnotations == 0 {
+			stableScans++
+		} else {
+			stableScans = 0
+		}
+		if stableScans == requiredStableScans {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf(
+				"drain late children for source %s: edges=%d annotations=%d stable_scans=%d/%d: %w",
+				sourceID,
+				childEdges,
+				childAnnotations,
+				stableScans,
+				requiredStableScans,
+				ctx.Err(),
+			)
+		case <-ticker.C:
 		}
 	}
-	rows.Close()
-	for _, id := range ids {
-		if _, err := pool.Exec(ctx, `DELETE FROM edges WHERE src_id = $1 OR dst_id = $1`, id); err != nil {
-			t.Logf("cleanup edges for artifact %s: %v", id, err)
+	return nil
+}
+
+type qfDecisionsStressCleanupCounts struct {
+	Artifacts   int64
+	Annotations int64
+	Edges       int64
+	SyncState   int64
+}
+
+func qfDecisionsStressCleanupRowCounts(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	sourceID string,
+	firstArtifactID string,
+	secondArtifactID string,
+) (qfDecisionsStressCleanupCounts, error) {
+	var counts qfDecisionsStressCleanupCounts
+	err := pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM artifacts WHERE source_id = $1),
+			(SELECT COUNT(*) FROM annotations WHERE artifact_id IN ($2, $3)),
+			(SELECT COUNT(*) FROM edges WHERE src_id IN ($2, $3) OR dst_id IN ($2, $3)),
+			(SELECT COUNT(*) FROM sync_state WHERE source_id = $1)
+	`, sourceID, firstArtifactID, secondArtifactID).Scan(
+		&counts.Artifacts,
+		&counts.Annotations,
+		&counts.Edges,
+		&counts.SyncState,
+	)
+	if err != nil {
+		return qfDecisionsStressCleanupCounts{}, fmt.Errorf("query cleanup row counts for source %s: %w", sourceID, err)
+	}
+	return counts, nil
+}
+
+func qfDecisionsStressSeedCleanupFixture(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	sourceID string,
+	artifactIDs []string,
+	edgeDestinationID string,
+) error {
+	if len(artifactIDs) == 0 {
+		return fmt.Errorf("seed cleanup fixture for source %s: at least one artifact ID is required", sourceID)
+	}
+	for _, artifactID := range artifactIDs {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO artifacts (id, artifact_type, title, content_hash, source_id)
+			VALUES ($1, 'note', $1, $2, $3)
+		`, artifactID, "hash-"+artifactID, sourceID); err != nil {
+			return fmt.Errorf("seed artifact %s for source %s: %w", artifactID, sourceID, err)
 		}
-		if _, err := pool.Exec(ctx, `DELETE FROM annotations WHERE artifact_id = $1`, id); err != nil {
-			t.Logf("cleanup annotations for artifact %s: %v", id, err)
-		}
 	}
-	if _, err := pool.Exec(ctx, `DELETE FROM artifacts WHERE source_id = $1`, sourceID); err != nil {
-		t.Logf("cleanup artifacts for %s: %v", sourceID, err)
+
+	annotationID := "annotation-" + sourceID
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO annotations (id, artifact_id, annotation_type, note, source_channel)
+		VALUES ($1, $2, 'note', 'cleanup integrity fixture', 'api')
+	`, annotationID, artifactIDs[len(artifactIDs)-1]); err != nil {
+		return fmt.Errorf("seed annotation for source %s: %w", sourceID, err)
 	}
-	if _, err := pool.Exec(ctx, `DELETE FROM sync_state WHERE source_id = $1`, sourceID); err != nil {
-		t.Logf("cleanup sync_state for %s: %v", sourceID, err)
+
+	edgeID := "edge-" + sourceID
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO edges (id, src_type, src_id, dst_type, dst_id, edge_type)
+		VALUES ($1, 'artifact', $2, 'artifact', $3, 'cleanup_integrity')
+	`, edgeID, artifactIDs[0], edgeDestinationID); err != nil {
+		return fmt.Errorf("seed edge for source %s: %w", sourceID, err)
 	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO sync_state (source_id, enabled, sync_cursor, items_synced)
+		VALUES ($1, TRUE, 'cleanup-integrity', $2)
+	`, sourceID, len(artifactIDs)); err != nil {
+		return fmt.Errorf("seed sync state for source %s: %w", sourceID, err)
+	}
+	return nil
 }

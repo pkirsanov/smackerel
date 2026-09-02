@@ -88,6 +88,10 @@ smackerel_is_truthy() {
   esac
 }
 
+smackerel_compose_stdin_is_terminal() {
+  [[ -t 0 ]]
+}
+
 smackerel_compose() {
   local target_env="$1"
   shift
@@ -147,9 +151,11 @@ smackerel_compose() {
     args+=(-f "$SMACKEREL_COMPOSE_OVERRIDE_FILE")
   fi
 
-  # Prevent docker compose exec from hanging on stdin in non-interactive contexts
-  # (e.g. when run under timeout or piped shells)
-  if [[ "${1:-}" == "exec" ]]; then
+  # Close terminal stdin so an ordinary exec cannot wait for interactive input.
+  # Preserve redirected or piped stdin: callers such as psql --file=- use it as
+  # an explicit data channel. Unconditionally replacing it with /dev/null made
+  # those commands exit successfully without processing their input.
+  if [[ "${1:-}" == "exec" ]] && smackerel_compose_stdin_is_terminal; then
     "${args[@]}" "$@" </dev/null
   else
     "${args[@]}" "$@"

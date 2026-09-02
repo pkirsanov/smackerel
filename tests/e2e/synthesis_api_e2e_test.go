@@ -10,12 +10,19 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/smackerel/smackerel/internal/acceptance"
 )
 
 type synthesisLatestBody struct {
@@ -351,10 +358,7 @@ func TestSynthesisAPI_RecoveryFollowsPersistedReadBack(t *testing.T) {
 
 	outcome := synthesisRetryOutcome(t, cfg)
 	if outcome.outputID == "" {
-		// Claimed elsewhere. The recovery claim below needs an output this run
-		// actually produced, so there is nothing to assert rather than something
-		// to assert weakly.
-		t.Skipf("window was claimed elsewhere (outcome=%q); no output from this trigger to verify", outcome.outcome)
+		t.Fatalf("window was claimed elsewhere (outcome=%q); this required recovery path cannot pass without an output from its own trigger", outcome.outcome)
 	}
 
 	// The reported output must be READABLE. Recovery asserted on the strength of
@@ -525,5 +529,323 @@ func TestSynthesisAPI_QuietWindowReadsAsRunNotBroken(t *testing.T) {
 	if parsed.State == "quiet" && parsed.Output.InsightCount != 0 {
 		t.Fatalf("quiet state reported %d insights; the kind and the payload disagree. body=%s",
 			parsed.Output.InsightCount, string(body))
+	}
+}
+
+const synthesisTerminalEventFailureProfile = "synthesis_terminal_event_persistence_failure"
+
+// SCN-004-004-C12 / T004-C12-AUDIT-RED. The fault is activated only after
+// resolving the canonical test-only acceptance profile, then applied at the
+// real PostgreSQL terminal-event boundary. The request still traverses bearer
+// auth, the mounted POST /api/synthesis/retry handler, producer, coordinator,
+// aggregate persistence, production read-back, and terminal-event persistence.
+func TestSynthesisAPI_TerminalEventFailureCannotProduceDeliveryOrSuccess(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 60*time.Second)
+	pool := synthesisAuditE2EPool(t)
+	resetSynthesisAuditE2EState(t, pool)
+
+	deactivateFault := activateSynthesisTerminalEventFailure(t, pool)
+	status, body := synthesisPost(t, cfg, "/api/synthesis/retry", `{"cadence":"daily"}`, true)
+	if status == http.StatusOK || status == http.StatusAccepted {
+		t.Fatalf("terminal-event rejection returned false success status %d; body=%s", status, string(body))
+	}
+	if status != http.StatusInternalServerError {
+		t.Fatalf("terminal-event rejection returned %d, want 500; body=%s", status, string(body))
+	}
+
+	var failure struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &failure); err != nil {
+		t.Fatalf("decode terminal-event failure response: %v; body=%s", err, string(body))
+	}
+	if failure.Error.Code != "audit_persistence_failed" {
+		t.Fatalf("terminal-event failure code=%q, want audit_persistence_failed; body=%s", failure.Error.Code, string(body))
+	}
+	if failure.Error.Message != "Required synthesis audit record could not be stored" {
+		t.Fatalf("terminal-event failure message=%q, want safe closed message; body=%s", failure.Error.Message, string(body))
+	}
+
+	var responseFields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &responseFields); err != nil {
+		t.Fatalf("decode terminal-event failure fields: %v; body=%s", err, string(body))
+	}
+	for _, forbiddenField := range []string{"outcome", "output", "outputId", "delivered", "delivery", "healthy", "persisted", "recovered"} {
+		if _, present := responseFields[forbiddenField]; present {
+			t.Fatalf("terminal-event failure exposed false-success field %q; body=%s", forbiddenField, string(body))
+		}
+	}
+	for _, forbiddenLeak := range []string{
+		"forced terminal event write failure",
+		"23514",
+		"insert into",
+		"synthesis_run_events",
+		"throughline",
+		"sourceartifact",
+	} {
+		if strings.Contains(strings.ToLower(string(body)), forbiddenLeak) {
+			t.Fatalf("terminal-event failure leaked internal/content marker %q; body=%s", forbiddenLeak, string(body))
+		}
+	}
+
+	latestStatus, latestBody := synthesisGet(t, cfg, "/api/synthesis/latest", true)
+	if latestStatus != http.StatusOK {
+		t.Fatalf("latest after terminal-event failure returned %d, want 200; body=%s", latestStatus, string(latestBody))
+	}
+	var latest synthesisLatestBody
+	if err := json.Unmarshal(latestBody, &latest); err != nil {
+		t.Fatalf("decode latest after terminal-event failure: %v; body=%s", err, string(latestBody))
+	}
+	if latest.State != "never-run" || latest.Output != nil {
+		t.Fatalf("terminal-event failure surfaced an output state=%q output=%+v; body=%s", latest.State, latest.Output, string(latestBody))
+	}
+
+	historyStatus, historyBody := synthesisGet(t, cfg, "/api/synthesis/runs?limit=10", true)
+	if historyStatus != http.StatusOK {
+		t.Fatalf("history after terminal-event failure returned %d, want 200; body=%s", historyStatus, string(historyBody))
+	}
+	var history struct {
+		Runs []json.RawMessage `json:"runs"`
+	}
+	if err := json.Unmarshal(historyBody, &history); err != nil {
+		t.Fatalf("decode history after terminal-event failure: %v; body=%s", err, string(historyBody))
+	}
+	if len(history.Runs) != 0 {
+		t.Fatalf("terminal-event failure exposed %d successful history row(s); body=%s", len(history.Runs), string(historyBody))
+	}
+
+	healthStatus, healthBody := synthesisGet(t, cfg, "/api/health?strict=true", true)
+	if healthStatus != http.StatusServiceUnavailable {
+		t.Fatalf("strict health after terminal-event failure returned %d, want 503; body=%s", healthStatus, string(healthBody))
+	}
+	var health struct {
+		Status   string `json:"status"`
+		Services map[string]struct {
+			Status string `json:"status"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(healthBody, &health); err != nil {
+		t.Fatalf("decode strict health after terminal-event failure: %v; body=%s", err, string(healthBody))
+	}
+	intelligenceHealth, present := health.Services["intelligence"]
+	if !present {
+		t.Fatalf("strict health omitted intelligence state after a synthesis attempt; body=%s", string(healthBody))
+	}
+	if health.Status == "healthy" || intelligenceHealth.Status == "up" {
+		t.Fatalf("terminal-event failure produced a healthy claim overall=%q intelligence=%q; body=%s",
+			health.Status, intelligenceHealth.Status, string(healthBody))
+	}
+
+	assertSynthesisTerminalEventFailureState(t, pool)
+
+	// Positive control: removing only the registered fault must let the SAME
+	// production route finish, publish its terminal audit event, and return an
+	// output that the mounted production read route can retrieve.
+	deactivateFault()
+	positiveStatus, positiveBody := synthesisPost(t, cfg, "/api/synthesis/retry", `{"cadence":"daily"}`, true)
+	if positiveStatus != http.StatusOK {
+		t.Fatalf("positive-control retry returned %d, want 200; body=%s", positiveStatus, string(positiveBody))
+	}
+	var positive struct {
+		Outcome string `json:"outcome"`
+		Output  *struct {
+			OutputID string `json:"outputId"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(positiveBody, &positive); err != nil {
+		t.Fatalf("decode positive-control retry: %v; body=%s", err, string(positiveBody))
+	}
+	if positive.Outcome != "persisted" || positive.Output == nil || positive.Output.OutputID == "" {
+		t.Fatalf("positive-control retry did not report a persisted identity; body=%s", string(positiveBody))
+	}
+	detailStatus, detailBody := synthesisGet(t, cfg, "/api/synthesis/runs/"+positive.Output.OutputID, true)
+	if detailStatus != http.StatusOK {
+		t.Fatalf("positive-control output %s did not read back: status=%d body=%s",
+			positive.Output.OutputID, detailStatus, string(detailBody))
+	}
+	var detail struct {
+		Output struct {
+			OutputID string `json:"outputId"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(detailBody, &detail); err != nil {
+		t.Fatalf("decode positive-control read-back: %v; body=%s", err, string(detailBody))
+	}
+	if detail.Output.OutputID != positive.Output.OutputID {
+		t.Fatalf("positive-control read-back id=%q, want %q", detail.Output.OutputID, positive.Output.OutputID)
+	}
+}
+
+func synthesisAuditE2EPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if databaseURL == "" {
+		t.Fatal("T004-C12-AUDIT-RED requires DATABASE_URL from ./smackerel.sh test e2e")
+	}
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		t.Fatalf("parse T004-C12 DATABASE_URL: %v", err)
+	}
+	config.MaxConns = 2
+	config.MinConns = 0
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatalf("connect T004-C12 PostgreSQL: %v", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		t.Fatalf("ping T004-C12 PostgreSQL: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+func resetSynthesisAuditE2EState(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if _, err := pool.Exec(ctx, `
+		TRUNCATE synthesis_run_events, synthesis_citations,
+			synthesis_output_insights, synthesis_output_source_classes,
+			synthesis_outputs, synthesis_run_attempts, synthesis_runs
+		RESTART IDENTITY CASCADE
+	`); err != nil {
+		t.Fatalf("reset T004-C12 synthesis state: %v", err)
+	}
+}
+
+func activateSynthesisTerminalEventFailure(t *testing.T, pool *pgxpool.Pool) func() {
+	t.Helper()
+	registry, err := acceptance.LoadCanonicalRegistry()
+	if err != nil {
+		t.Fatalf("load canonical fault-profile registry: %v", err)
+	}
+	profile, err := registry.Resolve(acceptance.PostureTest, synthesisTerminalEventFailureProfile)
+	if err != nil {
+		t.Fatalf("resolve T004-C12 test fault profile: %v", err)
+	}
+	if profile.Journey != "synthesis" || profile.NoFirstPartyInterception == nil || !*profile.NoFirstPartyInterception {
+		t.Fatalf("T004-C12 fault profile is not a synthesis/no-interception profile: %+v", profile)
+	}
+	if _, err := registry.Resolve(acceptance.PostureProduction, synthesisTerminalEventFailureProfile); !errors.Is(err, acceptance.ErrFaultInertInProduction) {
+		t.Fatalf("T004-C12 fault profile activated under production posture: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if _, err := pool.Exec(ctx, `
+		DROP TRIGGER IF EXISTS e2e_fail_synthesis_terminal_event ON synthesis_run_events;
+		DROP FUNCTION IF EXISTS e2e_fail_synthesis_terminal_event();
+		CREATE FUNCTION e2e_fail_synthesis_terminal_event()
+		RETURNS TRIGGER LANGUAGE plpgsql AS $$
+		BEGIN
+			RAISE EXCEPTION 'forced terminal event write failure'
+				USING ERRCODE = '23514';
+		END;
+		$$;
+		CREATE TRIGGER e2e_fail_synthesis_terminal_event
+		BEFORE INSERT ON synthesis_run_events
+		FOR EACH ROW WHEN (NEW.event_type IN (
+			'idempotent', 'persisted', 'quiet', 'partial', 'rolled_back',
+			'retryable_failure', 'failed', 'readback_failed', 'recovered'
+		))
+		EXECUTE FUNCTION e2e_fail_synthesis_terminal_event();
+	`); err != nil {
+		t.Fatalf("activate T004-C12 terminal-event fault: %v", err)
+	}
+
+	active := true
+	deactivate := func() {
+		if !active {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		if _, err := pool.Exec(cleanupCtx, `
+			DROP TRIGGER IF EXISTS e2e_fail_synthesis_terminal_event ON synthesis_run_events;
+			DROP FUNCTION IF EXISTS e2e_fail_synthesis_terminal_event();
+		`); err != nil {
+			t.Fatalf("deactivate T004-C12 terminal-event fault: %v", err)
+		}
+		active = false
+	}
+	t.Cleanup(deactivate)
+	return deactivate
+}
+
+func assertSynthesisTerminalEventFailureState(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var runState, runLifecycle, attemptState, attemptOutcome string
+	var attemptOutputID, failureCode, failureMessage string
+	var includedCount, omittedCount, insightCount, citationCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT r.state, r.lifecycle_state, a.state, a.outcome,
+			COALESCE(a.output_id, ''), COALESCE(a.failure_code, ''),
+			COALESCE(a.failure_message, ''),
+			cardinality(a.included_source_classes),
+			cardinality(a.omitted_source_classes),
+			a.insight_count, a.citation_count
+		FROM synthesis_run_attempts a
+		JOIN synthesis_runs r ON r.id = a.run_id
+		WHERE a.trigger_kind = 'operator_retry'
+		ORDER BY a.recorded_at DESC, a.id DESC
+		LIMIT 1
+	`).Scan(&runState, &runLifecycle, &attemptState, &attemptOutcome,
+		&attemptOutputID, &failureCode, &failureMessage,
+		&includedCount, &omittedCount, &insightCount, &citationCount); err != nil {
+		t.Fatalf("read T004-C12 attempt state: %v", err)
+	}
+	if runState == "succeeded" || attemptState != "running" || attemptOutcome != "running" {
+		t.Fatalf("terminal-event failure state run=%q lifecycle=%q attempt=%q outcome=%q, want no success and an unfinalized attempt",
+			runState, runLifecycle, attemptState, attemptOutcome)
+	}
+	if runLifecycle != "superseded" || attemptOutputID != "" || failureCode != "" || failureMessage != "" ||
+		includedCount != 0 || omittedCount != 0 || insightCount != 0 || citationCount != 0 {
+		t.Fatalf("terminal-event failure audit summary is not content-free/truthful: runLifecycle=%q output=%q code=%q message=%q included=%d omitted=%d insights=%d citations=%d",
+			runLifecycle, attemptOutputID, failureCode, failureMessage,
+			includedCount, omittedCount, insightCount, citationCount)
+	}
+
+	var totalOutputs, currentOutputs, succeededRuns int
+	if err := pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM synthesis_outputs),
+			(SELECT COUNT(*) FROM synthesis_outputs WHERE lifecycle_state = 'current'),
+			(SELECT COUNT(*) FROM synthesis_runs WHERE state = 'succeeded')
+	`).Scan(&totalOutputs, &currentOutputs, &succeededRuns); err != nil {
+		t.Fatalf("count T004-C12 output state: %v", err)
+	}
+	if totalOutputs != 1 || currentOutputs != 0 || succeededRuns != 0 {
+		t.Fatalf("terminal-event failure outputs total/current/succeeded-runs=%d/%d/%d, want 1 forensic/0/0",
+			totalOutputs, currentOutputs, succeededRuns)
+	}
+
+	var startedEvents, terminalEvents, unsafeEventRows int
+	if err := pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE event_type = 'attempt_started'),
+			COUNT(*) FILTER (WHERE event_type IN (
+				'idempotent', 'persisted', 'quiet', 'partial', 'rolled_back',
+				'retryable_failure', 'failed', 'readback_failed', 'recovered'
+			)),
+			COUNT(*) FILTER (WHERE output_id IS NOT NULL
+				OR related_output_id IS NOT NULL OR failure_code IS NOT NULL
+				OR insight_count IS NOT NULL OR citation_count IS NOT NULL)
+		FROM synthesis_run_events
+	`).Scan(&startedEvents, &terminalEvents, &unsafeEventRows); err != nil {
+		t.Fatalf("read T004-C12 event state: %v", err)
+	}
+	if startedEvents != 1 || terminalEvents != 0 || unsafeEventRows != 0 {
+		t.Fatalf("terminal-event failure events started/terminal/unsafe=%d/%d/%d, want 1/0/0",
+			startedEvents, terminalEvents, unsafeEventRows)
 	}
 }

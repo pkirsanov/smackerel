@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "featureDir": "specs/041-qf-companion-connector/bugs/BUG-001-qf-stress-cleanup-integrity",
+  "generatedAt": "2026-09-02T01:52:06Z",
+  "generatedBy": "bubbles.bug",
+  "planningOwner": "bubbles.plan",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-041-BUG001-001",
+      "scope": "SCOPE-01",
+      "title": "Cleanup runs before live resources close",
+      "gherkin": {
+        "given": "A QF stress test has opened PostgreSQL and NATS and registered close callbacks before its source-owned cleanup callback",
+        "when": "The testing package executes cleanup callbacks in LIFO order",
+        "then": "Owned-row cleanup completes before NATS close and PostgreSQL pool close"
+      },
+      "behaviorClass": "test-harness",
+      "changeType": "bugfix",
+      "requiredTestType": ["stress", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/qf_decisions_sync_stress_test.go",
+          "testId": "TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity"
+        },
+        {
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "testId": "TestQFDecisionsFreshnessSLAP95IngestRender"
+        },
+        {
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "testId": "TestQFDecisionsFreshnessSLAP95RenderAndCombined"
+        }
+      ],
+      "plannedTests": [],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-041-BUG001-002",
+      "scope": "SCOPE-01",
+      "title": "Parent observes zero owned parent and child rows",
+      "gherkin": {
+        "given": "A child created owned artifacts, annotations, edges, and sync state beside an unowned control artifact",
+        "when": "The child returns and its cleanup callback completes",
+        "then": "The parent observes zero owned rows in every table while the control artifact remains"
+      },
+      "behaviorClass": "data-isolation",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/qf_decisions_sync_stress_test.go",
+          "plannedTestId": "TestQFDecisionsStressCleanupChildReturnsZeroOwnedRows",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-041-BUG001-003",
+      "scope": "SCOPE-01",
+      "title": "Cleanup failure cannot become a passing log",
+      "gherkin": {
+        "given": "The cleanup core receives a closed or unusable PostgreSQL pool",
+        "when": "Set-based cleanup is attempted",
+        "then": "A contextual error is returned and the test wrapper fails loud"
+      },
+      "behaviorClass": "error-path",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/qf_decisions_sync_stress_test.go",
+          "plannedTestId": "TestQFDecisionsStressCleanupReturnsErrorForClosedPool",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-041-BUG001-004",
+      "scope": "SCOPE-01",
+      "title": "Freshness fixtures use current-run time",
+      "gherkin": {
+        "given": "A QF sync or freshness stress run starts now",
+        "when": "Decision events and packet envelopes are built",
+        "then": "Stable sync fixtures share a run timestamp and freshness fixtures use response-time timestamps instead of a historical literal"
+      },
+      "behaviorClass": "freshness",
+      "changeType": "bugfix",
+      "requiredTestType": ["stress", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/qf_decisions_sync_stress_test.go",
+          "testId": "TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity"
+        },
+        {
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "testId": "TestQFDecisionsFreshnessSLAP95IngestRender"
+        },
+        {
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "testId": "TestQFDecisionsFreshnessSLAP95RenderAndCombined"
+        }
+      ],
+      "plannedTests": [],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

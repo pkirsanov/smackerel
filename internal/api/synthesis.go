@@ -278,7 +278,7 @@ func (h *SynthesisHandlers) Retry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agg, err := h.Producer.RunAndPersist(r.Context(), cadence, synthesisRetryPrincipal, time.Now().UTC())
+	agg, err := h.Producer.RunAndPersist(r.Context(), cadence, intelligence.TriggerOperatorRetry, time.Now().UTC())
 	switch {
 	case errors.Is(err, intelligence.ErrRunClaimedElsewhere):
 		// Not an error condition. Another process holds the window and is doing
@@ -291,6 +291,14 @@ func (h *SynthesisHandlers) Retry(w http.ResponseWriter, r *http.Request) {
 			// The failure CLASS is safe to return; the candidate content that
 			// caused it is not, and the validator already keeps it out.
 			writeError(w, http.StatusUnprocessableEntity, string(ve.Code), "Synthesis candidate was rejected")
+			return
+		}
+		var auditErr *intelligence.SynthesisAuditPersistenceError
+		if errors.As(err, &auditErr) {
+			// The typed class is safe at the API boundary; its operation and
+			// wrapped database cause are intentionally not serialized.
+			writeError(w, http.StatusInternalServerError, string(intelligence.FailureAudit),
+				"Required synthesis audit record could not be stored")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "synthesis_retry_failed", "Synthesis run failed")
@@ -309,9 +317,3 @@ func (h *SynthesisHandlers) Retry(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
-
-// synthesisRetryPrincipal keeps an operator retry on the SAME logical identity
-// as the scheduled run for that window. A distinct principal would make the
-// retry a different logical key, so it would produce a second output instead of
-// converging on the existing one.
-const synthesisRetryPrincipal = "scheduler"

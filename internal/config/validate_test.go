@@ -1,8 +1,11 @@
 package config
 
 import (
+	"os"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidate_AllPresent(t *testing.T) {
@@ -667,9 +670,198 @@ func TestLoad_ConnectorPathFieldsOptional(t *testing.T) {
 	}
 }
 
+var synthesisRunPolicyTestEnv = map[string]string{
+	"SYNTHESIS_ACTOR_USER_ID":             "global-corpus",
+	"SYNTHESIS_DAILY_CRON":                "0 2 * * *",
+	"SYNTHESIS_WEEKLY_CRON":               "0 16 * * 0",
+	"SYNTHESIS_RETRY_BUDGET":              "2",
+	"SYNTHESIS_RETRY_BACKOFF_SECONDS":     "2",
+	"SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS": "30",
+	"SYNTHESIS_LEASE_SECONDS":             "600",
+	"SYNTHESIS_POLICY_VERSION":            "synthesis/v1",
+	"SYNTHESIS_REQUIRED_SOURCE_CLASSES":   `["canonical-graph"]`,
+	"SYNTHESIS_OPTIONAL_SOURCE_CLASSES":   `[]`,
+	"SYNTHESIS_RETENTION_SECONDS":         "7776000",
+}
+
+func setValidSynthesisRunPolicyEnv(t *testing.T) {
+	t.Helper()
+	for key, value := range synthesisRunPolicyTestEnv {
+		t.Setenv(key, value)
+	}
+}
+
+// This is the fail-loud Scope 7 synthesis run-policy contract. Every value
+// must come from generated environment configuration; missing, empty,
+// malformed, out-of-range, or unsupported input must stop Load rather than
+// selecting a code default.
+func TestSynthesisRunPolicyIsRequiredAndHasNoFallback(t *testing.T) {
+	type invalidCase struct {
+		name  string
+		key   string
+		value string
+		unset bool
+	}
+
+	keys := []string{
+		"SYNTHESIS_ACTOR_USER_ID",
+		"SYNTHESIS_DAILY_CRON",
+		"SYNTHESIS_WEEKLY_CRON",
+		"SYNTHESIS_RETRY_BUDGET",
+		"SYNTHESIS_RETRY_BACKOFF_SECONDS",
+		"SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS",
+		"SYNTHESIS_LEASE_SECONDS",
+		"SYNTHESIS_POLICY_VERSION",
+		"SYNTHESIS_REQUIRED_SOURCE_CLASSES",
+		"SYNTHESIS_OPTIONAL_SOURCE_CLASSES",
+		"SYNTHESIS_RETENTION_SECONDS",
+	}
+
+	cases := make([]invalidCase, 0, len(keys)*2+20)
+	for _, key := range keys {
+		name := strings.ToLower(strings.TrimPrefix(key, "SYNTHESIS_"))
+		cases = append(cases,
+			invalidCase{name: "missing_" + name, key: key, unset: true},
+			invalidCase{name: "empty_" + name, key: key, value: ""},
+		)
+	}
+	cases = append(cases,
+		invalidCase{name: "blank_actor", key: "SYNTHESIS_ACTOR_USER_ID", value: "   "},
+		invalidCase{name: "malformed_daily_cron", key: "SYNTHESIS_DAILY_CRON", value: "not a cron"},
+		invalidCase{name: "malformed_weekly_cron", key: "SYNTHESIS_WEEKLY_CRON", value: "0 16 * *"},
+		invalidCase{name: "negative_retry_budget", key: "SYNTHESIS_RETRY_BUDGET", value: "-1"},
+		invalidCase{name: "retry_budget_above_bound", key: "SYNTHESIS_RETRY_BUDGET", value: "11"},
+		invalidCase{name: "malformed_retry_budget", key: "SYNTHESIS_RETRY_BUDGET", value: "two"},
+		invalidCase{name: "zero_initial_backoff", key: "SYNTHESIS_RETRY_BACKOFF_SECONDS", value: "0"},
+		invalidCase{name: "negative_initial_backoff", key: "SYNTHESIS_RETRY_BACKOFF_SECONDS", value: "-2"},
+		invalidCase{name: "malformed_initial_backoff", key: "SYNTHESIS_RETRY_BACKOFF_SECONDS", value: "2s"},
+		invalidCase{name: "zero_max_backoff", key: "SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS", value: "0"},
+		invalidCase{name: "negative_max_backoff", key: "SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS", value: "-30"},
+		invalidCase{name: "max_backoff_below_initial", key: "SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS", value: "1"},
+		invalidCase{name: "zero_lease", key: "SYNTHESIS_LEASE_SECONDS", value: "0"},
+		invalidCase{name: "negative_lease", key: "SYNTHESIS_LEASE_SECONDS", value: "-600"},
+		invalidCase{name: "blank_policy_version", key: "SYNTHESIS_POLICY_VERSION", value: "\t"},
+		invalidCase{name: "malformed_required_classes", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `{not-json}`},
+		invalidCase{name: "required_classes_wrong_shape", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `{}`},
+		invalidCase{name: "required_classes_wrong_type", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `[1]`},
+		invalidCase{name: "required_classes_empty", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `[]`},
+		invalidCase{name: "required_classes_empty_value", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `[""]`},
+		invalidCase{name: "required_classes_duplicate", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `["canonical-graph","canonical-graph"]`},
+		invalidCase{name: "required_classes_unknown", key: "SYNTHESIS_REQUIRED_SOURCE_CLASSES", value: `["unknown-source"]`},
+		invalidCase{name: "malformed_optional_classes", key: "SYNTHESIS_OPTIONAL_SOURCE_CLASSES", value: `{not-json}`},
+		invalidCase{name: "optional_classes_wrong_shape", key: "SYNTHESIS_OPTIONAL_SOURCE_CLASSES", value: `{}`},
+		invalidCase{name: "optional_classes_wrong_type", key: "SYNTHESIS_OPTIONAL_SOURCE_CLASSES", value: `[1]`},
+		invalidCase{name: "optional_classes_empty_value", key: "SYNTHESIS_OPTIONAL_SOURCE_CLASSES", value: `[""]`},
+		invalidCase{name: "optional_classes_unknown", key: "SYNTHESIS_OPTIONAL_SOURCE_CLASSES", value: `["future-source"]`},
+		invalidCase{name: "zero_retention", key: "SYNTHESIS_RETENTION_SECONDS", value: "0"},
+		invalidCase{name: "negative_retention", key: "SYNTHESIS_RETENTION_SECONDS", value: "-1"},
+		invalidCase{name: "malformed_retention", key: "SYNTHESIS_RETENTION_SECONDS", value: "90d"},
+		invalidCase{name: "duration_overflow", key: "SYNTHESIS_RETENTION_SECONDS", value: "9223372037"},
+	)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setRequiredEnv(t)
+			if tc.unset {
+				if err := os.Unsetenv(tc.key); err != nil {
+					t.Fatalf("unset %s: %v", tc.key, err)
+				}
+			} else {
+				t.Setenv(tc.key, tc.value)
+			}
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("expected %s=%q to fail loudly", tc.key, tc.value)
+			}
+			if !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("error must name %s, got: %v", tc.key, err)
+			}
+		})
+	}
+
+	t.Run("valid_recommended_values", func(t *testing.T) {
+		setRequiredEnv(t)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("load valid synthesis policy: %v", err)
+		}
+		if cfg.Synthesis.ActorUserID != "global-corpus" {
+			t.Fatalf("actor mismatch: %q", cfg.Synthesis.ActorUserID)
+		}
+		if cfg.Synthesis.DailyCron != "0 2 * * *" {
+			t.Fatalf("daily cron mismatch: %q", cfg.Synthesis.DailyCron)
+		}
+		if cfg.Synthesis.WeeklyCron != "0 16 * * 0" {
+			t.Fatalf("weekly cron mismatch: %q", cfg.Synthesis.WeeklyCron)
+		}
+		if cfg.Synthesis.RetryBudget != 2 {
+			t.Fatalf("retry budget mismatch: %d", cfg.Synthesis.RetryBudget)
+		}
+		maxAttempts, err := cfg.Synthesis.MaxAttempts()
+		if err != nil {
+			t.Fatalf("derive max attempts: %v", err)
+		}
+		if maxAttempts != 3 {
+			t.Fatalf("MaxAttempts must equal retry budget + 1; got %d", maxAttempts)
+		}
+		if cfg.Synthesis.RetryBackoff != 2*time.Second {
+			t.Fatalf("initial backoff mismatch: %s", cfg.Synthesis.RetryBackoff)
+		}
+		if cfg.Synthesis.RetryMaxBackoff != 30*time.Second {
+			t.Fatalf("max backoff mismatch: %s", cfg.Synthesis.RetryMaxBackoff)
+		}
+		if cfg.Synthesis.LeaseTTL != 10*time.Minute {
+			t.Fatalf("lease mismatch: %s", cfg.Synthesis.LeaseTTL)
+		}
+		if cfg.Synthesis.PolicyVersion != "synthesis/v1" {
+			t.Fatalf("policy version mismatch: %q", cfg.Synthesis.PolicyVersion)
+		}
+		if !reflect.DeepEqual(cfg.Synthesis.RequiredSourceClasses, []string{"canonical-graph"}) {
+			t.Fatalf("required source classes mismatch: %#v", cfg.Synthesis.RequiredSourceClasses)
+		}
+		if !reflect.DeepEqual(cfg.Synthesis.OptionalSourceClasses, []string{}) {
+			t.Fatalf("optional source classes mismatch: %#v", cfg.Synthesis.OptionalSourceClasses)
+		}
+		if cfg.Synthesis.Retention != 90*24*time.Hour {
+			t.Fatalf("retention mismatch: %s", cfg.Synthesis.Retention)
+		}
+	})
+
+	t.Run("zero_retry_budget_means_one_total_attempt", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("SYNTHESIS_RETRY_BUDGET", "0")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("zero retry budget must be valid: %v", err)
+		}
+		maxAttempts, err := cfg.Synthesis.MaxAttempts()
+		if err != nil {
+			t.Fatalf("derive max attempts: %v", err)
+		}
+		if maxAttempts != 1 {
+			t.Fatalf("zero retries must produce one total attempt, got %d", maxAttempts)
+		}
+	})
+
+	t.Run("bounded_every_cadences_are_valid_for_the_test_overlay", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("SYNTHESIS_DAILY_CRON", "@every 8s")
+		t.Setenv("SYNTHESIS_WEEKLY_CRON", "@every 11s")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("bounded test cadences must parse through the production loader: %v", err)
+		}
+		if cfg.Synthesis.DailyCron != "@every 8s" || cfg.Synthesis.WeeklyCron != "@every 11s" {
+			t.Fatalf("test cadence mismatch: daily=%q weekly=%q", cfg.Synthesis.DailyCron, cfg.Synthesis.WeeklyCron)
+		}
+	})
+}
+
 // setRequiredEnv sets all required env vars with test values.
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
+	setValidSynthesisRunPolicyEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
 	t.Setenv("NATS_URL", "nats://localhost:4222")
 	t.Setenv("LLM_PROVIDER", "openai")

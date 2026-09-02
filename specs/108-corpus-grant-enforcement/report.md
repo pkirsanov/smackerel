@@ -236,6 +236,18 @@ PASS: go-e2e-corpus-enforce
 # the final code state rather than against the state before the fix.
 ```
 
+### Concrete artifact evidence mapping
+
+This index links current Test Plan locations to evidence already recorded in `scopes.md`.
+It adds no execution claim and does not alter the existing evidence.
+
+| Concrete artifact | Existing evidence mapping |
+|---|---|
+| `internal/auth/browser_session_policy_test.go` | `TP-01-01` and `TP-03-01`; [Scope 01](scopes.md#scope-01-scope-registration-prerequisite) and [Scope 03](scopes.md#scope-03-gate-mount) |
+| `internal/api/router_corpus_gate_test.go` | `TP-03-04` and `TP-03-12`; [Scope 03](scopes.md#scope-03-gate-mount) |
+| `cmd/core/cmd_auth.go` | Production mechanism mapped by `TP-04-10`; the recorded test evidence names `cmd/core/cmd_auth_test.go` in [Scope 04](scopes.md#scope-04-caller-remediation) |
+| `docs/releases/v1/features.md` | Contract target for `TP-05-05` and `SCN-108-R04`; [Scope 05](scopes.md#scope-05-docs-release-train-flag-bundles) |
+
 ### Shared-infrastructure canary, proven non-vacuous
 
 A green canary only means something if a broken registry would turn it red. That was tested

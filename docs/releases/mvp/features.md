@@ -33,6 +33,13 @@
     2. Spec 039 is now `required`, not `carried`. The 2026-08-04 exclusion rested on
        a guard-parse defect that has since been fixed in the guard itself; see the
        corrected Census row below. The legacy-estate enforced count moves 74 -> 75.
+
+    RE-RECONCILED 2026-09-02 for active Spec 004 corrective recertification. Its
+    invalidation ledger preserves the prior `done`, validate-certified delivery,
+    while its live state remains `in_progress` with Scope 8 `Not Started`. The
+    prior delivery is therefore `carried` with a blocking regression posture for
+    this publication checkpoint. It returns to `required` only after terminal,
+    validate-certified recertification. No corrective Scope 8 delivery is claimed.
 -->
 <!-- bubbles:reconciled-packet schemaVersion=1 phase=mvp -->
 
@@ -75,7 +82,7 @@
 <!-- bubbles:feature id=cf-roadmap-specs spec=specs/001-smackerel-mvp delivery=required -->
 <!-- bubbles:feature id=cf-core-runtime-stack spec=specs/002-phase1-foundation delivery=required -->
 <!-- bubbles:feature id=cf-capture-pipeline spec=specs/003-phase2-ingestion delivery=required -->
-<!-- bubbles:feature id=cf-phase3-intelligence spec=specs/004-phase3-intelligence delivery=required -->
+<!-- bubbles:feature id=cf-phase3-intelligence spec=specs/004-phase3-intelligence delivery=carried carried-regression=blocking -->
 <!-- bubbles:feature id=cf-phase4-expansion spec=specs/005-phase4-expansion delivery=required -->
 <!-- bubbles:feature id=cf-phase5-advanced spec=specs/006-phase5-advanced delivery=required -->
 
@@ -171,8 +178,8 @@ This packet is the **home packet** for two disjoint groups:
 
 | Group | Membership test | Count | Enforced (`required`) |
 |---|---|---:|---:|
-| mvp-train delivery set | `state.json` has `releaseTrain: mvp` | 20 | 16 |
-| Pre-078 legacy estate | `state.json` has no `releaseTrain` field | 79 | 75 |
+| mvp-train delivery set | `state.json` has `releaseTrain: mvp` | 21 | 16 |
+| Pre-078 legacy estate | `state.json` has no `releaseTrain` field | 78 | 74 |
 | Operational specs | `specs/_ops/*` with a `state.json`, no train or `mvp` | 6 | 0 |
 
 > Counts re-derived 2026-08-27 at `HEAD` `8a599234`. The mvp-train group moved
@@ -180,16 +187,25 @@ This packet is the **home packet** for two disjoint groups:
 > that single increment is spec 039, whose exclusion no longer holds — see its row
 > below.
 
+> Counts re-derived again 2026-09-02 from current `state.json` membership and
+> packet bindings. Spec 004 now declares `releaseTrain: mvp`, so the mvp-train
+> group is 21 and the pre-078 group is 78. Its active corrective recertification
+> changes only its binding from `required` to `carried`, leaving 16 enforced mvp
+> specs and 74 enforced legacy specs. Its stable `cf-phase3-intelligence` ID is
+> preserved.
+
 Specs on `releaseTrain: next` home to [`../next/features.md`](../next/features.md)
 and are deliberately absent here. A spec bound in **no** packet is a defect.
 
 **Every class above was derived, not asserted.** For each bound spec the guard's own
-required-feature test was replayed at `HEAD` `8a599234`: status terminal-for-mode,
-`validate` present in the completed-phase record, status not `blocked`. Thirteen bound
-specs fail that test, and those thirteen are exactly the ones that are not `required`:
+required-feature test was replayed: status terminal-for-mode, `validate` present in
+the completed-phase record, status not `blocked`. Fourteen bound specs fail that
+test at the current state. Together with spec 025's capability-level deferral,
+they form the fifteen distinct specs classified below as non-required:
 
 | Spec | Observed state | Class | Why not `required` |
 |---|---|---|---|
+| [`004-phase3-intelligence`](../../../specs/004-phase3-intelligence/) | `in_progress`; `requiresRevalidation: true`; the invalidation ledger preserves prior `done` and validate certification | `carried` (`carried-regression=blocking`) | The previously delivered Phase 3 intelligence capability is carried for this publication checkpoint while corrective Scope 7/8 recertification remains active. Scope 8 is `Not Started` and is not claimed delivered. Flip back to `required` only after the full-delivery spec reaches terminal, validate-certified recertification. |
 | [`025-knowledge-synthesis-layer`](../../../specs/025-knowledge-synthesis-layer/) | `done` | `deferred-to:v1` (×2) | The spec itself is delivered; two *capabilities* it carries (M1b calendar-triggered briefs, M1c full promise engine) are deferred to phase `v1`. This is a capability-level deferral, not a spec-state failure — the only entry in this table of that kind. |
 | [`058-chrome-extension-bridge`](../../../specs/058-chrome-extension-bridge/) | `blocked` | `deferred-to:v1` | Sole remaining DoD row is a keyless-OIDC cosign identity binding that requires a real tagged CI release; it cannot be produced or honestly faked on a developer box. |
 | [`063-knowledge-ai-enrichment`](../../../specs/063-knowledge-ai-enrichment/) | `specs_hardened` | `optional` | `product-to-planning` planning artifact — no delivered source. The enrichment *capability* ships via 061/064, which are separately `required` above. |
@@ -222,7 +238,10 @@ rewrite that `state.json` is **discharged — no spec edit is needed or wanted.*
 **Flip conditions.** Each `optional` above becomes `required` the moment its spec
 reaches a terminal, validate-certified, non-blocked state — nothing else needs to
 change, and the census command in [`../README.md`](../README.md) will surface any
-binding that has fallen behind its spec.
+binding that has fallen behind its spec. The `cf-phase3-intelligence` carried
+binding flips back to `required` only after Spec 004 completes terminal,
+validate-certified recertification. Until then, its prior delivery remains
+carried and corrective Scope 8 remains explicitly undelivered.
 
 **Two prior claims did not survive re-derivation.** The previous packet recorded
 [`054-notification-intelligence-handler`](../../../specs/054-notification-intelligence-handler/)
@@ -277,7 +296,7 @@ All capabilities below were certified `done` (or equivalent terminal-for-mode) b
 | Web username/password login + web/mobile assistant frontend | 070, 073 | delivered |
 | WhatsApp Business transport | 072 | delivered |
 | Capture-as-fallback policy | 074 | delivered |
-| Phase roadmap specs (intentionally high-level) | 001, 002, 003, 004, 005, 006 | delivered |
+| Phase roadmap specs (intentionally high-level) | 001, 002, 003, 004, 005, 006 | 001–003 and 005–006 delivered; 004 prior delivery carried during corrective recertification, with Scope 8 `Not Started` and not claimed delivered |
 
 ### Connector roster (LOCKED at MVP — no additions in MVP)
 
@@ -373,7 +392,7 @@ the two specs flagged by finding F-13.
 
 ## Capability evidence trace
 
-Every "delivered" claim in the carry-forward table traces to a spec folder under [`specs/`](../../../specs/) whose `state.json` was certified at `done` (or terminal-for-mode equivalent) per [`specs/_spec-review-report.md`](../../../specs/_spec-review-report.md) audit on 2026-06-02. No capability is claimed delivered without a spec reference. No capability is fabricated.
+Every current "delivered" claim in the carry-forward table traces to a spec folder under [`specs/`](../../../specs/) whose `state.json` is certified at `done` (or terminal-for-mode equivalent). Spec 004 is explicitly classified as prior delivery carried during corrective recertification: its `state.json` invalidation ledger records the prior `done` status and validate-certified phases, while its live state remains `in_progress` and Scope 8 remains `Not Started`. No corrective Scope 8 delivery is claimed. No capability is claimed delivered without a spec reference. No capability is fabricated.
 
 Every new-in-MVP delivery claim is machine-bound by the Gate G101 annotations at the top of this file and was verified against validate-certified, terminal `state.json` truth on 2026-06-06 (the `delivery=required` entries — M1a / M2a / M2b / M4 — each bind a spec whose completed phases include `validate`). Deferrals (M1b, M1c full engine, M5b) and carried items (M1c basic, M5a, M5c, M5d) are recorded but not delivery-enforced. No capability is claimed delivered without a spec reference, and no capability is fabricated. Spec 081 (Python NATS parity) is `done` on the `next` train and is intentionally out of this MVP packet — recorded here only as next-train lineage.
 

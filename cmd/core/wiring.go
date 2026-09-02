@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/annotation"
@@ -160,6 +161,109 @@ func initAssistantTracing(ctx context.Context, cfg *config.Config) (*assistanttr
 	})
 }
 
+// synthesisRuntime is the one process-local synthesis dependency graph shared
+// by API retry and scheduler callers. The database coordinator remains the
+// authority across processes.
+type synthesisRuntime struct {
+	readModel   *intelligence.SynthesisReadModel
+	persistence *intelligence.SynthesisPersistence
+	producer    *intelligence.SynthesisProducer
+}
+
+func (r *synthesisRuntime) validate() error {
+	if r == nil {
+		return fmt.Errorf("synthesis runtime is required")
+	}
+	if r.readModel == nil {
+		return fmt.Errorf("synthesis runtime requires a read model")
+	}
+	if r.persistence == nil {
+		return fmt.Errorf("synthesis runtime requires persistence")
+	}
+	if r.producer == nil {
+		return fmt.Errorf("synthesis runtime requires a coordinated producer")
+	}
+	return nil
+}
+
+func synthesisRunPolicyFromConfig(cfg config.SynthesisConfig) intelligence.SynthesisRunPolicy {
+	return intelligence.SynthesisRunPolicyFromConfig(cfg)
+}
+
+func synthesisRetryPolicyFromConfig(cfg config.SynthesisConfig, maxAttempts int) intelligence.SynthesisRetryPolicy {
+	return intelligence.SynthesisRetryPolicyFromConfig(cfg, maxAttempts)
+}
+
+func resolveSynthesisHolder(hostname func() (string, error), pid int) (string, error) {
+	host, err := hostname()
+	if err != nil {
+		return "", fmt.Errorf("resolve synthesis holder hostname: %w", err)
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", fmt.Errorf("resolve synthesis holder hostname: hostname is empty")
+	}
+	if pid <= 0 {
+		return "", fmt.Errorf("resolve synthesis holder process id: expected a positive PID, got %d", pid)
+	}
+	return fmt.Sprintf("%s-%d", host, pid), nil
+}
+
+func newSynthesisRuntime(cfg *config.Config, svc *coreServices) (*synthesisRuntime, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("synthesis runtime requires configuration")
+	}
+	if svc == nil {
+		return nil, fmt.Errorf("synthesis runtime requires core services")
+	}
+	if svc.pg == nil {
+		return nil, fmt.Errorf("synthesis runtime requires the postgres service")
+	}
+
+	readModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool)
+	if err != nil {
+		return nil, fmt.Errorf("construct synthesis read model: %w", err)
+	}
+	persistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool)
+	if err != nil {
+		return nil, fmt.Errorf("construct synthesis persistence: %w", err)
+	}
+	maxAttempts, err := cfg.Synthesis.MaxAttempts()
+	if err != nil {
+		return nil, fmt.Errorf("construct synthesis retry policy: %w", err)
+	}
+	producer, err := intelligence.NewSynthesisProducer(
+		svc.intEngine,
+		persistence,
+		synthesisRunPolicyFromConfig(cfg.Synthesis),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("construct synthesis producer: %w", err)
+	}
+	holder, err := resolveSynthesisHolder(os.Hostname, os.Getpid())
+	if err != nil {
+		return nil, err
+	}
+	coordinator, err := intelligence.NewSynthesisCoordinator(
+		persistence,
+		synthesisRetryPolicyFromConfig(cfg.Synthesis, maxAttempts),
+		holder,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("construct synthesis coordinator: %w", err)
+	}
+
+	runtime := &synthesisRuntime{
+		readModel:   readModel,
+		persistence: persistence,
+		producer:    producer.WithCoordinator(coordinator),
+	}
+	if err := runtime.validate(); err != nil {
+		return nil, err
+	}
+	return runtime, nil
+}
+
 // buildAPIDeps assembles the api.Dependencies struct including annotation and
 // actionable-list handlers (specs 027 and 028). It returns the deps plus the
 // list resolver and store so callers can reuse them when wiring meal planning.
@@ -173,7 +277,10 @@ func initAssistantTracing(ctx context.Context, cfg *config.Config) (*assistanttr
 // fail-loud by resolveCorpusGrantEnforcement in run(). It is a REQUIRED
 // parameter rather than an optional field assignment so that omitting it is a
 // compile error here, not a silent ENFORCE→OBSERVE downgrade at runtime.
-func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, corpusGrantEnforce bool) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
+func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, synthesisRT *synthesisRuntime, corpusGrantEnforce bool) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
+	if err := synthesisRT.validate(); err != nil {
+		return nil, nil, nil, err
+	}
 	notificationSeverity := notification.ParseSeverity(cfg.Notification.EscalationSeverity)
 	notificationEngine, err := notification.NewDecisionEngine(notification.DecisionPolicy{
 		PersistenceThreshold:   cfg.Notification.PersistenceThreshold,
@@ -264,24 +371,18 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, co
 	// inside that gate meant an operator who turned off an unrelated integration
 	// also silently lost the synthesis API, the Today/Status synthesis section,
 	// and every honest never-run / stale / failed signal with it.
-	if synthesisReadModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool); err == nil {
-		if synthesisPersistence, err := intelligence.NewSynthesisPersistence(svc.pg.Pool); err == nil {
-			handlers := api.NewSynthesisHandlers(synthesisReadModel, synthesisPersistence)
-			if producer, pErr := intelligence.NewSynthesisProducer(svc.intEngine, synthesisPersistence); pErr == nil {
-				handlers = handlers.WithProducer(producer)
-			}
-			deps.SynthesisHandlers = handlers
+	handlers := api.NewSynthesisHandlers(synthesisRT.readModel, synthesisRT.persistence).
+		WithProducer(synthesisRT.producer)
+	deps.SynthesisHandlers = handlers
 
-			// Today and Status read the SAME durable state the API serves.
-			// Sharing the read model is what makes the page and the API
-			// structurally unable to disagree; a separate page-local query could
-			// drift from it without any test noticing.
-			if svc.webHandler != nil {
-				svc.webHandler.SynthesisReader = synthesisReadModel
-				svc.webHandler.SynthesisAggregates = synthesisPersistence
-				svc.webHandler.SynthesisFreshnessBudget = time.Duration(cfg.DigestStaleAfterHours) * time.Hour
-			}
-		}
+	// Today and Status read the SAME durable state the API serves.
+	// Sharing the read model is what makes the page and the API structurally
+	// unable to disagree; a separate page-local query could drift from it
+	// without any test noticing.
+	if svc.webHandler != nil {
+		svc.webHandler.SynthesisReader = synthesisRT.readModel
+		svc.webHandler.SynthesisAggregates = synthesisRT.persistence
+		svc.webHandler.SynthesisFreshnessBudget = time.Duration(cfg.DigestStaleAfterHours) * time.Hour
 	}
 
 	if cfg.QFDecisionsEnabled {

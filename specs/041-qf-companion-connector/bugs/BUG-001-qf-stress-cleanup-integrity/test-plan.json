@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "specId": "BUG-001",
+  "generatedBy": "bubbles.bug",
+  "planningOwner": "bubbles.plan",
+  "generatedAt": "2026-09-02T01:52:06Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Deterministic QF Stress Fixture Teardown",
+      "tests": [
+        {
+          "id": "QFS01-TP01",
+          "type": "red-green-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/qf_decisions_sync_stress_test.go",
+          "testId": "TestQFDecisionsStressCleanupChildReturnsZeroOwnedRows",
+          "scenarioId": "SCN-041-BUG001-002",
+          "description": "RED then GREEN parent/child proof: zero owned artifacts, annotations, edges, and sync state after child cleanup while an unowned control survives.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP02",
+          "type": "adversarial-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/qf_decisions_sync_stress_test.go",
+          "testId": "TestQFDecisionsStressCleanupReturnsErrorForClosedPool",
+          "scenarioId": "SCN-041-BUG001-003",
+          "description": "A closed pool must produce a contextual cleanup error; nil or log-only handling fails the assertion.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP03",
+          "type": "sync-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/qf_decisions_sync_stress_test.go",
+          "testId": "TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity",
+          "scenarioId": "SCN-041-BUG001-001",
+          "additionalScenarioIds": ["SCN-041-BUG001-004"],
+          "description": "Repeated cursor pages preserve packet identity and trace metadata with ordered cleanup and one injected run timestamp.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP04",
+          "type": "freshness-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "testId": "TestQFDecisionsFreshnessSLAP95IngestRender",
+          "scenarioId": "SCN-041-BUG001-001",
+          "additionalScenarioIds": ["SCN-041-BUG001-004"],
+          "description": "Ingest freshness remains within its existing budget with response-time timestamps and data cleanup before resource close.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP05",
+          "type": "combined-freshness-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "testId": "TestQFDecisionsFreshnessSLAP95RenderAndCombined",
+          "scenarioId": "SCN-041-BUG001-001",
+          "additionalScenarioIds": ["SCN-041-BUG001-004"],
+          "description": "Render and combined freshness remain within existing budgets with response-time timestamps and deterministic teardown.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP06",
+          "type": "regression-e2e-api",
+          "category": "e2e-api",
+          "file": "tests/e2e/qf_decisions_connector_api_test.go",
+          "testId": "TestQFDecisionsConnectorHealthAppearsInLiveAPI",
+          "scenarioId": "SCN-041-BUG001-001",
+          "description": "Scenario-specific QF connector canary remains live after test-harness-only changes.",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP07",
+          "type": "broader-e2e-regression",
+          "category": "e2e-api",
+          "file": "tests/e2e/qf_decisions_connector_api_test.go",
+          "testId": "TestQFDecisionsIncompatibleCapabilityBlocksPolling; TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata",
+          "scenarioId": "SCN-041-BUG001-004",
+          "description": "Broader exact QF capability and unknown-decision connector regressions remain intact.",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "id": "QFS01-TP08",
+          "type": "broader-qf-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/qf_decisions_sync_stress_test.go; tests/stress/qf_decision_event_replay_test.go",
+          "testId": "all QF decision sync and freshness stress tests in the two exact files",
+          "scenarioId": "SCN-041-BUG001-001",
+          "additionalScenarioIds": ["SCN-041-BUG001-002", "SCN-041-BUG001-003", "SCN-041-BUG001-004"],
+          "description": "The complete QF sync/freshness stress surface passes against disposable state with zero skipped required tests.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        }
+      ]
+    }
+  ]
+}

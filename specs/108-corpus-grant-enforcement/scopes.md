@@ -219,18 +219,20 @@ Infrastructure Impact Sweep, a Change Boundary, and explicit canary coverage.
 
 ### Use Cases (Gherkin)
 
-**SCN-108-P01 — `corpus` is a registered scope surface**
+#### SCN-108-P01 — `corpus` is a registered scope surface
 
 ```gherkin
+Scenario: corpus is a registered scope surface
 Given the operator inspects the registered scope surfaces
 When auth.RegisteredScopeSurfaces is enumerated
 Then it contains the surface "corpus"
 And the surface maps to the existing grant constant auth.GrantGlobalCorpusRead
 ```
 
-**SCN-108-P02 — An operator can mint a token carrying `corpus:read`**
+#### SCN-108-P02 — An operator can mint a token carrying `corpus:read`
 
 ```gherkin
+Scenario: An operator can mint a token carrying corpus:read
 Given the surface "corpus" is registered
 When the operator issues a principal token whose scope claim includes "corpus:read"
 Then token issuance succeeds without an unknown-surface error
@@ -374,7 +376,7 @@ three-surface list. Each was checked; none was assumed.
   new `internal/auth/browser_session_policy_test.go` (untracked in this working tree), matching
   the TP-01-01 location declared in the Test Plan above.
 
-- [x] `TP-01-02` unit test passes — `corpus:read` scope claim validates and authorizes
+- [x] `TP-01-02` unit test passes — `corpus:read` scope claim validates and authorizes (SCN-108-P02)
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=3af96a02
 
@@ -587,9 +589,10 @@ three-surface list. Each was checked; none was assumed.
 
 ### Use Cases (Gherkin)
 
-**SCN-108-C03 — Absent enforcement config aborts startup**
+#### SCN-108-C03 — Absent enforcement config aborts startup
 
 ```gherkin
+Scenario: Absent enforcement config aborts startup
 Given SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT is absent or empty
 When the core process starts
 Then startup aborts and the error names SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT
@@ -597,18 +600,20 @@ And no stage is silently selected
 And no HTTP listener is bound
 ```
 
-**SCN-108-C05 — Malformed enforcement config aborts startup**
+#### SCN-108-C05 — Malformed enforcement config aborts startup
 
 ```gherkin
+Scenario: Malformed enforcement config aborts startup
 Given SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT is set to a value that is not an accepted boolean
 When the core process starts
 Then startup aborts and the error names the offending value
 And neither OBSERVE nor ENFORCE is selected
 ```
 
-**SCN-108-O01 — An ungranted request is counted, not denied, in OBSERVE**
+#### SCN-108-O01 — An ungranted request is counted, not denied, in OBSERVE
 
 ```gherkin
+Scenario: An ungranted request is counted, not denied, in OBSERVE
 Given the enforcement stage is OBSERVE
 And a principal whose scope claim does not include "corpus:read"
 When that principal requests a corpus route group
@@ -619,9 +624,10 @@ And a warn log is emitted with event=corpus_grant_would_deny and enforcement_mod
 And the log carries no query text and no artifact id
 ```
 
-**SCN-108-O02 — A granted request is counted as allowed**
+#### SCN-108-O02 — A granted request is counted as allowed
 
 ```gherkin
+Scenario: A granted request is counted as allowed
 Given the enforcement stage is OBSERVE
 And a principal whose scope claim includes "corpus:read"
 When that principal requests a corpus route group
@@ -889,7 +895,7 @@ looking early, so each class below was checked and found clear:
   search path, a raw path carrying a private query string, and an artifact UUID are all refused
   as label values — which is R-108-O3/O4 (no path, no query text, no artifact id in a label).
 
-- [x] `TP-02-04` integration test passes — OBSERVE returns 200 on all sixteen groups and counts would-be denials
+- [x] `TP-02-04` integration test passes — OBSERVE returns 200 on all sixteen groups and counts would-be denials (SCN-108-O01)
 
   **Claim Source:** executed · **Tree:** WORKING TREE, HEAD=9243ebdb
   **Executed:** YES (`~/i5.log`, 2026-08-11 20:16, preserved full-lane capture)
@@ -1239,9 +1245,10 @@ looking early, so each class below was checked and found clear:
 
 ### Use Cases (Gherkin)
 
-**SCN-108-G01 — ENFORCE denies an ungranted principal on every corpus route group**
+#### SCN-108-G01 — ENFORCE denies an ungranted principal on every corpus route group
 
 ```gherkin
+Scenario: ENFORCE denies an ungranted principal on every corpus route group
 Given the enforcement stage is ENFORCE
 And a principal whose scope claim does not include "corpus:read"
 When that principal requests any of the sixteen corpus route groups
@@ -1251,9 +1258,10 @@ And smackerel_auth_scope_rejected_total increments
 And smackerel_auth_corpus_grant_enforcement_mode reports 1
 ```
 
-**SCN-108-G04 — Tier B corpus-derived intelligence endpoints are gated identically**
+#### SCN-108-G04 — Tier B corpus-derived intelligence endpoints are gated identically
 
 ```gherkin
+Scenario: Tier B corpus-derived intelligence endpoints are gated identically
 Given the enforcement stage is ENFORCE
 And the intelligence engine is wired so the Phase-5 endpoints are registered
 And a principal whose scope claim does not include "corpus:read"
@@ -1264,9 +1272,10 @@ And the denial body is the same shape as a Tier A denial
 And a principal holding "corpus:read" receives 200 from the same eight endpoints
 ```
 
-**SCN-108-G05 — The Tier B conditional registration cannot make set-equality pass vacuously (adversarial)**
+#### SCN-108-G05 — The Tier B conditional registration cannot make set-equality pass vacuously (adversarial)
 
 ```gherkin
+Scenario: The Tier B conditional registration cannot make set-equality pass vacuously
 Given the Phase-5 endpoints are registered only when deps.IntelligenceEngine is non-nil
 When the route-manifest contract test builds the real router with a NON-NIL intelligence engine
 Then the router's mounted corpus group contains all sixteen route groups
@@ -1275,9 +1284,10 @@ And the test FAILS if the Tier B routes are registered outside the gated group
 And the test FAILS if a nil intelligence engine is substituted to make the assertion trivially satisfiable
 ```
 
-**SCN-108-D01 — A denial is not an existence oracle**
+#### SCN-108-D01 — A denial is not an existence oracle
 
 ```gherkin
+Scenario: A denial is not an existence oracle
 Given the enforcement stage is ENFORCE
 And a principal whose scope claim does not include "corpus:read"
 When that principal requests /api/artifact/{id} for an id that exists
@@ -1287,9 +1297,10 @@ And both responses are byte-identical
 And neither response carries a WWW-Authenticate challenge or a retry hint
 ```
 
-**SCN-108-G02 — Documented bypass sources still pass under ENFORCE**
+#### SCN-108-G02 — Documented bypass sources still pass under ENFORCE
 
 ```gherkin
+Scenario: Documented bypass sources still pass under ENFORCE
 Given the enforcement stage is ENFORCE
 When a shared-token session requests a corpus route group
 And a bootstrap session requests a corpus route group
@@ -1297,9 +1308,10 @@ Then both receive a non-403 response per the existing RequireScope source switch
 And the bypass is asserted by test rather than assumed
 ```
 
-**SCN-108-G03 — The gate cannot be silently removed or bypassed (adversarial, design T8)**
+#### SCN-108-G03 — The gate cannot be silently removed or bypassed (adversarial, design T8)
 
 ```gherkin
+Scenario: The gate cannot be silently removed or bypassed
 Given the real router is constructed through the same constructor production uses, with ENFORCE selected
 And a fixture principal whose scope claim is empty
 When each of the sixteen canonical corpus route groups is requested
@@ -1309,9 +1321,10 @@ And the test fails if the RequireScope mount is deleted, a corpus route is moved
     the stage machine falls back to OBSERVE when config is absent, or a seventeenth corpus route is registered ungated
 ```
 
-**SCN-108-C04 — Rollback to OBSERVE stops denials without a rebuild**
+#### SCN-108-C04 — Rollback to OBSERVE stops denials without a rebuild
 
 ```gherkin
+Scenario: Rollback to OBSERVE stops denials without a rebuild
 Given the enforcement stage is ENFORCE and ungranted principals are being denied
 When the operator sets the train flag back to false, regenerates the config bundle,
      and re-applies the same signed image digest
@@ -1793,7 +1806,7 @@ same spec, and the Consumer Impact Sweep proves no consumer is left stranded acr
   (`scope_middleware.go`, `corpus_grant_gate.go`, `cmd/core/wiring.go`) is a consumer.
   Driving it through the router would require inventing a path that does not exist.
 
-- [x] `TP-03-04` adversarial route-manifest test passes AND is demonstrated to **fail against current `main`** (empty-scope principal is allowed today); set-equality catches a seventeenth ungated corpus route
+- [x] `TP-03-04` adversarial route-manifest test passes AND is demonstrated to **fail against current `main`** (empty-scope principal is allowed today); set-equality catches a seventeenth ungated corpus route (SCN-108-G03)
   - **Command:** `./smackerel.sh test unit --go --go-run 'TestCorpusGate_AllSixteenRouteGroupsGated'`
   - **Exit Code:** 1 with the mount removed (RED), 0 with it restored (GREEN)
   - **Evidence:** the two halves were executed SEPARATELY, because the passing run alone is
@@ -1879,7 +1892,7 @@ same spec, and the Consumer Impact Sweep proves no consumer is left stranded acr
   `PASS: go-e2e-corpus-enforce` while all three tests SKIPPED; a missing keypair
   or token is now `t.Fatalf`, never `t.Skip`.
 
-- [x] `TP-03-07` e2e-api test passes — denial byte-parity between real and random id
+- [x] `TP-03-07` e2e-api test passes — denial byte-parity between real and random id (SCN-108-D01)
   - **Command:** `./smackerel.sh test e2e` (phase `go-e2e-corpus-enforce`)
   - **Exit Code:** 0
   - **Evidence:**
@@ -2009,7 +2022,7 @@ same spec, and the Consumer Impact Sweep proves no consumer is left stranded acr
   ungranted principals. Fixed in `cmd/core/main.go` with its own probed
   regression guard (commit `15394e84`).
 
-- [x] `TP-03-11` integration test passes — all eight Tier B Phase-5 route groups deny an ungranted principal with 403 and the Tier A denial shape, and allow a `corpus:read` holder (§18 decision 5)
+- [x] `TP-03-11` integration test passes — all eight Tier B Phase-5 route groups deny an ungranted principal with 403 and the Tier A denial shape, and allow a `corpus:read` holder (§18 decision 5) (SCN-108-G04)
 
   Closed by `TestIntegration_CorpusGrantEnforce_TierBDeniesWithTheTierADenialShape`. The router for
   this test is built with a **non-nil** `deps.IntelligenceEngine`. Without it the eight Phase-5
@@ -2533,9 +2546,10 @@ same spec, and the Consumer Impact Sweep proves no consumer is left stranded acr
 
 ### Use Cases (Gherkin)
 
-**SCN-108-E01 — Telegram bridge corpus command under enforcement**
+#### SCN-108-E01 — Telegram bridge corpus command under enforcement
 
 ```gherkin
+Scenario: Telegram bridge corpus command under enforcement
 Given the enforcement stage is ENFORCE
 And a mapped Telegram chat whose principal holds "corpus:read" in its persisted grant set
 When the user issues a search, digest, recent, or knowledge command through the bridge
@@ -2544,9 +2558,10 @@ And the command succeeds
 And no minter-side hardcoded scope list determined the outcome
 ```
 
-**SCN-108-E04 — Telegram authority comes from the principal, not the minter (adversarial)**
+#### SCN-108-E04 — Telegram authority comes from the principal, not the minter (adversarial)
 
 ```gherkin
+Scenario: Telegram authority comes from the principal, not the minter
 Given the enforcement stage is ENFORCE
 And a mapped Telegram chat whose principal does NOT hold "corpus:read" in its persisted grant set
 When the user issues a corpus command through the bridge
@@ -2557,9 +2572,10 @@ And the test FAILS if the minter reintroduces a hardcoded scope list that grants
     to every mapped chat regardless of the principal's persisted grants
 ```
 
-**SCN-108-E02 — Daily-user principal is remediated by token rotation, not a flag flip**
+#### SCN-108-E02 — Daily-user principal is remediated by token rotation, not a flag flip
 
 ```gherkin
+Scenario: Daily-user principal is remediated by token rotation, not a flag flip
 Given a PWA daily-user principal whose scope claim excludes "corpus:read"
 And the enforcement stage is ENFORCE
 When the principal requests a corpus route group
@@ -2569,9 +2585,10 @@ Then the same request returns 200
 And no feature flag was changed to achieve the grant
 ```
 
-**SCN-108-E03 — The browser extension inherits its principal's grant**
+#### SCN-108-E03 — The browser extension inherits its principal's grant
 
 ```gherkin
+Scenario: The browser extension inherits its principal's grant
 Given the browser extension consumes the principal's bearer token
 And the enforcement stage is ENFORCE
 When the principal holds "corpus:read"
@@ -2579,6 +2596,16 @@ Then extension corpus requests succeed
 And when the principal does not hold "corpus:read"
 Then extension corpus requests receive the same 403 as the PWA
 And no extension-specific grant exists or is introduced
+```
+
+#### SCN-108-F02 — Rotation preserves the principal's existing grants
+
+```gherkin
+Scenario: Rotation preserves the principal's existing grants
+Given a principal holds "annotation:edit" and needs "corpus:read"
+When the operator rotates that principal's token with the complete intended grant set
+Then the rotated token carries both "annotation:edit" and "corpus:read"
+And the replace-not-merge rotation contract cannot silently revoke the existing annotation grant
 ```
 
 ### Implementation Plan
@@ -3680,9 +3707,10 @@ Web validation passed
 
 ### Use Cases (Gherkin)
 
-**SCN-108-R01 — The flag is declared in every train and default-OFF in every train**
+#### SCN-108-R01 — The flag is declared in every train and default-OFF in every train
 
 ```gherkin
+Scenario: The flag is declared in every train and default-OFF in every train
 Given the flag corpusGrantEnforcement is introduced by spec 108 on the owning train next
 When every train's flag bundle is inspected
 Then corpusGrantEnforcement is declared in every train bundle, both next and mvp
@@ -3692,9 +3720,10 @@ And no non-owning train carries the flag default-ON, which is the only condition
 And the release-train guard reports zero violations
 ```
 
-**SCN-108-R02 — The SST key has no default and reaches every environment**
+#### SCN-108-R02 — The SST key has no default and reaches every environment
 
 ```gherkin
+Scenario: The SST key has no default and reaches every environment
 Given auth.corpus_grant_enforcement is declared in config/smackerel.yaml
 When ./smackerel.sh config generate runs for each environment
 Then SMACKEREL_AUTH_CORPUS_GRANT_ENFORCEMENT is present in every generated env file
@@ -3702,9 +3731,10 @@ And config/smackerel.yaml declares the key with no default value
 And no ${VAR:-default} or getenv-with-default shape appears in the resolution path
 ```
 
-**SCN-108-R03 — The operator runbook answers "who would have been denied?"**
+#### SCN-108-R03 — The operator runbook answers "who would have been denied?"
 
 ```gherkin
+Scenario: The operator runbook answers who would have been denied
 Given docs/Operations.md documents the corpus grant rollout
 When the operator follows the UC-108-001 runbook
 Then the documented query sum by (user_id, route_group) (increase(smackerel_auth_corpus_grant_would_deny_total[7d]))
@@ -3713,9 +3743,10 @@ And the go/no-go criterion for flipping to ENFORCE is stated
 And the OBSERVE to ENFORCE to rollback procedure is stated with no rebuild step
 ```
 
-**SCN-108-R04 — The release packet records this capability**
+#### SCN-108-R04 — The release packet records this capability
 
 ```gherkin
+Scenario: The release packet records this capability
 Given the next train is the promotion candidate feeding the v1 gate packet
 When docs/releases/v1/features.md is inspected
 Then it carries an entry for corpus grant enforcement
@@ -3725,9 +3756,10 @@ And that entry names the flag corpusGrantEnforcement
 And the packet therefore does not silently omit a shipped capability
 ```
 
-**SCN-108-R05 — The flag retirement contract is recorded, not implied**
+#### SCN-108-R05 — The flag retirement contract is recorded, not implied
 
 ```gherkin
+Scenario: The flag retirement contract is recorded, not implied
 Given corpusGrantEnforcement ships default-OFF in every train and is owned by the train next
 When the flag lifecycle documentation is inspected
 Then it records that the flag dies with its train plus one cycle
@@ -4152,7 +4184,7 @@ ok      github.com/smackerel/smackerel/tests/integration        0.215s
   lane regenerates every run (`config-validate: .../test.env.tmp.N OK`), so it is
   fresh by construction. It still FAILS rather than skips if that file is
   unreadable.
-- [x] `TP-05-04` e2e-api test passes — the documented runbook query returns the documented shape against the real `/metrics` surface
+- [x] `TP-05-04` e2e-api test passes — the documented runbook query returns the documented shape against the real `/metrics` surface (SCN-108-R03)
 - [x] `TP-05-05` unit test passes — the `v1` release packet's `features.md` records the capability, its owning spec, its owning train, and its flag
   - **Command:** `./smackerel.sh test unit --go --go-run 'CorpusGrantFlag'`
   - **Exit Code:** 0

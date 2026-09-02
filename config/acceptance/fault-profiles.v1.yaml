@@ -183,3 +183,23 @@ profiles:
     expectedResponseOrTermination: "The synthesis journey fails when a never-run capability is shown up or produces no durable output, and passes only a genuine quiet outcome where policy permits it."
     evidence: "Value-safe synthesis-outcome key and durability class only; no synthesis prose or personal content."
     noFirstPartyInterception: true
+
+  - stableId: "synthesis_terminal_event_persistence_failure"
+    journey: "synthesis"
+    setup: "Resolve this profile under the test posture, then install the test-owned trigger in the disposable env=test* PostgreSQL stack so every terminal synthesis event insert is rejected after aggregate read-back."
+    teardown: "Drop the test-owned PostgreSQL trigger and function before the positive control; the disposable stack is destroyed after the lane and no production database is reachable."
+    parallelism: "Exclusive within the serialized Go E2E stack because the trigger guards the shared ephemeral synthesis event table; no parallel worker or non-test database can observe it."
+    expectedRequest: "A real authenticated first-party POST /api/synthesis/retry request through the mounted handler, producer, aggregate store, read-back gate, and terminal-event writer."
+    expectedResponseOrTermination: "The route returns the closed audit_persistence_failed error with no output, delivery, persisted, recovered, or healthy claim; removing the fault lets the same route persist and read back normally."
+    evidence: "Value-safe HTTP status and error code plus content-free run, attempt, event, and output-state counts only; no SQL error, generated text, source identity, credential, or raw payload."
+    noFirstPartyInterception: true
+
+  - stableId: "synthesis_readback_relation_failure"
+    journey: "synthesis"
+    setup: "Resolve this profile under the test posture, seed one owned canonical graph cluster in the disposable env=test* PostgreSQL stack, and install the test-owned citation trigger that transactionally renames the synthesis source-class relation after the known citation is committed."
+    teardown: "Repair the renamed relation, drop the test-owned trigger and function, clear the owned synthesis fixture, and recreate the disposable core after any failed assertion; no production database is reachable."
+    parallelism: "Exclusive lifecycle-managed E2E execution; the script owns its disposable stack and core restart so no shared-stack worker can observe the temporary relation rename."
+    expectedRequest: "A real authenticated first-party POST /api/synthesis/retry request through the mounted handler, producer, aggregate commit, production aggregate reader, compensation, and immutable event writer, followed by the same request after a real core restart and repair."
+    expectedResponseOrTermination: "The first request fails safely while one superseded forensic output and one readback_failed event remain durable across restart; only the repaired request returns the API persisted vocabulary while database truth appends recovered for the same output after verified read-back."
+    evidence: "Value-safe HTTP status and error code, output/run/attempt identities, lifecycle and event counts, and known-test citation cardinality only; no generated text, source identity, SQL error, credential, or raw payload."
+    noFirstPartyInterception: true

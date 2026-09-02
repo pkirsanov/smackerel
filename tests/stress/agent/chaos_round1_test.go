@@ -29,6 +29,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -39,6 +40,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -400,10 +402,70 @@ func TestChaos_037_AuthBoundaryChaos(t *testing.T) {
 	}
 }
 
+func validateReplayExecutable(binPath string) error {
+	info, err := os.Stat(binPath)
+	if err != nil {
+		return fmt.Errorf("stat replay CLI binary: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("replay CLI path is not a regular file: mode=%s", info.Mode())
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("replay CLI binary is not executable: mode=%s", info.Mode())
+	}
+	return nil
+}
+
+func validateReplayNULLaunchError(runErr error) error {
+	if runErr == nil {
+		return errors.New("NUL-bearing replay argument unexpectedly launched")
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		return fmt.Errorf("NUL-bearing replay argument reached the CLI: error_type=%T", runErr)
+	}
+	if !errors.Is(runErr, syscall.EINVAL) {
+		return fmt.Errorf("NUL-bearing replay argument returned unrelated launch error: error_type=%T", runErr)
+	}
+	return nil
+}
+
+func TestChaos_037_ReplayNULOracleRejectsUnrelatedLaunchFailures(t *testing.T) {
+	missingBinPath := filepath.Join(t.TempDir(), "missing-smackerel-chaos-cli")
+	if err := validateReplayExecutable(missingBinPath); err == nil {
+		t.Fatal("missing replay CLI binary satisfied the executable precondition")
+	}
+
+	cases := []struct {
+		name   string
+		runErr error
+	}{
+		{name: "successful_launch", runErr: nil},
+		{name: "missing_binary", runErr: &os.PathError{Op: "fork/exec", Path: missingBinPath, Err: syscall.ENOENT}},
+		{name: "permission_denied", runErr: &os.PathError{Op: "fork/exec", Path: missingBinPath, Err: syscall.EACCES}},
+		{name: "canceled_context", runErr: context.Canceled},
+		{name: "expired_context", runErr: context.DeadlineExceeded},
+		{name: "process_exit", runErr: &exec.ExitError{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateReplayNULLaunchError(tc.runErr); err == nil {
+				t.Fatalf("unrelated launch result satisfied NUL rejection oracle: error_type=%T", tc.runErr)
+			}
+		})
+	}
+
+	wrappedEINVAL := &os.PathError{Op: "fork/exec", Path: "smackerel-chaos-cli", Err: syscall.EINVAL}
+	if err := validateReplayNULLaunchError(wrappedEINVAL); err != nil {
+		t.Fatalf("wrapped syscall.EINVAL did not satisfy NUL rejection oracle: %v", err)
+	}
+}
+
 // TestChaos_037_ReplayCLIErrorPaths probes the `smackerel agent replay`
-// exit-code contract. Every missing/malformed/adversarial trace_id MUST
-// exit ERROR=2 (never PASS=0 or FAIL=1) so wrapping scripts can
-// distinguish "system error" from "drift detected".
+// exit-code contract. Every CLI-reachable missing/malformed/adversarial
+// trace_id MUST exit ERROR=2 (never PASS=0 or FAIL=1) so wrapping scripts
+// can distinguish "system error" from "drift detected". A NUL-bearing
+// argument must instead be rejected by the OS before the process starts.
 //
 // Implementation note: we build the cmd/core binary once and exec it
 // directly. `go run` would translate the inner exit code (2) into its
@@ -447,15 +509,15 @@ func TestChaos_037_ReplayCLIErrorPaths(t *testing.T) {
 	}
 
 	cases := []struct {
-		name       string
-		traceID    string
-		skipReason string
+		name                   string
+		traceID                string
+		expectPreExecRejection bool
 	}{
 		{name: "nonexistent_uuid", traceID: "trace_00000000_does_not_exist"},
 		{name: "empty_string_after_double_dash", traceID: ""},
 		{name: "sql_injection_attempt", traceID: "trace'); DROP TABLE agent_traces;--"},
 		{name: "very_long_trace_id", traceID: strings.Repeat("a", 8192)},
-		{name: "null_byte_in_trace_id", traceID: "trace_with_null\x00byte", skipReason: "exec.Command cannot pass NUL byte in args (OS-level restriction)"},
+		{name: "null_byte_in_trace_id", traceID: "trace_with_null\x00byte", expectPreExecRejection: true},
 		{name: "unicode_control_in_trace_id", traceID: "trace\u202ereversed"},
 		{name: "whitespace_only_trace_id", traceID: "   "},
 		{name: "path_traversal_attempt", traceID: "../../../etc/passwd"},
@@ -463,9 +525,6 @@ func TestChaos_037_ReplayCLIErrorPaths(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.skipReason != "" {
-				t.Skipf("chaos: %s", tc.skipReason)
-			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			args := []string{"agent", "replay", "--json", tc.traceID}
@@ -478,7 +537,20 @@ func TestChaos_037_ReplayCLIErrorPaths(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout = &stdout
 			cmd.Stderr = &stderr
+			if err := validateReplayExecutable(binPath); err != nil {
+				t.Fatalf("chaos: replay CLI executable precondition failed: %v", err)
+			}
 			runErr := cmd.Run()
+			if tc.expectPreExecRejection {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					t.Fatalf("FINDING: NUL-bearing trace_id result came from command context: %v", ctxErr)
+				}
+				if err := validateReplayNULLaunchError(runErr); err != nil {
+					t.Fatalf("FINDING: invalid NUL-bearing trace_id rejection: %v", err)
+				}
+				t.Logf("case=%s rejected before process execution with syscall.EINVAL", tc.name)
+				return
+			}
 			exit := 0
 			if runErr != nil {
 				if ee, ok := runErr.(*exec.ExitError); ok {

@@ -28,6 +28,16 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func setValidSynthesisSchedule(t *testing.T, s *Scheduler) {
+	t.Helper()
+	if err := s.SetSynthesisSchedule(SynthesisSchedule{
+		DailyCron:  "0 2 * * *",
+		WeeklyCron: "0 16 * * 0",
+	}); err != nil {
+		t.Fatalf("set valid synthesis schedule: %v", err)
+	}
+}
+
 func TestStart_InvalidCron(t *testing.T) {
 	s := New(nil, nil, nil, nil)
 	err := s.Start(nil, "invalid-cron-expression")
@@ -193,6 +203,7 @@ func TestCronEntries_WithEngine(t *testing.T) {
 	// Create engine with nil pool — cron registration still succeeds
 	engine := &intelligence.Engine{Pool: nil}
 	s := New(nil, nil, engine, nil)
+	setValidSynthesisSchedule(t, s)
 	err := s.Start(nil, "0 7 * * *")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -203,6 +214,88 @@ func TestCronEntries_WithEngine(t *testing.T) {
 	// 1 (digest) + 7 (existing intelligence, no lifecycle) + 3 (delivery sweep + batched daily producers + weekly relationship cooling) = 11
 	if count < 11 {
 		t.Errorf("expected at least 11 cron entries with engine, got %d", count)
+	}
+}
+
+func TestSynthesisScheduleIsRequiredAndValidatedBeforeStart(t *testing.T) {
+	t.Run("missing schedule refuses before any cron registration", func(t *testing.T) {
+		s := New(nil, nil, &intelligence.Engine{}, nil)
+		err := s.Start(nil, "0 7 * * *")
+		if err == nil || !strings.Contains(err.Error(), "synthesis") {
+			t.Fatalf("missing synthesis schedule must fail loudly, got: %v", err)
+		}
+		if got := s.CronEntryCount(); got != 0 {
+			t.Fatalf("missing required schedule registered %d cron entries before refusal", got)
+		}
+	})
+
+	for _, tc := range []struct {
+		name     string
+		schedule SynthesisSchedule
+		wantKey  string
+	}{
+		{name: "empty daily", schedule: SynthesisSchedule{WeeklyCron: "0 16 * * 0"}, wantKey: "daily"},
+		{name: "empty weekly", schedule: SynthesisSchedule{DailyCron: "0 2 * * *"}, wantKey: "weekly"},
+		{name: "invalid daily", schedule: SynthesisSchedule{DailyCron: "not a cron", WeeklyCron: "0 16 * * 0"}, wantKey: "daily"},
+		{name: "invalid weekly", schedule: SynthesisSchedule{DailyCron: "0 2 * * *", WeeklyCron: "0 16 * *"}, wantKey: "weekly"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := New(nil, nil, &intelligence.Engine{}, nil)
+			err := s.SetSynthesisSchedule(tc.schedule)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.wantKey) {
+				t.Fatalf("invalid %s cadence must fail loudly, got: %v", tc.wantKey, err)
+			}
+		})
+	}
+
+	t.Run("bounded descriptor reaches actual cron registration", func(t *testing.T) {
+		s := New(nil, nil, &intelligence.Engine{}, nil)
+		if err := s.SetSynthesisSchedule(SynthesisSchedule{
+			DailyCron: "@every 8s", WeeklyCron: "@every 11s",
+		}); err != nil {
+			t.Fatalf("set bounded synthesis schedule: %v", err)
+		}
+		if err := s.Start(nil, "0 7 * * *"); err != nil {
+			t.Fatalf("actual cron registration rejected validated schedules: %v", err)
+		}
+		defer s.Stop()
+		if got := s.CronEntryCount(); got != 11 {
+			t.Fatalf("cron entry count = %d, want 11 (digest plus ten engine jobs)", got)
+		}
+	})
+}
+
+func TestEngineJobEntriesUseConfiguredSynthesisCadencesAndPreserveOthers(t *testing.T) {
+	s := New(nil, nil, &intelligence.Engine{}, nil)
+	if err := s.SetSynthesisSchedule(SynthesisSchedule{
+		DailyCron: "@every 37m", WeeklyCron: "@every 43m",
+	}); err != nil {
+		t.Fatalf("set synthesis schedule: %v", err)
+	}
+
+	got := make(map[string]string)
+	for _, entry := range s.engineJobEntries() {
+		got[entry.name] = entry.cron
+	}
+	want := map[string]string{
+		"synthesis":                             "@every 37m",
+		"resurfacing":                           "0 8 * * *",
+		"pre-meeting briefs":                    "*/5 * * * *",
+		"weekly synthesis":                      "@every 43m",
+		"monthly report":                        "0 3 1 * *",
+		"subscription detection":                "0 3 * * 1",
+		"frequent lookup detection":             "0 4 * * *",
+		"alert delivery sweep":                  "*/15 * * * *",
+		"daily alert production":                "0 6 * * *",
+		"relationship cooling alert production": "0 7 * * 1",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("engine job count = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for name, cronExpr := range want {
+		if got[name] != cronExpr {
+			t.Fatalf("engine job %q cron = %q, want %q", name, got[name], cronExpr)
+		}
 	}
 }
 

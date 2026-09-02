@@ -11,13 +11,38 @@ package stress
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/knowledge"
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
+
+const (
+	knowledgeLintMaxDuration         = 5 * time.Minute
+	knowledgeLintRunTimeout          = knowledgeLintMaxDuration
+	knowledgeLintDatabaseTimeout     = 30 * time.Second
+	knowledgeLintArtifactCount int64 = 1000
+	knowledgeLintContextItemLimit    = 50
+	knowledgeLintContentCharacterCap = 8000
+)
+
+type knowledgeLintCardinality struct {
+	totalRows             int64
+	distinctArtifactIDs   int64
+	distinctContentHashes int64
+}
 
 // stressConfig holds live-stack connection details resolved from environment.
 type stressConfig struct {
@@ -29,15 +54,49 @@ type stressConfig struct {
 // Config values MUST come from env (SST) — no hardcoded defaults.
 func loadStressConfig(t *testing.T) stressConfig {
 	t.Helper()
-	coreURL := os.Getenv("CORE_EXTERNAL_URL")
+	coreURL := strings.TrimSpace(os.Getenv("CORE_EXTERNAL_URL"))
 	if coreURL == "" {
-		t.Skip("stress: CORE_EXTERNAL_URL not set — live stack not available")
+		t.Fatal("stress: CORE_EXTERNAL_URL is empty; the canonical stress stack must provide a live core URL")
 	}
-	authToken := os.Getenv("SMACKEREL_AUTH_TOKEN")
+	authToken := strings.TrimSpace(os.Getenv("SMACKEREL_AUTH_TOKEN"))
 	if authToken == "" {
-		t.Skip("stress: SMACKEREL_AUTH_TOKEN not set — live stack not available")
+		t.Fatal("stress: SMACKEREL_AUTH_TOKEN is empty; the canonical stress stack must provide authenticated API and NATS access")
 	}
 	return stressConfig{CoreURL: coreURL, AuthToken: authToken}
+}
+
+// loadKnowledgeLintStressConfig resolves the complete production linter
+// dependency envelope through config.Load. The stress runner supplies the
+// generated disposable test env, so any absent or malformed database, NATS, or
+// linter setting is a failed test rather than an optional prerequisite.
+func loadKnowledgeLintStressConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("stress: load canonical generated test configuration: %v", err)
+	}
+	if strings.TrimSpace(cfg.AuthToken) == "" {
+		t.Fatal("stress: SMACKEREL_AUTH_TOKEN is empty after config.Load; authenticated API and NATS access are required")
+	}
+	if strings.TrimSpace(cfg.DatabaseURL) == "" {
+		t.Fatal("stress: DATABASE_URL is empty after config.Load; production lint requires the disposable PostgreSQL stack")
+	}
+	if strings.TrimSpace(cfg.NATSURL) == "" {
+		t.Fatal("stress: NATS_URL is empty after config.Load; production lint retries require the disposable NATS stack")
+	}
+	if !cfg.KnowledgeEnabled {
+		t.Fatal("stress: KNOWLEDGE_ENABLED must be true for the canonical knowledge stress lane")
+	}
+	if cfg.KnowledgeLintStaleDays <= 0 {
+		t.Fatalf("stress: KNOWLEDGE_LINT_STALE_DAYS must resolve to a positive integer, got %d", cfg.KnowledgeLintStaleDays)
+	}
+	if cfg.KnowledgeMaxSynthesisRetries < 0 {
+		t.Fatalf("stress: KNOWLEDGE_MAX_SYNTHESIS_RETRIES must resolve to a non-negative integer, got %d", cfg.KnowledgeMaxSynthesisRetries)
+	}
+	if strings.TrimSpace(cfg.KnowledgePromptContractIngestSynthesis) == "" {
+		t.Fatal("stress: KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS is empty after config.Load")
+	}
+	return cfg
 }
 
 // stressWaitForHealth blocks until the health endpoint reports healthy.
@@ -99,7 +158,128 @@ func stressAPIPost(cfg stressConfig, path string, payload []byte) (int, []byte, 
 	return resp.StatusCode, body, nil
 }
 
+func seedKnowledgeLintArtifacts(ctx context.Context, pool *pgxpool.Pool, ownerToken string) error {
+	commandTag, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (
+			id, artifact_type, title, content_raw, content_hash, source_id,
+			processing_status, synthesis_status, synthesis_at, created_at, updated_at
+		)
+		SELECT
+			$1 || '-artifact-' || generated.ordinal::text,
+			'note',
+			'test-b025006 synthetic knowledge lint artifact ' || generated.ordinal::text,
+			'test-b025006 synthetic content for knowledge lint artifact ' || generated.ordinal::text,
+			$1 || '-content-hash-' || generated.ordinal::text,
+			$1,
+			'completed',
+			'completed',
+			NOW(),
+			NOW(),
+			NOW()
+		FROM generate_series(1, $2::bigint) AS generated(ordinal)`, ownerToken, knowledgeLintArtifactCount)
+	if err != nil {
+		return fmt.Errorf("seed knowledge lint artifacts: %w", err)
+	}
+	if inserted := commandTag.RowsAffected(); inserted != knowledgeLintArtifactCount {
+		return fmt.Errorf("seed knowledge lint artifacts: inserted %d rows, expected %d", inserted, knowledgeLintArtifactCount)
+	}
+	return nil
+}
+
+func loadKnowledgeLintCardinality(ctx context.Context, pool *pgxpool.Pool, ownerToken string) (knowledgeLintCardinality, error) {
+	var cardinality knowledgeLintCardinality
+	err := pool.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(DISTINCT id), COUNT(DISTINCT content_hash)
+		FROM artifacts
+		WHERE source_id = $1`, ownerToken).Scan(
+		&cardinality.totalRows,
+		&cardinality.distinctArtifactIDs,
+		&cardinality.distinctContentHashes,
+	)
+	if err != nil {
+		return knowledgeLintCardinality{}, fmt.Errorf("query knowledge lint artifact cardinality: %w", err)
+	}
+	return cardinality, nil
+}
+
+func validateKnowledgeLintCardinality(expected int64, actual knowledgeLintCardinality) error {
+	if actual.totalRows != expected || actual.distinctArtifactIDs != expected || actual.distinctContentHashes != expected {
+		return fmt.Errorf(
+			"knowledge lint scale cardinality: expected total=%d distinct_ids=%d distinct_content_hashes=%d, got total=%d distinct_ids=%d distinct_content_hashes=%d",
+			expected, expected, expected,
+			actual.totalRows, actual.distinctArtifactIDs, actual.distinctContentHashes,
+		)
+	}
+	return nil
+}
+
+func cleanupKnowledgeLintScaleRows(t *testing.T, pool *pgxpool.Pool, ownerToken, reportID string) {
+	t.Helper()
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), knowledgeLintDatabaseTimeout)
+	defer cleanupCancel()
+
+	if reportID != "" {
+		commandTag, err := pool.Exec(cleanupCtx, `DELETE FROM knowledge_lint_reports WHERE id = $1`, reportID)
+		if err != nil {
+			t.Errorf("cleanup knowledge lint report %s: %v", reportID, err)
+		} else if deleted := commandTag.RowsAffected(); deleted != 1 {
+			t.Errorf("cleanup knowledge lint report %s: deleted %d rows, expected 1", reportID, deleted)
+		}
+	}
+	if _, err := pool.Exec(cleanupCtx, `DELETE FROM artifacts WHERE source_id = $1`, ownerToken); err != nil {
+		t.Errorf("cleanup knowledge lint artifacts owned by %s: %v", ownerToken, err)
+	}
+
+	cardinality, err := loadKnowledgeLintCardinality(cleanupCtx, pool, ownerToken)
+	if err != nil {
+		t.Errorf("verify knowledge lint artifact cleanup for %s: %v", ownerToken, err)
+	} else if err := validateKnowledgeLintCardinality(0, cardinality); err != nil {
+		t.Errorf("verify knowledge lint artifact cleanup for %s: %v", ownerToken, err)
+	}
+
+	var reportRows int64
+	if err := pool.QueryRow(cleanupCtx, `SELECT COUNT(*) FROM knowledge_lint_reports WHERE id = $1`, reportID).Scan(&reportRows); err != nil {
+		t.Errorf("verify knowledge lint report cleanup for %s: %v", reportID, err)
+	} else if reportRows != 0 {
+		t.Errorf("verify knowledge lint report cleanup for %s: got %d rows, expected 0", reportID, reportRows)
+	}
+	t.Logf("Knowledge lint cleanup verified: owner=%s artifacts=0 report_rows=0", ownerToken)
+}
+
 // --- Tests ---
+
+func TestKnowledge_LintScaleCardinalityGuardRejectsZeroAndDrift(t *testing.T) {
+	for _, observed := range []int64{0, knowledgeLintArtifactCount - 1, knowledgeLintArtifactCount + 1} {
+		t.Run(fmt.Sprintf("observed-%d", observed), func(t *testing.T) {
+			actual := knowledgeLintCardinality{
+				totalRows:             observed,
+				distinctArtifactIDs:   observed,
+				distinctContentHashes: observed,
+			}
+			err := validateKnowledgeLintCardinality(knowledgeLintArtifactCount, actual)
+			if err == nil {
+				t.Fatalf("knowledge lint cardinality guard accepted %d artifacts, expected exactly %d", observed, knowledgeLintArtifactCount)
+			}
+			expectedError := fmt.Sprintf(
+				"knowledge lint scale cardinality: expected total=%d distinct_ids=%d distinct_content_hashes=%d, got total=%d distinct_ids=%d distinct_content_hashes=%d",
+				knowledgeLintArtifactCount, knowledgeLintArtifactCount, knowledgeLintArtifactCount,
+				observed, observed, observed,
+			)
+			if err.Error() != expectedError {
+				t.Fatalf("knowledge lint cardinality guard returned %q, expected %q", err.Error(), expectedError)
+			}
+		})
+	}
+
+	exact := knowledgeLintCardinality{
+		totalRows:             knowledgeLintArtifactCount,
+		distinctArtifactIDs:   knowledgeLintArtifactCount,
+		distinctContentHashes: knowledgeLintArtifactCount,
+	}
+	if err := validateKnowledgeLintCardinality(knowledgeLintArtifactCount, exact); err != nil {
+		t.Fatalf("knowledge lint cardinality guard rejected exact scale: %v", err)
+	}
+}
 
 // TestKnowledge_LintAt1000ArtifactScale verifies that the knowledge lint
 // system completes within the 5-minute budget for a 1000-artifact knowledge base
@@ -107,37 +287,108 @@ func stressAPIPost(cfg stressConfig, path string, payload []byte) (int, []byte, 
 //
 // Requires: live PostgreSQL + NATS stack (./smackerel.sh up).
 func TestKnowledge_LintAt1000ArtifactScale(t *testing.T) {
-	cfg := loadStressConfig(t)
-	stressWaitForHealth(t, cfg, 120*time.Second)
+	apiCfg := loadStressConfig(t)
+	stressWaitForHealth(t, apiCfg, 120*time.Second)
+	runtimeCfg := loadKnowledgeLintStressConfig(t)
 
-	const maxLintDurationMinutes = 5
-
-	// Check latest lint report timing
-	status, body, err := stressAPIGet(cfg, "/api/knowledge/lint")
+	connectCtx, connectCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	pool, err := pgxpool.New(connectCtx, runtimeCfg.DatabaseURL)
+	if err == nil {
+		err = pool.Ping(connectCtx)
+	}
+	connectCancel()
 	if err != nil {
-		t.Skipf("lint report endpoint not available: %v", err)
+		if pool != nil {
+			pool.Close()
+		}
+		t.Fatalf("stress: connect production linter to disposable PostgreSQL: %v", err)
 	}
-	if status == 404 {
-		t.Skip("no lint report available — lint may not have run yet")
+	// Cleanup runs LIFO. Register closes first so every later cleanup that uses
+	// the live clients executes before those clients close.
+	t.Cleanup(pool.Close)
+
+	natsConnectCtx, natsConnectCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	natsClient, err := smacknats.Connect(natsConnectCtx, runtimeCfg.NATSURL, runtimeCfg.AuthToken)
+	natsConnectCancel()
+	if err != nil {
+		t.Fatalf("stress: connect production linter to disposable NATS: %v", err)
 	}
-	if status == 503 {
-		t.Skip("knowledge layer not enabled on this stack")
+	t.Cleanup(natsClient.Close)
+
+	ownerRef := "test-b025006-knowledge-lint-" + uuid.NewString()
+	reportID := ""
+	t.Cleanup(func() {
+		cleanupKnowledgeLintScaleRows(t, pool, ownerRef, reportID)
+	})
+
+	seedCtx, seedCancel := context.WithTimeout(context.Background(), knowledgeLintDatabaseTimeout)
+	err = seedKnowledgeLintArtifacts(seedCtx, pool, ownerRef)
+	if err == nil {
+		var cardinality knowledgeLintCardinality
+		cardinality, err = loadKnowledgeLintCardinality(seedCtx, pool, ownerRef)
+		if err == nil {
+			err = validateKnowledgeLintCardinality(knowledgeLintArtifactCount, cardinality)
+		}
+	}
+	seedCancel()
+	if err != nil {
+		t.Fatalf("stress: establish exact knowledge lint scale before production lint: %v", err)
+	}
+	t.Logf("Knowledge lint precondition verified: owner=%s total=1000 distinct_ids=1000 distinct_content_hashes=1000", ownerRef)
+
+	store := knowledge.NewKnowledgeStore(pool)
+	store.MaxTokens = runtimeCfg.KnowledgeConceptMaxTokens
+	linter := knowledge.NewLinter(store, pool, knowledge.LinterConfig{
+		StaleDays:                runtimeCfg.KnowledgeLintStaleDays,
+		MaxSynthesisRetries:      runtimeCfg.KnowledgeMaxSynthesisRetries,
+		PromptContractVersion:    runtimeCfg.KnowledgePromptContractIngestSynthesis,
+		MaxSynthesisContextItems: knowledgeLintContextItemLimit,
+		MaxSynthesisContentChars: knowledgeLintContentCharacterCap,
+	}, natsClient)
+
+	runStartedAt := time.Now().UTC()
+	lintCtx, lintCancel := context.WithTimeout(context.Background(), knowledgeLintRunTimeout)
+	lintStartedAt := time.Now()
+	err = linter.RunLint(lintCtx)
+	lintElapsed := time.Since(lintStartedAt)
+	lintCancel()
+	if err != nil {
+		t.Fatalf("stress: production knowledge lint failed after %s: %v", lintElapsed, err)
+	}
+	if lintElapsed > knowledgeLintMaxDuration {
+		t.Fatalf("production knowledge lint took %s, expected <= %s", lintElapsed, knowledgeLintMaxDuration)
+	}
+
+	status, body, err := stressAPIGet(apiCfg, "/api/knowledge/lint")
+	if err != nil {
+		t.Fatalf("GET /api/knowledge/lint transport failed after production lint: %v", err)
 	}
 	if status != 200 {
 		t.Fatalf("GET /api/knowledge/lint returned %d: %s", status, string(body))
 	}
 
 	var report struct {
-		DurationMs int `json:"duration_ms"`
+		ID         string    `json:"id"`
+		RunAt      time.Time `json:"run_at"`
+		DurationMs int       `json:"duration_ms"`
 	}
 	if err := json.Unmarshal(body, &report); err != nil {
 		t.Fatalf("parse lint report: %v", err)
 	}
-
-	t.Logf("Latest lint report duration: %dms", report.DurationMs)
-	if report.DurationMs > maxLintDurationMinutes*60*1000 {
-		t.Errorf("lint duration %dms exceeds %d-minute budget", report.DurationMs, maxLintDurationMinutes)
+	if strings.TrimSpace(report.ID) == "" {
+		t.Fatal("GET /api/knowledge/lint returned a report without an ID")
 	}
+	if report.RunAt.Before(runStartedAt) {
+		t.Fatalf("GET /api/knowledge/lint returned pre-existing report %s run at %s; production lint started at %s", report.ID, report.RunAt, runStartedAt)
+	}
+	reportID = report.ID
+	if report.DurationMs < 0 {
+		t.Fatalf("GET /api/knowledge/lint returned negative duration %dms for report %s", report.DurationMs, report.ID)
+	}
+	if report.DurationMs > int(knowledgeLintMaxDuration.Milliseconds()) {
+		t.Fatalf("lint report duration %dms exceeds %s budget", report.DurationMs, knowledgeLintMaxDuration)
+	}
+	t.Logf("Production knowledge lint report %s generated at %s: wall=%s report_duration=%dms", report.ID, report.RunAt, lintElapsed, report.DurationMs)
 }
 
 // TestKnowledge_ConceptQueryPerformance verifies that knowledge concept
@@ -153,12 +404,12 @@ func TestKnowledge_ConceptQueryPerformance(t *testing.T) {
 	start := time.Now()
 	status, body, err := stressAPIGet(cfg, "/api/knowledge/concepts?limit=50&sort=citations")
 	if err != nil {
-		t.Skipf("knowledge concepts endpoint not available: %v", err)
+		t.Fatalf("knowledge concepts request failed: %v", err)
 	}
 	elapsed := time.Since(start)
 
 	if status == 503 {
-		t.Skip("knowledge layer not enabled on this stack")
+		t.Fatal("GET /api/knowledge/concepts returned 503: knowledge layer is unavailable on the canonical stress stack")
 	}
 	if status != 200 {
 		t.Fatalf("GET /api/knowledge/concepts returned %d: %s", status, string(body))
@@ -172,7 +423,7 @@ func TestKnowledge_ConceptQueryPerformance(t *testing.T) {
 	start = time.Now()
 	status, body, err = stressAPIGet(cfg, "/api/knowledge/stats")
 	if err != nil {
-		t.Skipf("knowledge stats endpoint not available: %v", err)
+		t.Fatalf("knowledge stats request failed: %v", err)
 	}
 	elapsed = time.Since(start)
 	if status != 200 {
@@ -187,7 +438,7 @@ func TestKnowledge_ConceptQueryPerformance(t *testing.T) {
 	start = time.Now()
 	status, body, err = stressAPIGet(cfg, "/api/knowledge/entities?limit=50&sort=mentions")
 	if err != nil {
-		t.Skipf("knowledge entities endpoint not available: %v", err)
+		t.Fatalf("knowledge entities request failed: %v", err)
 	}
 	elapsed = time.Since(start)
 	if status != 200 {
@@ -221,7 +472,7 @@ func TestKnowledge_SearchWithKnowledgeLayerPerformance(t *testing.T) {
 		start := time.Now()
 		status, body, err := stressAPIPost(cfg, "/api/search", searchBody)
 		if err != nil {
-			t.Skipf("search endpoint not available: %v", err)
+			t.Fatalf("search request %q failed: %v", q, err)
 		}
 		elapsed := time.Since(start)
 

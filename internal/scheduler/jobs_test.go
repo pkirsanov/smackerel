@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +15,28 @@ import (
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/topics"
 )
+
+type synthesisRunInvocation struct {
+	cadence intelligence.SynthesisCadence
+	trigger intelligence.SynthesisTriggerKind
+	now     time.Time
+}
+
+type recordingSynthesisRunner struct {
+	aggregate *intelligence.SynthesisAggregate
+	err       error
+	calls     []synthesisRunInvocation
+}
+
+func (r *recordingSynthesisRunner) RunAndPersist(
+	_ context.Context,
+	cadence intelligence.SynthesisCadence,
+	trigger intelligence.SynthesisTriggerKind,
+	now time.Time,
+) (*intelligence.SynthesisAggregate, error) {
+	r.calls = append(r.calls, synthesisRunInvocation{cadence: cadence, trigger: trigger, now: now})
+	return r.aggregate, r.err
+}
 
 // === FormatAlertMessage edge cases ===
 
@@ -503,6 +526,37 @@ func TestRunSynthesisJob_OverlapGuard(t *testing.T) {
 	s.muDaily.Unlock()
 }
 
+func TestRunSynthesisJob_UsesScheduledDailyTrigger(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), "postgres://test:test@127.0.0.1:1/test?connect_timeout=1")
+	if err != nil {
+		t.Fatalf("create PostgreSQL pool: %v", err)
+	}
+	pool.Close()
+
+	runner := &recordingSynthesisRunner{aggregate: &intelligence.SynthesisAggregate{
+		OutputID: "daily-output", RunID: "daily-run", Kind: intelligence.OutputKindFull,
+	}}
+	s := New(nil, nil, &intelligence.Engine{Pool: pool}, nil)
+	t.Cleanup(s.baseCancel)
+	s.SetSynthesisProducer(runner)
+
+	s.doSynthesisJob()
+
+	if len(runner.calls) != 1 {
+		t.Fatalf("daily scheduler calls = %d, want 1", len(runner.calls))
+	}
+	call := runner.calls[0]
+	if call.cadence != intelligence.CadenceDaily {
+		t.Fatalf("daily scheduler cadence = %q, want %q", call.cadence, intelligence.CadenceDaily)
+	}
+	if call.trigger != intelligence.TriggerScheduled {
+		t.Fatalf("daily scheduler trigger = %q, want %q", call.trigger, intelligence.TriggerScheduled)
+	}
+	if call.now.IsZero() {
+		t.Fatal("daily scheduler passed a zero observation time")
+	}
+}
+
 func TestRunResurfacingJob_OverlapGuard(t *testing.T) {
 	s := New(nil, nil, nil, nil)
 	s.muResurface.Lock()
@@ -522,6 +576,76 @@ func TestRunWeeklySynthesisJob_OverlapGuard(t *testing.T) {
 	s.muWeekly.Lock()
 	s.runWeeklySynthesisJob()
 	s.muWeekly.Unlock()
+}
+
+func TestRunWeeklySynthesisJob_UsesScheduledTriggerWithoutDirectEngineGeneration(t *testing.T) {
+	runner := &recordingSynthesisRunner{aggregate: &intelligence.SynthesisAggregate{
+		OutputID: "weekly-output", RunID: "weekly-run", Kind: intelligence.OutputKindFull,
+		InsightCount: 1, CitationCount: 1,
+		Insights: []intelligence.SynthesisInsight{{ThroughLine: "Persisted connection", Confidence: 0.8}},
+	}}
+	// A nil engine makes a direct GenerateWeeklySynthesis call fail immediately.
+	// The scheduled path must instead obtain its verified aggregate from runner.
+	s := New(nil, nil, nil, nil)
+	t.Cleanup(s.baseCancel)
+	s.SetSynthesisProducer(runner)
+
+	s.doWeeklySynthesisJob()
+
+	if len(runner.calls) != 1 {
+		t.Fatalf("weekly scheduler calls = %d, want 1", len(runner.calls))
+	}
+	call := runner.calls[0]
+	if call.cadence != intelligence.CadenceWeekly {
+		t.Fatalf("weekly scheduler cadence = %q, want %q", call.cadence, intelligence.CadenceWeekly)
+	}
+	if call.trigger != intelligence.TriggerScheduled {
+		t.Fatalf("weekly scheduler trigger = %q, want %q", call.trigger, intelligence.TriggerScheduled)
+	}
+	if call.now.IsZero() {
+		t.Fatal("weekly scheduler passed a zero observation time")
+	}
+}
+
+func TestRunWeeklySynthesisJob_RendersOnlyPersistedAggregateFields(t *testing.T) {
+	aggregate := &intelligence.SynthesisAggregate{
+		Kind: intelligence.OutputKindFull,
+		Insights: []intelligence.SynthesisInsight{
+			{ThroughLine: "Cross-domain thread", Confidence: 0.8},
+			{ThroughLine: "Second persisted thread", Confidence: 0.35},
+		},
+	}
+	want := "CONNECTION DISCOVERED:\n• Cross-domain thread (confidence: 80%)\n• Second persisted thread (confidence: 35%)"
+	if got := renderPersistedWeeklySynthesis(aggregate); got != want {
+		t.Fatalf("persisted weekly rendering mismatch\n got: %q\nwant: %q", got, want)
+	}
+
+	quiet := &intelligence.SynthesisAggregate{Kind: intelligence.OutputKindQuiet}
+	if got := renderPersistedWeeklySynthesis(quiet); got != "Quiet week — not much to report. Keep exploring!" {
+		t.Fatalf("persisted quiet rendering mismatch: %q", got)
+	}
+}
+
+func TestRunWeeklySynthesisJob_DoesNotLogSuccessWithoutAggregate(t *testing.T) {
+	runner := &recordingSynthesisRunner{}
+	s := New(nil, nil, nil, nil)
+	t.Cleanup(s.baseCancel)
+	s.SetSynthesisProducer(runner)
+
+	var logBuffer bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	s.doWeeklySynthesisJob()
+
+	logs := logBuffer.String()
+	if !strings.Contains(logs, "weekly synthesis returned no aggregate") {
+		t.Fatalf("missing no-aggregate failure log: %s", logs)
+	}
+	if strings.Contains(logs, "weekly synthesis complete") || strings.Contains(logs, "weekly synthesis delivered") {
+		t.Fatalf("scheduler logged weekly success without a verified aggregate: %s", logs)
+	}
 }
 
 func TestRunMonthlyReportJob_OverlapGuard(t *testing.T) {

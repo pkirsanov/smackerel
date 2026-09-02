@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "specId": "BUG-025-006",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T01:51:33Z",
+  "scopes": [
+    {
+      "scopeId": "scope-1-prove-knowledge-lint-scale",
+      "scopeName": "Prove knowledge lint at exactly 1000 artifacts",
+      "tests": [
+        {
+          "id": "B025006-TP01",
+          "type": "red-stage Regression E2E / stress",
+          "category": "stress",
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testTitle": "TestKnowledge_LintAt1000ArtifactScale",
+          "scenarioId": "SCN-B025006-001,SCN-B025006-003",
+          "description": "Add the exact pre-run count assertion before seeding and capture failure at zero owned rows.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "B025006-TP02",
+          "type": "scenario-specific Regression E2E / stress",
+          "category": "stress",
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testTitle": "TestKnowledge_LintAt1000ArtifactScale",
+          "scenarioId": "SCN-B025006-001,SCN-B025006-002,SCN-B025006-004",
+          "description": "Seed exactly 1000 owned artifacts, run production lint, validate the fresh report and timing, and prove zero residue.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "B025006-TP03",
+          "type": "adversarial Regression E2E / stress",
+          "category": "stress",
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testTitle": "TestKnowledge_LintScaleCardinalityGuardRejectsZeroAndDrift",
+          "scenarioId": "SCN-B025006-003",
+          "description": "Reject observed counts zero, 999, and 1001 while accepting exactly 1000.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "B025006-TP04",
+          "type": "broader Regression E2E / stress",
+          "category": "stress",
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testTitle": "knowledge stress package",
+          "scenarioId": "SCN-B025006-002,SCN-B025006-004,SCN-B025006-005",
+          "description": "Run the complete stress lane and preserve all neighboring fail-loud knowledge checks.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "B025006-TP05",
+          "type": "regression-quality",
+          "category": "functional",
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testTitle": "bugfix regression quality guard",
+          "scenarioId": "SCN-B025006-003,SCN-B025006-005",
+          "description": "Reject silent-pass and weak adversarial patterns in the changed stress test.",
+          "command": "bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/stress/knowledge_stress_test.go",
+          "liveSystem": false
+        },
+        {
+          "id": "B025006-TP06",
+          "type": "build-quality",
+          "category": "functional",
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testTitle": "repository check lint and format",
+          "scenarioId": "SCN-B025006-001,SCN-B025006-002,SCN-B025006-003,SCN-B025006-004,SCN-B025006-005",
+          "description": "Check compilation, lint, and formatting without bypassing the repository CLI.",
+          "command": "./smackerel.sh check && ./smackerel.sh lint && ./smackerel.sh format --check",
+          "liveSystem": false
+        }
+      ]
+    }
+  ]
+}

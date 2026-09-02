@@ -1,8 +1,8 @@
 {
   "version": 1,
   "featureDir": "specs/004-phase3-intelligence/bugs/BUG-004-004-synthesis-persistence-and-health-truth",
-  "generatedAt": "2026-07-24T08:31:22Z",
-  "reconciliation": "bubbles.plan harden 2026-07-24: one contract row per (scenarioId, scope) Gherkin instance across SCOPE-01..05 (18 rows) to match scopes.md. linkedTests are empty pending implementation (planned test files under tests/integration/synthesis/, tests/e2e/, web/pwa/tests/ are not yet created); evidenceRefs remain empty until execution.",
+  "generatedAt": "2026-08-31T22:39:40Z",
+  "reconciliation": "The original 18 scenario rows remain unchanged as historical planning contracts. SCN-004-004-C11..C20 remain the reopened causal and health contracts. SCN-004-004-C21 adds local prior-source compatibility for SCOPE-03A without claiming the operator pointer rollback or exceptional restore owned by SCOPE-04A. T004-C15-RESTART remains limited to durable event and latest/history/detail API truth; T004-C20-STRICT remains the strict-health owner.",
   "scenarios": [
     {"scenarioId":"SCN-004-004-01","scope":"SCOPE-01","title":"Successful run commits one complete aggregate","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
     {"scenarioId":"SCN-004-004-02","scope":"SCOPE-01","title":"Duplicate logical run is idempotent","behaviorClass":"data","changeType":"bugfix","requiredTestType":"integration","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
@@ -21,6 +21,293 @@
     {"scenarioId":"SCN-004-004-01","scope":"SCOPE-05","title":"Today renders only durable cited output","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
     {"scenarioId":"SCN-004-004-05","scope":"SCOPE-05","title":"Reader and operator states are exclusive","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
     {"scenarioId":"SCN-004-004-09","scope":"SCOPE-05","title":"Authorization loss clears synthesis content","behaviorClass":"security","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
-    {"scenarioId":"SCN-004-004-10","scope":"SCOPE-05","title":"Synthesis states and Retry are accessible and responsive","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]}
+    {"scenarioId":"SCN-004-004-10","scope":"SCOPE-05","title":"Synthesis states and Retry are accessible and responsive","behaviorClass":"ui","changeType":"bugfix","requiredTestType":"e2e-ui","regressionRequired":true,"linkedTests":[],"evidenceRefs":[]},
+    {
+      "scenarioId": "SCN-004-004-C11",
+      "scope": "SCOPE-03",
+      "title": "Every trigger has one causal attempt and immutable event history",
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "behaviorTraits": ["mutable-state", "degraded-state", "dependency-path"],
+      "obligations": [
+        {"trait":"mutable-state","requiredProof":"Exact legacy 064-066 attempt/output INSERT shapes survive migration 067 with projected output identity, nullable causal fields, and no fabricated event; current writes round-trip a run-linked started and terminal event chain.","satisfiedBy":["T004-C11-MIGRATE","T004-C11-CAUSAL","T004-C11-IMMUTABLE"]},
+        {"trait":"degraded-state","requiredProof":"Named rejection occurs for event mutation, deletion, malformed linkage, content leakage, or an incomplete new linked writer.","satisfiedBy":["T004-C11-MIGRATE","T004-C11-IMMUTABLE"]},
+        {"trait":"dependency-path","requiredProof":"Real PostgreSQL executes migration 067 over exact legacy writer shapes and enforces strict new causal constraints.","satisfiedBy":["T004-C11-MIGRATE"]}
+      ],
+      "testMechanism": {"entrypoint":"public-function","inputOrigin":"ephemeral-real","assertionSurface":"persisted-state","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_persistence.go","internal/db/migrations/067_synthesis_causal_event_truth.sql","scripts/lib/runtime.sh"],"negativeControl":"infer a causal field or event for a legacy INSERT, relax a required new linked-write field, permit event UPDATE, or restore unconditional Compose-exec stdin replacement and the corresponding migration, causal-ledger, or helper regression fails","negativeControlMechanism":"mutation"},
+      "riskTier": "high",
+      "implementationRefs": ["internal/intelligence/synthesis_persistence.go","internal/db/migrations/067_synthesis_causal_event_truth.sql","scripts/lib/runtime.sh"],
+      "plannedTests": [
+        {"file":"tests/integration/synthesis_migration_test.go","testId":"TestSynthesisMigration_PreservesLegacy064Through066InsertShapesAndEnforcesCausal067Writes"},
+        {"file":"tests/integration/synthesis_event_ledger_test.go","testId":"TestSynthesisRunEvents_LinkStartedAndTerminalEventToOneAttempt"},
+        {"file":"tests/integration/synthesis_event_ledger_test.go","testId":"TestSynthesisRunEvents_RejectUpdateDeleteAndContentLeakage"},
+        {"file":"tests/e2e/synthesis_scheduler_cadence_e2e_test.sh","testId":"daily and weekly scheduler triggers both persist and read back before delivery"},
+        {"file":"tests/unit/cli/runtime_compose_stdin_test.sh","testId":"smackerel_compose preserves piped stdin, closes terminal exec stdin, and leaves non-exec behavior and argv unchanged"}
+      ],
+      "linkedTests": [],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C12",
+      "scope": "SCOPE-03",
+      "title": "Audit persistence failure cannot be swallowed",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "dependency-path", "return-time-ordering"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"The real trigger boundary returns a typed audit-persistence failure rather than success.","satisfiedBy":["T004-C12-AUDIT-RED"]},
+        {"trait":"mutable-state","requiredProof":"The terminal-event write failure is observed against real PostgreSQL and no success audit fact is stored.","satisfiedBy":["T004-C12-AUDIT-RED"]},
+        {"trait":"degraded-state","requiredProof":"Named negative path proves delivery and healthy state remain absent.","satisfiedBy":["T004-C12-AUDIT-RED"]},
+        {"trait":"dependency-path","requiredProof":"The test reaches the PostgreSQL event-write boundary and observes its failure at the first-party API/scheduler boundary.","satisfiedBy":["T004-C12-AUDIT-RED"]},
+        {"trait":"return-time-ordering","requiredProof":"The trigger returns only after terminal-event persistence has succeeded or its typed failure is known.","satisfiedBy":["T004-C12-AUDIT-RED","ordering:at-return","ordering:sentinel","ordering:precondition-attempts"]}
+      ],
+      "testMechanism": {"entrypoint":"production-api","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_producer.go","internal/intelligence/synthesis_persistence.go","internal/scheduler/jobs.go","internal/api/synthesis.go"],"negativeControl":"restore the current ignored RecordAttempt error and the trigger incorrectly returns success","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; the persistent fault profile directly perturbs the terminal event write."},
+      "riskTier": "high",
+      "implementationRefs": ["internal/intelligence/synthesis_producer.go","internal/intelligence/synthesis_persistence.go","internal/scheduler/jobs.go","internal/api/synthesis.go"],
+      "plannedTests": [{"file":"tests/e2e/synthesis_api_e2e_test.go","testId":"TestSynthesisAPI_TerminalEventFailureCannotProduceDeliveryOrSuccess"}],
+      "linkedTests": [],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C13",
+      "scope": "SCOPE-03",
+      "title": "Changed source supersedes current output atomically",
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "behaviorTraits": ["mutable-state", "degraded-state", "dependency-path"],
+      "obligations": [
+        {"trait":"mutable-state","requiredProof":"Real PostgreSQL round trip proves supersede-before-insert, exactly one current output, and both histories retained.","satisfiedBy":["T004-C13-REPLACE","T004-C13-ROLLBACK"]},
+        {"trait":"degraded-state","requiredProof":"A failed replacement restores the prior current output and appends a safe failure event.","satisfiedBy":["T004-C13-ROLLBACK"]},
+        {"trait":"dependency-path","requiredProof":"The test reaches the actor/cadence/window advisory lock and unique-current database constraint.","satisfiedBy":["T004-C13-REPLACE","T004-C13-ROLLBACK"]}
+      ],
+      "testMechanism": {"entrypoint":"public-function","inputOrigin":"ephemeral-real","assertionSurface":"persisted-state","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_persistence.go","internal/intelligence/synthesis_coordinator.go"],"negativeControl":"use source-set identity as the serialization key or omit supersede-before-insert and the changed-source race violates one-current","negativeControlMechanism":"perturbed-input"},
+      "riskTier": "medium",
+      "implementationRefs": ["internal/intelligence/synthesis_persistence.go","internal/intelligence/synthesis_coordinator.go"],
+      "plannedTests": [
+        {"file":"tests/integration/synthesis_persistence_test.go","testId":"TestSynthesisReplacement_ChangedSourceSupersedesUnderWindowLock"},
+        {"file":"tests/integration/synthesis_persistence_test.go","testId":"TestSynthesisReplacement_FailedReplacementRestoresPriorCurrentAndAppendsFailure"}
+      ],
+      "linkedTests": [],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C14",
+      "scope": "SCOPE-03",
+      "title": "Same-source replay remains idempotent under concurrency",
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "behaviorTraits": ["mutable-state", "dependency-path", "sla-sensitive", "runtime-config"],
+      "obligations": [
+        {"trait":"mutable-state","requiredProof":"Concurrent triggers round-trip to one output while every trigger retains a separate causal attempt outcome.","satisfiedBy":["T004-C14-RACE","T004-C14-ACTOR-CADENCE"]},
+        {"trait":"dependency-path","requiredProof":"Live PostgreSQL lock, unique, and event constraints are exercised across concurrent processes.","satisfiedBy":["T004-C14-RACE"]},
+        {"trait":"sla-sensitive","requiredProof":"Stress assertion proves bounded completion under the repository's declared stress envelope with no cross-pairing.","satisfiedBy":["T004-C14-RACE"]},
+        {"trait":"runtime-config","requiredProof":"Configured actor, retry budget/backoff, lease, policy, source classes, and retention execute through both cadence paths with no code fallback.","satisfiedBy":["T004-C14-CONFIG-UNIT","T004-C14-CONFIG-RUNTIME"]}
+      ],
+      "testMechanism": {"entrypoint":"public-function","inputOrigin":"ephemeral-real","assertionSurface":"persisted-state","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_coordinator.go","internal/intelligence/synthesis_persistence.go"],"negativeControl":"remove the window lock or run/attempt key and concurrent triggers create duplicate or cross-paired history","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; the stress fixture perturbs concurrency and source identity directly."},
+      "riskTier": "high",
+      "implementationRefs": ["internal/intelligence/synthesis_coordinator.go","internal/intelligence/synthesis_persistence.go"],
+      "linkedTests": [
+        {"file":"tests/stress/synthesis_retry_stress_test.go","testId":"TestSynthesisSameAndChangedSourceRacesLeaveOneCurrentAndCompleteEventChains"},
+        {"file":"internal/config/validate_test.go","testId":"TestSynthesisRunPolicyIsRequiredAndHasNoFallback"}
+      ],
+      "plannedTests": [
+        {"file":"tests/integration/synthesis_event_ledger_test.go","testId":"TestSynthesisAttempts_DoNotCrossPairActorsCadencesRunsOrAttempts"},
+        {"file":"tests/integration/synthesis_runtime_config_test.go","testId":"TestSynthesisRunPolicyReachesCoordinatorAndBothCadences"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C15",
+      "scope": "SCOPE-03",
+      "title": "Read-back failure is durable and recoverable without false success",
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "dependency-path", "return-time-ordering"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"Latest, history, and detail APIs preserve readback_failed truth across restart until a later verified recovery.","satisfiedBy":["T004-C15-READBACK","T004-C15-RESTART"]},
+        {"trait":"mutable-state","requiredProof":"Committed-unverified and recovered events persist through a real store round trip and restart.","satisfiedBy":["T004-C15-READBACK","T004-C15-RESTART"]},
+        {"trait":"degraded-state","requiredProof":"The synthesis APIs expose no committed-unverified output. Strict-health refusal remains T004-C20-STRICT in SCOPE-04A.","satisfiedBy":["T004-C15-READBACK","T004-C15-RESTART"]},
+        {"trait":"dependency-path","requiredProof":"The production aggregate reader and real restart boundary are exercised.","satisfiedBy":["T004-C15-READBACK","T004-C15-RESTART"]},
+        {"trait":"return-time-ordering","requiredProof":"Recovered returns only after a new aggregate read verifies output, insights, citations, and event counts.","satisfiedBy":["T004-C15-READBACK","ordering:at-return","ordering:sentinel","ordering:precondition-attempts"]}
+      ],
+      "testMechanism": {"entrypoint":"production-api","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_persistence.go","internal/intelligence/synthesis_producer.go","internal/intelligence/synthesis_readmodel.go"],"negativeControl":"force the production aggregate reader to fail after commit and assert that success or recovered never appears","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; the test-only database fault profile exercises the production reader boundary."},
+      "riskTier": "high",
+      "implementationRefs": ["internal/intelligence/synthesis_persistence.go","internal/intelligence/synthesis_producer.go","internal/intelligence/synthesis_readmodel.go"],
+      "plannedTests": [
+        {"file":"tests/integration/synthesis_persistence_test.go","testId":"TestSynthesisReadbackFailurePersistsFailureBeforeVerifiedRecovery"}
+      ],
+      "linkedTests": [
+        {"file":"tests/e2e/synthesis_restart_durability_e2e_test.sh","testId":"committed-unverified state survives restart and recovery appends after verified read-back"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C16",
+      "scope": "SCOPE-04",
+      "title": "Latest state is causal per configured actor and cadence",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "shared-consumer"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"Real requests return attempt and output from one requested actor/cadence history.","satisfiedBy":["T004-C16-CROSSPAIR-RED"]},
+        {"trait":"mutable-state","requiredProof":"Interleaved histories are persisted and read through the production snapshot query.","satisfiedBy":["T004-C16-QUERY","T004-C16-CROSSPAIR-RED"]},
+        {"trait":"degraded-state","requiredProof":"Mismatched or absent causal state is refused rather than filled from another cadence.","satisfiedBy":["T004-C16-CROSSPAIR-RED"]},
+        {"trait":"shared-consumer","requiredProof":"Read-model parity and current API/UI consumer surfaces return the same actor/cadence result.","satisfiedBy":["parity:T004-C16-QUERY","consumer-surface:T004-C16-CROSSPAIR-RED"]}
+      ],
+      "testMechanism": {"entrypoint":"production-api","inputOrigin":"seeded-store","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_readmodel.go","internal/api/synthesis.go","internal/web/synthesis_page.go"],"negativeControl":"interleave a newer weekly failure and another principal's output around the requested daily run; global queries return a forbidden cross-pair","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; the adversarial interleaving deterministically kills the two-global-query implementation."},
+      "riskTier": "high",
+      "implementationRefs": ["internal/intelligence/synthesis_readmodel.go","internal/api/synthesis.go","internal/web/synthesis_page.go"],
+      "linkedTests": [
+        {"file":"tests/integration/synthesis_health_test.go","testId":"TestSynthesisReadSnapshot_IsCausalPerActorAndCadence"},
+        {"file":"tests/e2e/synthesis_api_e2e_test.go","testId":"TestSynthesisAPI_InterleavedCadencesAndPrincipalsCannotCrossPairAttemptAndOutput"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C17",
+      "scope": "SCOPE-04",
+      "title": "Running failed and recovered states follow event order",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "shared-consumer", "dependency-path", "return-time-ordering"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"API and strict health expose running, failed, and recovered in causal order.","satisfiedBy":["T004-C17-PRECEDENCE","T004-C17-ALERT"]},
+        {"trait":"mutable-state","requiredProof":"Failure and recovery history persists while current health advances on a later verified event.","satisfiedBy":["T004-C17-PRECEDENCE","T004-C17-ALERT"]},
+        {"trait":"degraded-state","requiredProof":"Running and failed states remain named and non-green before recovery.","satisfiedBy":["T004-C17-PRECEDENCE"]},
+        {"trait":"shared-consumer","requiredProof":"The canonical snapshot and real alert/API consumers agree.","satisfiedBy":["parity:T004-C17-PRECEDENCE","consumer-surface:T004-C17-ALERT"]},
+        {"trait":"dependency-path","requiredProof":"The live PostgreSQL event boundary and Prometheus alert evaluation are exercised.","satisfiedBy":["T004-C17-ALERT"]},
+        {"trait":"return-time-ordering","requiredProof":"The alert clears only after an observed new persisted read-back-verified recovery.","satisfiedBy":["T004-C17-ALERT","ordering:at-return","ordering:sentinel","ordering:precondition-attempts"]}
+      ],
+      "testMechanism": {"entrypoint":"production-api","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["internal/intelligence/synthesis_readmodel.go","internal/intelligence/synthesis_health.go","internal/api/health.go","config/prometheus/alerts.yml"],"negativeControl":"place a historical failure before a new verified success and assert the current alert clears while the failure event remains queryable","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; event-order perturbation directly distinguishes poison-pill logic from causal recovery."},
+      "riskTier": "high",
+      "implementationRefs": ["internal/intelligence/synthesis_readmodel.go","internal/intelligence/synthesis_health.go","internal/api/health.go","config/prometheus/alerts.yml"],
+      "linkedTests": [
+        {"file":"tests/integration/synthesis_health_test.go","testId":"TestSynthesisHealth_RunningFailureAndRecoveryFollowCausalEventOrder"}
+      ],
+      "plannedTests": [
+        {"file":"tests/e2e/synthesis_recovery_health_e2e_test.sh","testId":"failure alert clears only after a later verified persisted recovery"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C18",
+      "scope": "SCOPE-04",
+      "title": "Startup reconciles abandoned work without inventing success",
+      "behaviorClass": "data",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "dependency-path"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"After real restart the API reports a typed non-green reconciliation state until a new verified attempt succeeds.","satisfiedBy":["T004-C18-RESTART"]},
+        {"trait":"mutable-state","requiredProof":"Expired and committed-unverified fixtures gain append-only failure facts without success-shaped events.","satisfiedBy":["T004-C18-STARTUP","T004-C18-RESTART"]},
+        {"trait":"degraded-state","requiredProof":"Abandoned work has a named failure/readback state and never maps to up.","satisfiedBy":["T004-C18-STARTUP"]},
+        {"trait":"dependency-path","requiredProof":"The core startup, real PostgreSQL, scheduler registration, and process restart boundaries are exercised.","satisfiedBy":["T004-C18-RESTART"]}
+      ],
+      "testMechanism": {"entrypoint":"production-api","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["cmd/core/main.go","internal/intelligence/synthesis_coordinator.go","internal/intelligence/synthesis_readmodel.go"],"negativeControl":"seed expired running and committed-unverified rows, restart core, and fail if startup reports either as persisted or recovered","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; restart fixtures perturb the durable pre-start state through the real database."},
+      "riskTier": "high",
+      "implementationRefs": ["cmd/core/main.go","internal/intelligence/synthesis_coordinator.go","internal/intelligence/synthesis_readmodel.go"],
+      "plannedTests": [
+        {"file":"tests/integration/synthesis_coordinator_test.go","testId":"TestSynthesisStartupReconciliation_ExpiresRunningAndRefusesUnverifiedCommit"}
+      ],
+      "linkedTests": [
+        {"file":"tests/e2e/synthesis_restart_durability_e2e_test.sh","testId":"startup reconciliation preserves failure truth across real restart"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C19",
+      "scope": "SCOPE-04",
+      "title": "One cadence-specific SST controls every freshness consumer",
+      "behaviorClass": "config",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "behaviorTraits": ["runtime-config", "api-contract", "shared-consumer", "degraded-state"],
+      "obligations": [
+        {"trait":"runtime-config","requiredProof":"Distinct explicit daily and weekly values execute through generation, startup, health, API, web, metrics, and alert behavior.","satisfiedBy":["T004-C19-CONFIG","T004-C19-RUNTIME","T004-C19-STALE-SCAN"]},
+        {"trait":"api-contract","requiredProof":"The API exposes freshness state derived from the requested cadence value.","satisfiedBy":["T004-C19-RUNTIME"]},
+        {"trait":"shared-consumer","requiredProof":"All consumers read the same generated cadence values and a stale-reference scan finds no parallel constant or digest alias.","satisfiedBy":["parity:T004-C19-STALE-SCAN","consumer-surface:T004-C19-RUNTIME"]},
+        {"trait":"degraded-state","requiredProof":"Missing, invalid, or unpropagated configuration fails loudly rather than falling back.","satisfiedBy":["T004-C19-CONFIG"]}
+      ],
+      "testMechanism": {"entrypoint":"production-api","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["config/smackerel.yaml","scripts/commands/config.sh","internal/config/config.go","cmd/core/wiring.go","internal/api/health.go","internal/web/synthesis_page.go"],"negativeControl":"configure different daily and weekly budgets; a hardcoded 48h constant or DIGEST_STALE_AFTER_HOURS alias misclassifies one cadence","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; distinct runtime values are a deterministic negative control for parallel constants."},
+      "riskTier": "high",
+      "implementationRefs": ["config/smackerel.yaml","scripts/commands/config.sh","internal/config/config.go","cmd/core/wiring.go","internal/api/health.go","internal/web/synthesis_page.go","config/prometheus/alerts.yml"],
+      "linkedTests": [
+        {"file":"internal/config/validate_test.go","testId":"TestSynthesisFreshnessPerCadenceIsRequiredPositiveAndHasNoFallback"}
+      ],
+      "plannedTests": [
+        {"file":"tests/integration/synthesis_freshness_sst_test.go","testId":"TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers"},
+        {"file":"internal/intelligence/synthesis_freshness_contract_test.go","testId":"TestSynthesisFreshness_HasOneSSTAndNo48hDigestAlias"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C20",
+      "scope": "SCOPE-04",
+      "title": "Release verification remains fail-closed through recovery and rollback",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "shared-consumer", "dependency-path", "return-time-ordering"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"Strict health returns refusal for every non-green required cadence and success only for verified recovery.","satisfiedBy":["T004-C20-STRICT","T004-C20-DEPLOY"]},
+        {"trait":"mutable-state","requiredProof":"Candidate failure, verified recovery, and rollback preserve and expose the append-only history.","satisfiedBy":["T004-C20-DEPLOY","T004-C20-ROLLBACK"]},
+        {"trait":"degraded-state","requiredProof":"Never-run, running, stale, partial, failed, and read-degraded states are explicit deployment refusals.","satisfiedBy":["T004-C20-STRICT"]},
+        {"trait":"shared-consumer","requiredProof":"Product strict health and the operator-owned target adapter agree on candidate admission.","satisfiedBy":["parity:T004-C20-STRICT","consumer-surface:T004-C20-DEPLOY"]},
+        {"trait":"dependency-path","requiredProof":"The normal product deploy CLI and real target verification boundary are exercised without bypass.","satisfiedBy":["T004-C20-DEPLOY","T004-C20-ROLLBACK"]},
+        {"trait":"return-time-ordering","requiredProof":"Promotion returns only after an observed verified recovery; rollback completes only after the prior release and retained history are verified.","satisfiedBy":["T004-C20-DEPLOY","T004-C20-ROLLBACK","ordering:at-return","ordering:sentinel","ordering:precondition-attempts"]}
+      ],
+      "testMechanism": {"entrypoint":"production-cli","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"external-live","productionOwners":["smackerel.sh","internal/api/health.go","deploy/contract.yaml"],"negativeControl":"deploy a candidate with intelligence down for longer than the admission window and fail if the target adapter accepts it","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; the candidate's real non-green health is the external admission negative control."},
+      "riskTier": "high",
+      "implementationRefs": ["smackerel.sh","internal/api/health.go","deploy/contract.yaml"],
+      "plannedTests": [
+        {"file":"tests/e2e/synthesis_api_e2e_test.go","testId":"TestSynthesisAPI_StrictHealthRefusesEveryNonGreenRequiredCadence"}
+      ],
+      "linkedTests": [
+        {"file":"web/pwa/tests/synthesis_truth.spec.ts","testId":"Today and Status report the same durable synthesis state"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-004-004-C21",
+      "scope": "SCOPE-03",
+      "title": "The certified prior source remains locally compatible without becoming a deployment pointer",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "behaviorTraits": ["api-contract", "mutable-state", "degraded-state", "dependency-path"],
+      "obligations": [
+        {"trait":"api-contract","requiredProof":"Authenticated prior-source liveness and reads succeed against a disposable database migrated through 067, then the current candidate remains readable.","satisfiedBy":["T004-C21-PRIOR-SOURCE"]},
+        {"trait":"mutable-state","requiredProof":"Prior-source daily and weekly writes either persist compatibly or fail closed with zero fabricated causal event; the candidate retains 067 data and appends one strict causal write.","satisfiedBy":["T004-C21-PRIOR-SOURCE"]},
+        {"trait":"degraded-state","requiredProof":"An incompatible prior-source write is a named failure with no success-shaped or synthetic causal history.","satisfiedBy":["T004-C21-PRIOR-SOURCE"]},
+        {"trait":"dependency-path","requiredProof":"The full local SHA is built in a detached worktree through its own CLI, pinned by final digest, run without runtime network, and all unique resources are cleaned; no source fetch or deployment-pointer substitution is permitted.","satisfiedBy":["T004-C21-HARNESS","T004-C21-PRIOR-SOURCE"]}
+      ],
+      "testMechanism": {"entrypoint":"production-cli","inputOrigin":"ephemeral-real","assertionSurface":"http-response","dependencyPath":"ephemeral-real","productionOwners":["smackerel.sh","internal/db/migrations/067_synthesis_causal_event_truth.sql","internal/intelligence/synthesis_persistence.go","internal/api/synthesis.go"],"negativeControl":"replace the full SHA, permit a fetch, omit lifecycle registration or cleanup, infer a legacy event, or accept an incomplete current causal write and the static or live lifecycle contract fails","negativeControlMechanism":"perturbed-input","negativeControlFallbackReason":"Smackerel declares no project-owned mutationExecution adapter; the static harness and isolated lifecycle fixture perturb source, network, migration, and cleanup boundaries directly."},
+      "riskTier": "high",
+      "implementationRefs": ["smackerel.sh","internal/db/migrations/067_synthesis_causal_event_truth.sql","internal/intelligence/synthesis_persistence.go","internal/api/synthesis.go","tests/e2e/run_all.sh"],
+      "plannedTests": [
+        {"file":"tests/unit/cli/synthesis_test_harness_contract_test.sh","testId":"prior-source lifecycle pins the full SHA, forbids fetch, records digest and inputs, owns unique refs, registers lifecycle required, and cleans every resource"},
+        {"file":"tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh","testId":"pinned local prior source and current candidate preserve migration 067 without fabricated causal history"}
+      ],
+      "linkedTests": [],
+      "evidenceRefs": []
+    }
   ]
 }

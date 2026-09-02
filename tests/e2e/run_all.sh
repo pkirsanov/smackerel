@@ -8,8 +8,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PATTERN="${1:-test_*.sh}"
+PATTERN="${1:-*.sh}"
 TEST_ENV="${TEST_ENV:-test}"
+# shellcheck source=tests/e2e/lib/helpers.sh
 source "$SCRIPT_DIR/lib/helpers.sh"
 
 PASSED=0
@@ -35,7 +36,7 @@ trap 'cleanup_run_output; exit 130' INT
 trap 'cleanup_run_output; exit 143' TERM
 
 # Lifecycle tests manage their own stack boot/teardown and must run standalone.
-LIFECYCLE_TESTS="test_timeout_process_cleanup test_compose_start test_persistence test_postgres_readiness_gate test_config_fail"
+LIFECYCLE_TESTS="test_timeout_process_cleanup test_compose_start test_persistence test_postgres_readiness_gate test_config_fail synthesis_restart_durability_e2e_test synthesis_prior_source_compatibility_e2e_test"
 
 # Fixtures whose skip must keep the suite non-green. Requiredness is declared
 # here by the runner, in the same explicit-array idiom as LIFECYCLE_TESTS, so a
@@ -43,7 +44,7 @@ LIFECYCLE_TESTS="test_timeout_process_cleanup test_compose_start test_persistenc
 # body. A required fixture that skips is still reported as SKIP — the label
 # stays honest — and the suite exit stays non-zero because the behaviour the
 # fixture covers is unproven.
-REQUIRED_TESTS="test_timeout_process_cleanup test_deploy_target_status test_compose_start test_persistence test_postgres_readiness_gate test_config_fail test_capture_pipeline test_voice_pipeline test_llm_failure_e2e test_capture_api test_capture_errors test_voice_capture_api test_knowledge_graph test_graph_entities test_search test_search_filters test_search_empty test_telegram test_telegram_auth test_telegram_voice test_telegram_format test_digest test_digest_quiet test_digest_telegram test_web_ui test_web_detail test_web_settings test_connector_framework test_imap_sync test_caldav_sync test_youtube_sync test_bookmark_import test_topic_lifecycle test_settings_connectors test_maps_import test_browser_sync"
+REQUIRED_TESTS="test_timeout_process_cleanup test_deploy_target_status test_compose_start test_persistence test_postgres_readiness_gate test_config_fail synthesis_restart_durability_e2e_test synthesis_prior_source_compatibility_e2e_test test_capture_pipeline test_voice_pipeline test_llm_failure_e2e test_capture_api test_capture_errors test_voice_capture_api test_knowledge_graph test_graph_entities test_search test_search_filters test_search_empty test_telegram test_telegram_auth test_telegram_voice test_telegram_format test_digest test_digest_quiet test_digest_telegram synthesis_scheduler_cadence_e2e_test synthesis_state_matrix_e2e_test test_web_ui test_web_detail test_web_settings test_connector_framework test_imap_sync test_caldav_sync test_youtube_sync test_bookmark_import test_topic_lifecycle test_settings_connectors test_maps_import test_browser_sync"
 
 is_lifecycle_test() {
   local name="$1"

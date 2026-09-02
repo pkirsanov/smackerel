@@ -235,7 +235,7 @@ func (c *SynthesisCoordinator) claimOnce(ctx context.Context, key SynthesisRunKe
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, advisoryLockKey(logicalKey)); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, synthesisWindowLockKey(key)); err != nil {
 		return fmt.Errorf("acquire advisory lock: %w", err)
 	}
 
@@ -331,7 +331,9 @@ func (c *SynthesisCoordinator) RunWithRetry(
 		lastErr = err
 
 		kind := ClassifySynthesisFailure(err)
-		c.recordFailedAttempt(ctx, logicalKey, kind, err)
+		if auditErr := c.recordFailedAttempt(ctx, logicalKey, kind, err); auditErr != nil {
+			return auditErr
+		}
 
 		if kind == FailureTerminal {
 			// Spending the remaining budget would delay the alert without any
@@ -348,7 +350,7 @@ func (c *SynthesisCoordinator) RunWithRetry(
 	return fmt.Errorf("synthesis retries exhausted after %d attempt(s): %w", c.policy.MaxAttempts, lastErr)
 }
 
-func (c *SynthesisCoordinator) recordFailedAttempt(ctx context.Context, logicalKey string, kind SynthesisFailureKind, cause error) {
+func (c *SynthesisCoordinator) recordFailedAttempt(ctx context.Context, logicalKey string, kind SynthesisFailureKind, cause error) error {
 	failureClass := string(FailureInvalidPayload)
 	var ve *SynthesisValidationError
 	if errors.As(cause, &ve) {
@@ -356,7 +358,10 @@ func (c *SynthesisCoordinator) recordFailedAttempt(ctx context.Context, logicalK
 	}
 	// The message is a fixed classification, never the error text: an error can
 	// carry candidate content, and audit rows must stay content-free.
-	_ = c.persistence.RecordAttemptWithKind(ctx, logicalKey, AttemptFailed, failureClass, string(kind), "attempt failed")
+	if err := c.persistence.RecordAttemptWithKind(ctx, logicalKey, AttemptFailed, failureClass, string(kind), "attempt failed"); err != nil {
+		return &SynthesisAuditPersistenceError{Operation: "legacy_retry_attempt", Cause: err}
+	}
+	return nil
 }
 
 // MarkSuperseded records that a newer run has replaced this window's answer.

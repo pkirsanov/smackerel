@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/config"
 )
 
 // BUG-004-004 SCOPE-02 — the producer that closes the loop.
@@ -15,21 +19,68 @@ import (
 // that left no trace. RunAndPersist is the only synthesis entry point that ends
 // in a durable, read-back-verified row.
 
-// synthesisPolicyVersion identifies the producer contract that shaped an
-// output. It participates in the logical key, so changing it deliberately makes
-// a re-run under new rules a NEW run rather than a duplicate of the old one.
-const synthesisPolicyVersion = "synthesis/v1"
+const canonicalSynthesisSourceClass = "canonical-graph"
 
-// synthesisSourceClass is the single source class today's cluster producer
-// draws from. It is required, so a window that cannot read the canonical graph
-// fails rather than quietly reporting a partial output.
-const synthesisSourceClass = "canonical-graph"
+// SynthesisRunPolicy is the fail-loud runtime contract shared by daily,
+// weekly, scheduled, and operator-triggered synthesis.
+type SynthesisRunPolicy struct {
+	Actor                 string
+	PolicyVersion         string
+	RequiredSourceClasses []string
+	OptionalSourceClasses []string
+	Retention             time.Duration
+}
+
+func (p SynthesisRunPolicy) Validate() error {
+	if strings.TrimSpace(p.Actor) == "" {
+		return errors.New("synthesis run policy requires an actor")
+	}
+	if strings.TrimSpace(p.PolicyVersion) == "" {
+		return errors.New("synthesis run policy requires a policy version")
+	}
+	if p.Retention <= 0 {
+		return errors.New("synthesis run policy requires positive retention")
+	}
+	if len(p.RequiredSourceClasses) != 1 || p.RequiredSourceClasses[0] != canonicalSynthesisSourceClass {
+		return fmt.Errorf("synthesis run policy requires exactly source class %q", canonicalSynthesisSourceClass)
+	}
+	if len(p.OptionalSourceClasses) != 0 {
+		classes := append([]string(nil), p.OptionalSourceClasses...)
+		sort.Strings(classes)
+		return fmt.Errorf("synthesis run policy contains unsupported optional source classes: %s", strings.Join(classes, ","))
+	}
+	return nil
+}
+
+// SynthesisRunPolicyFromConfig maps the typed, fail-loud configuration into
+// the production policy shared by daily, weekly, and operator-triggered runs.
+func SynthesisRunPolicyFromConfig(cfg config.SynthesisConfig) SynthesisRunPolicy {
+	return SynthesisRunPolicy{
+		Actor:                 cfg.ActorUserID,
+		PolicyVersion:         cfg.PolicyVersion,
+		RequiredSourceClasses: append([]string{}, cfg.RequiredSourceClasses...),
+		OptionalSourceClasses: append([]string{}, cfg.OptionalSourceClasses...),
+		Retention:             cfg.Retention,
+	}
+}
+
+// SynthesisRetryPolicyFromConfig maps the validated attempt count and typed
+// durations into the coordinator policy used by the production runtime.
+func SynthesisRetryPolicyFromConfig(cfg config.SynthesisConfig, maxAttempts int) SynthesisRetryPolicy {
+	return SynthesisRetryPolicy{
+		MaxAttempts:  maxAttempts,
+		InitialDelay: cfg.RetryBackoff,
+		MaxDelay:     cfg.RetryMaxBackoff,
+		LeaseTTL:     cfg.LeaseTTL,
+	}
+}
 
 // SynthesisProducer runs a cadence window end to end: read the authorized
 // corpus, build candidate insights, validate, persist, read back.
 type SynthesisProducer struct {
 	engine      *Engine
 	persistence *SynthesisPersistence
+	policy      SynthesisRunPolicy
 	// coordinator is optional. When set, a window is claimed before any work
 	// starts and the commit runs under bounded retry, so a second scheduler or
 	// an operator retry cannot duplicate the run. Nil keeps the single-process
@@ -47,14 +98,17 @@ func (p *SynthesisProducer) WithCoordinator(c *SynthesisCoordinator) *SynthesisP
 // NewSynthesisProducer wires a producer to its engine and durable store. Both
 // are required; a producer without persistence is the defect being repaired, so
 // it cannot be constructed.
-func NewSynthesisProducer(engine *Engine, persistence *SynthesisPersistence) (*SynthesisProducer, error) {
+func NewSynthesisProducer(engine *Engine, persistence *SynthesisPersistence, policy SynthesisRunPolicy) (*SynthesisProducer, error) {
 	if engine == nil {
 		return nil, errors.New("synthesis producer requires an engine")
 	}
 	if persistence == nil {
 		return nil, errors.New("synthesis producer requires persistence; a producer that cannot store its output is the defect this repairs")
 	}
-	return &SynthesisProducer{engine: engine, persistence: persistence}, nil
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
+	return &SynthesisProducer{engine: engine, persistence: persistence, policy: policy}, nil
 }
 
 // SynthesisWindow is the half-open interval [Start, End) a run covers.
@@ -116,7 +170,13 @@ func (p *SynthesisProducer) authorizedCorpus(ctx context.Context) ([]string, err
 // do that if failures leave no row. An already-committed window resolves to the
 // existing output rather than erroring: a restart mid-schedule must not turn a
 // stored success into a reported failure.
-func (p *SynthesisProducer) RunAndPersist(ctx context.Context, cadence SynthesisCadence, principal string, now time.Time) (*SynthesisAggregate, error) {
+func (p *SynthesisProducer) RunAndPersist(ctx context.Context, cadence SynthesisCadence, trigger SynthesisTriggerKind, now time.Time) (*SynthesisAggregate, error) {
+	if p.coordinator == nil {
+		return nil, errors.New("synthesis producer requires a coordinator; uncoordinated production writes are forbidden")
+	}
+	if err := validateTriggerKind(trigger); err != nil {
+		return nil, err
+	}
 	window, err := WindowFor(cadence, now)
 	if err != nil {
 		return nil, err
@@ -129,107 +189,86 @@ func (p *SynthesisProducer) RunAndPersist(ctx context.Context, cadence Synthesis
 
 	key := SynthesisRunKey{
 		Cadence:       cadence,
-		Principal:     principal,
+		Principal:     p.policy.Actor,
 		WindowStart:   window.Start,
 		WindowEnd:     window.End,
-		PolicyVersion: synthesisPolicyVersion,
+		PolicyVersion: p.policy.PolicyVersion,
 		SourceIDs:     authorized,
 	}
-	policy := SourceClassPolicy{Required: []string{synthesisSourceClass}}
+	policy := SourceClassPolicy{
+		Required: append([]string(nil), p.policy.RequiredSourceClasses...),
+		Optional: append([]string(nil), p.policy.OptionalSourceClasses...),
+	}
 
-	if p.coordinator != nil {
-		if claimErr := p.coordinator.ClaimWindow(ctx, key, now); claimErr != nil {
-			// Losing the claim is not an error condition for this process -- the
-			// holder is doing the work. Recording an attempt here would inflate the
-			// failure count with something that is functioning correctly.
-			return nil, claimErr
+	var lastErr error
+	for retryIndex := 1; retryIndex <= p.coordinator.policy.MaxAttempts; retryIndex++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		attempt, startErr := p.persistence.StartAttempt(ctx, key, trigger,
+			p.coordinator.holder, p.coordinator.policy.LeaseTTL, now)
+		if startErr != nil {
+			return nil, startErr
+		}
+
+		insights, buildErr := p.buildCadenceInsights(ctx, cadence)
+		if buildErr != nil {
+			kind := ClassifySynthesisFailure(buildErr)
+			eventType := EventFailed
+			if kind == FailureTransient {
+				eventType = EventRetryableFailure
+			}
+			if auditErr := p.persistence.FinishAttemptFailure(context.WithoutCancel(ctx), attempt,
+				eventType, string(FailureInvalidPayload), kind, time.Now().UTC()); auditErr != nil {
+				return nil, auditErr
+			}
+			lastErr = fmt.Errorf("run synthesis: %w", buildErr)
+		} else {
+			kind := OutputKindFull
+			if len(insights) == 0 {
+				kind = OutputKindQuiet
+			}
+			candidate := SynthesisCandidate{
+				Key: key, Kind: kind, Insights: insights,
+				EvaluatedArtifactCount: len(authorized),
+				IncludedClasses:        append([]string(nil), p.policy.RequiredSourceClasses...),
+			}
+			aggregate, commitErr := p.persistence.CommitAttempt(ctx, attempt, candidate,
+				policy, authorized, time.Now().UTC())
+			if commitErr == nil {
+				if _, archiveErr := p.coordinator.ArchiveOlderThan(ctx, now.Add(-p.policy.Retention)); archiveErr != nil {
+					return nil, fmt.Errorf("apply synthesis retention: %w", archiveErr)
+				}
+				return aggregate, nil
+			}
+			var auditErr *SynthesisAuditPersistenceError
+			if errors.As(commitErr, &auditErr) {
+				return nil, commitErr
+			}
+			lastErr = commitErr
+		}
+
+		if ClassifySynthesisFailure(lastErr) != FailureTransient || retryIndex == p.coordinator.policy.MaxAttempts {
+			return nil, lastErr
+		}
+		if sleepErr := p.coordinator.sleep(ctx, p.coordinator.policy.backoffFor(retryIndex)); sleepErr != nil {
+			return nil, sleepErr
 		}
 	}
-
-	insights, err := p.engine.RunSynthesis(ctx)
-	if err != nil {
-		// The corpus could not be read, so this window has no verdict. Recording
-		// the failure is what keeps it distinguishable from a quiet window, which
-		// is a genuine "evaluated, found nothing".
-		p.recordAttempt(ctx, key, AttemptFailed, string(FailureInvalidPayload), "cluster query failed")
-		return nil, fmt.Errorf("run synthesis: %w", err)
-	}
-
-	// A window that evaluated its corpus and surfaced nothing is a quiet output,
-	// not an absence. Storing it is what lets an operator tell "nothing to say"
-	// apart from "never ran" a day later.
-	kind := OutputKindFull
-	if len(insights) == 0 {
-		kind = OutputKindQuiet
-	}
-
-	candidate := SynthesisCandidate{
-		Key:                    key,
-		Kind:                   kind,
-		Insights:               insights,
-		EvaluatedArtifactCount: len(authorized),
-		IncludedClasses:        []string{synthesisSourceClass},
-	}
-
-	var aggregate *SynthesisAggregate
-	commit := func(ctx context.Context) error {
-		var commitErr error
-		aggregate, commitErr = p.persistence.Commit(ctx, candidate, policy, authorized, now)
-		return commitErr
-	}
-
-	var err2 error
-	if p.coordinator == nil {
-		err2 = commit(ctx)
-	} else {
-		// Retry only wraps the commit. Re-running the cluster query on a
-		// serialization conflict would recompute identical insights at real cost;
-		// the conflict is about writing, not about deriving.
-		err2 = p.coordinator.RunWithRetry(ctx, key.LogicalKey(), commit)
-	}
-
-	err = err2
-	switch {
-	case err == nil:
-		p.recordAttempt(ctx, key, AttemptSucceeded, "", "")
-		return aggregate, nil
-
-	case errors.Is(err, ErrSynthesisRunExists):
-		// Restart or a second scheduler reached the same window. The stored
-		// output is the answer; re-deriving it would be a duplicate.
-		outputID, readErr := p.persistence.FindOutputByLogicalKey(ctx, key.LogicalKey())
-		if readErr != nil {
-			p.recordAttempt(ctx, key, AttemptFailed, string(FailureInvalidPayload), "duplicate run could not be resolved")
-			return nil, fmt.Errorf("resolve existing synthesis run: %w", readErr)
-		}
-		// Read the stored aggregate rather than returning the id alone, so the
-		// duplicate path and the first-commit path hand back the same shape and a
-		// caller cannot accidentally treat one as emptier than the other.
-		existing, readErr := p.persistence.ReadAggregate(ctx, outputID)
-		if readErr != nil {
-			p.recordAttempt(ctx, key, AttemptFailed, string(FailureInvalidPayload), "existing output could not be read back")
-			return nil, fmt.Errorf("read existing synthesis output: %w", readErr)
-		}
-		p.recordAttempt(ctx, key, AttemptIdempotentNoChange, "", "")
-		return existing, nil
-
-	default:
-		failureClass := string(FailureInvalidPayload)
-		var ve *SynthesisValidationError
-		if errors.As(err, &ve) {
-			failureClass = string(ve.Code)
-		}
-		p.recordAttempt(ctx, key, AttemptFailed, failureClass, "persistence rejected the candidate")
-		return nil, err
-	}
+	return nil, lastErr
 }
 
-// recordAttempt writes the audit row. Its own error is logged by the caller's
-// telemetry rather than returned, because losing an audit row must not convert a
-// committed output into a reported failure -- that would be the same class of
-// lie in the opposite direction.
-func (p *SynthesisProducer) recordAttempt(ctx context.Context, key SynthesisRunKey, outcome SynthesisAttemptOutcome, failureClass, message string) {
-	// The attempt is deliberately written outside any content transaction so it
-	// survives that transaction's rollback.
-	_ = p.persistence.RecordAttempt(ctx, key.LogicalKey(), outcome, failureClass, message)
+func (p *SynthesisProducer) buildCadenceInsights(ctx context.Context, cadence SynthesisCadence) ([]SynthesisInsight, error) {
+	switch cadence {
+	case CadenceDaily:
+		return p.engine.RunSynthesis(ctx)
+	case CadenceWeekly:
+		weekly, err := p.engine.GenerateWeeklySynthesis(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return weekly.Insights, nil
+	default:
+		return nil, fmt.Errorf("unknown synthesis cadence %q", cadence)
+	}
 }

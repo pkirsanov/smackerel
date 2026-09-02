@@ -59,19 +59,20 @@ func synthesisTestPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// resetSynthesisTables clears the BUG-004-004 tables. Deleting runs cascades to
-// outputs, insights and citations; attempts are cleared separately because they
-// deliberately carry no FK to runs (a failed attempt may precede any run row).
+// resetSynthesisTables clears the BUG-004-004 tables in the disposable test
+// database. The event ledger rejects row UPDATE/DELETE by design, so test
+// isolation uses TRUNCATE rather than weakening the production immutability
+// trigger.
 func resetSynthesisTables(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
-	for _, sql := range []string{
-		`DELETE FROM synthesis_run_attempts`,
-		`DELETE FROM synthesis_runs`,
-	} {
-		if _, err := pool.Exec(ctx, sql); err != nil {
-			t.Fatalf("reset %q: %v", sql, err)
-		}
+	const statement = `
+		TRUNCATE synthesis_run_events, synthesis_citations,
+			synthesis_output_insights, synthesis_output_source_classes,
+			synthesis_outputs, synthesis_run_attempts, synthesis_runs
+		RESTART IDENTITY CASCADE`
+	if _, err := pool.Exec(ctx, statement); err != nil {
+		t.Fatalf("reset synthesis tables: %v", err)
 	}
 }
 
@@ -126,6 +127,143 @@ func synthesisTestInsights() []intelligence.SynthesisInsight {
 			SourceArtifactIDs: []string{"art-gamma"},
 			Confidence:        0.41,
 		},
+	}
+}
+
+func startSynthesisTestAttempt(
+	t *testing.T,
+	p *intelligence.SynthesisPersistence,
+	key intelligence.SynthesisRunKey,
+	trigger intelligence.SynthesisTriggerKind,
+	holder string,
+	now time.Time,
+) intelligence.SynthesisAttempt {
+	t.Helper()
+	attempt, err := p.StartAttempt(context.Background(), key, trigger, holder, time.Minute, now)
+	if err != nil {
+		t.Fatalf("start synthesis attempt: %v", err)
+	}
+	return attempt
+}
+
+func commitSynthesisTestAttempt(
+	t *testing.T,
+	p *intelligence.SynthesisPersistence,
+	attempt intelligence.SynthesisAttempt,
+	candidate intelligence.SynthesisCandidate,
+	authorizedSources []string,
+	now time.Time,
+) *intelligence.SynthesisAggregate {
+	t.Helper()
+	aggregate, err := p.CommitAttempt(context.Background(), attempt, candidate,
+		synthesisTestPolicy(), authorizedSources, now)
+	if err != nil {
+		t.Fatalf("commit synthesis attempt: %v", err)
+	}
+	return aggregate
+}
+
+func installReplacementOutputFailure(t *testing.T, pool *pgxpool.Pool) func() {
+	t.Helper()
+	ctx := context.Background()
+	const install = `
+		CREATE OR REPLACE FUNCTION test_fail_synthesis_replacement_output()
+		RETURNS TRIGGER LANGUAGE plpgsql AS $$
+		BEGIN
+			RAISE EXCEPTION 'forced replacement output write failure'
+				USING ERRCODE = '23514';
+		END;
+		$$;
+		CREATE TRIGGER test_fail_synthesis_replacement_output
+		BEFORE INSERT ON synthesis_outputs
+		FOR EACH ROW EXECUTE FUNCTION test_fail_synthesis_replacement_output();`
+	if _, err := pool.Exec(ctx, install); err != nil {
+		t.Fatalf("install replacement output failure trigger: %v", err)
+	}
+	return func() {
+		if _, err := pool.Exec(context.Background(), `
+			DROP TRIGGER IF EXISTS test_fail_synthesis_replacement_output ON synthesis_outputs;
+			DROP FUNCTION IF EXISTS test_fail_synthesis_replacement_output();
+		`); err != nil {
+			t.Errorf("remove replacement output failure trigger: %v", err)
+		}
+	}
+}
+
+func installReadbackRelationFailure(t *testing.T, pool *pgxpool.Pool) func() {
+	t.Helper()
+	ctx := context.Background()
+	const install = `
+		CREATE OR REPLACE FUNCTION test_break_synthesis_readback_relation()
+		RETURNS TRIGGER LANGUAGE plpgsql AS $$
+		BEGIN
+			ALTER TABLE synthesis_output_source_classes
+				RENAME TO synthesis_output_source_classes_readback_fault;
+			RETURN NEW;
+		END;
+		$$;
+		CREATE TRIGGER test_break_synthesis_readback_relation
+		AFTER INSERT ON synthesis_citations
+		FOR EACH ROW WHEN (NEW.artifact_id = 'art-gamma')
+		EXECUTE FUNCTION test_break_synthesis_readback_relation();`
+	if _, err := pool.Exec(ctx, install); err != nil {
+		t.Fatalf("install read-back relation failure trigger: %v", err)
+	}
+
+	repaired := false
+	repair := func() {
+		if repaired {
+			return
+		}
+		if _, err := pool.Exec(context.Background(), `
+			DROP TRIGGER IF EXISTS test_break_synthesis_readback_relation ON synthesis_citations;
+			DROP FUNCTION IF EXISTS test_break_synthesis_readback_relation();
+		`); err != nil {
+			t.Fatalf("remove read-back relation failure trigger: %v", err)
+		}
+		var faultRelationExists bool
+		if err := pool.QueryRow(context.Background(), `
+			SELECT to_regclass('public.synthesis_output_source_classes_readback_fault') IS NOT NULL
+		`).Scan(&faultRelationExists); err != nil {
+			t.Fatalf("probe read-back fault relation: %v", err)
+		}
+		if faultRelationExists {
+			if _, err := pool.Exec(context.Background(), `
+				ALTER TABLE synthesis_output_source_classes_readback_fault
+					RENAME TO synthesis_output_source_classes
+			`); err != nil {
+				t.Fatalf("repair read-back relation: %v", err)
+			}
+		}
+		repaired = true
+	}
+	return repair
+}
+
+func installTerminalEventFailure(t *testing.T, pool *pgxpool.Pool) func() {
+	t.Helper()
+	const install = `
+		CREATE OR REPLACE FUNCTION test_fail_synthesis_terminal_event()
+		RETURNS TRIGGER LANGUAGE plpgsql AS $$
+		BEGIN
+			RAISE EXCEPTION 'forced terminal event write failure'
+				USING ERRCODE = '23514';
+		END;
+		$$;
+		CREATE TRIGGER test_fail_synthesis_terminal_event
+		BEFORE INSERT ON synthesis_run_events
+		FOR EACH ROW WHEN (NEW.event_type IN ('persisted', 'quiet', 'partial'))
+		EXECUTE FUNCTION test_fail_synthesis_terminal_event();`
+	if _, err := pool.Exec(context.Background(), install); err != nil {
+		t.Fatalf("install terminal event failure trigger: %v", err)
+	}
+	return func() {
+		if _, err := pool.Exec(context.Background(), `
+			DROP TRIGGER IF EXISTS test_fail_synthesis_terminal_event ON synthesis_run_events;
+			DROP FUNCTION IF EXISTS test_fail_synthesis_terminal_event();
+		`); err != nil {
+			t.Errorf("remove terminal event failure trigger: %v", err)
+		}
 	}
 }
 
@@ -489,6 +627,361 @@ func TestSynthesisPersistence_PartialOutputNamesOmissions(t *testing.T) {
 	}
 	if omitted != 1 {
 		t.Fatalf("got %d omitted-class rows, want 1", omitted)
+	}
+}
+
+// SCN-004-004-C13 / T004-C13-ROLLBACK. The failure trigger fires on the
+// replacement output insert, after the content transaction selected and
+// temporarily superseded the prior current row. PostgreSQL rollback must undo
+// that transition while the separate safe failure audit remains durable.
+func TestSynthesisReplacement_FailedReplacementRestoresPriorCurrentAndAppendsFailure(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+
+	persistence, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	ctx := context.Background()
+	principal := "test-c13-rollback"
+	baseCandidate := synthesisCompleteCandidate(principal)
+	baseAttempt := startSynthesisTestAttempt(t, persistence, baseCandidate.Key,
+		intelligence.TriggerScheduled, "test-c13-initial", time.Now().UTC())
+	prior := commitSynthesisTestAttempt(t, persistence, baseAttempt, baseCandidate,
+		synthesisAuthorizedSources(), time.Now().UTC())
+
+	replacementCandidate := synthesisCompleteCandidate(principal)
+	replacementCandidate.Key.SourceIDs = append(replacementCandidate.Key.SourceIDs, "art-delta")
+	authorized := append(synthesisAuthorizedSources(), "art-delta")
+	replacementAttempt := startSynthesisTestAttempt(t, persistence, replacementCandidate.Key,
+		intelligence.TriggerOperatorRetry, "test-c13-replacement", time.Now().UTC())
+	removeFailure := installReplacementOutputFailure(t, pool)
+	defer removeFailure()
+
+	if _, err := persistence.CommitAttempt(ctx, replacementAttempt, replacementCandidate,
+		synthesisTestPolicy(), authorized, time.Now().UTC()); err == nil {
+		t.Fatal("replacement succeeded despite the required output-write failure")
+	}
+
+	var currentCount int
+	var currentOutputID string
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*), MAX(id)
+		FROM synthesis_outputs
+		WHERE principal = $1 AND cadence = $2
+			AND window_start = $3 AND window_end = $4
+			AND lifecycle_state = 'current'
+	`, principal, string(baseCandidate.Key.Cadence), baseCandidate.Key.WindowStart,
+		baseCandidate.Key.WindowEnd).Scan(&currentCount, &currentOutputID); err != nil {
+		t.Fatalf("read current output after replacement rollback: %v", err)
+	}
+	if currentCount != 1 || currentOutputID != prior.OutputID {
+		t.Fatalf("rollback current outputs=%d id=%s, want prior %s",
+			currentCount, currentOutputID, prior.OutputID)
+	}
+
+	var partialOutputs int
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM synthesis_outputs WHERE run_id = $1`, replacementAttempt.RunID,
+	).Scan(&partialOutputs); err != nil {
+		t.Fatalf("count failed replacement outputs: %v", err)
+	}
+	if partialOutputs != 0 {
+		t.Fatalf("failed replacement left %d partial output row(s), want 0", partialOutputs)
+	}
+
+	var priorOutputState, priorRunState, failedRunState, failedRunLifecycle string
+	if err := pool.QueryRow(ctx, `
+		SELECT o.lifecycle_state, r.lifecycle_state, failed.state, failed.lifecycle_state
+		FROM synthesis_outputs o
+		JOIN synthesis_runs r ON r.id = o.run_id
+		JOIN synthesis_runs failed ON failed.id = $2
+		WHERE o.id = $1
+	`, prior.OutputID, replacementAttempt.RunID).Scan(
+		&priorOutputState, &priorRunState, &failedRunState, &failedRunLifecycle,
+	); err != nil {
+		t.Fatalf("read rollback lifecycle: %v", err)
+	}
+	if priorOutputState != "current" || priorRunState != "current" {
+		t.Fatalf("prior output/run lifecycle=%s/%s, want current/current",
+			priorOutputState, priorRunState)
+	}
+	if failedRunState != "failed" || failedRunLifecycle != "superseded" {
+		t.Fatalf("failed replacement run state/lifecycle=%s/%s, want failed/superseded",
+			failedRunState, failedRunLifecycle)
+	}
+
+	var attemptState, failureCode string
+	var finished bool
+	var includedCount, omittedCount, insightCount, citationCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT state, failure_code, finished_at IS NOT NULL,
+		       cardinality(included_source_classes), cardinality(omitted_source_classes),
+		       insight_count, citation_count
+		FROM synthesis_run_attempts
+		WHERE run_id = $1 AND attempt_no = $2
+	`, replacementAttempt.RunID, replacementAttempt.AttemptNo).Scan(
+		&attemptState, &failureCode, &finished, &includedCount, &omittedCount,
+		&insightCount, &citationCount,
+	); err != nil {
+		t.Fatalf("read failed replacement attempt: %v", err)
+	}
+	if attemptState != "failed" || failureCode != "transaction_failed" || !finished ||
+		includedCount != 0 || omittedCount != 0 || insightCount != 0 || citationCount != 0 {
+		t.Fatalf("unsafe failed-attempt summary state=%s code=%s finished=%t included=%d omitted=%d insights=%d citations=%d",
+			attemptState, failureCode, finished, includedCount, omittedCount, insightCount, citationCount)
+	}
+
+	var startedEvents, failedEvents int
+	if err := pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE event_type = 'attempt_started'),
+			COUNT(*) FILTER (WHERE event_type = 'failed'
+				AND failure_code = 'transaction_failed'
+				AND output_id IS NULL AND related_output_id IS NULL)
+		FROM synthesis_run_events
+		WHERE run_id = $1 AND attempt_no = $2
+	`, replacementAttempt.RunID, replacementAttempt.AttemptNo).Scan(&startedEvents, &failedEvents); err != nil {
+		t.Fatalf("read failed replacement event chain: %v", err)
+	}
+	if startedEvents != 1 || failedEvents != 1 {
+		t.Fatalf("failed replacement events started=%d failed=%d, want exactly 1 each",
+			startedEvents, failedEvents)
+	}
+}
+
+func TestSynthesisReplacement_TerminalEventFailureRestoresPriorCurrent(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+
+	persistence, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	ctx := context.Background()
+	principal := "test-c13-terminal-audit"
+	baseCandidate := synthesisCompleteCandidate(principal)
+	baseAttempt := startSynthesisTestAttempt(t, persistence, baseCandidate.Key,
+		intelligence.TriggerScheduled, "test-c13-audit-initial", time.Now().UTC())
+	prior := commitSynthesisTestAttempt(t, persistence, baseAttempt, baseCandidate,
+		synthesisAuthorizedSources(), time.Now().UTC())
+
+	replacementCandidate := synthesisCompleteCandidate(principal)
+	replacementCandidate.Key.SourceIDs = append(replacementCandidate.Key.SourceIDs, "art-delta")
+	authorized := append(synthesisAuthorizedSources(), "art-delta")
+	replacementAttempt := startSynthesisTestAttempt(t, persistence, replacementCandidate.Key,
+		intelligence.TriggerOperatorRetry, "test-c13-audit-replacement", time.Now().UTC())
+	removeFailure := installTerminalEventFailure(t, pool)
+	defer removeFailure()
+
+	_, commitErr := persistence.CommitAttempt(ctx, replacementAttempt, replacementCandidate,
+		synthesisTestPolicy(), authorized, time.Now().UTC())
+	if commitErr == nil {
+		t.Fatal("replacement returned success despite a rejected terminal event")
+	}
+	var auditErr *intelligence.SynthesisAuditPersistenceError
+	if !errors.As(commitErr, &auditErr) {
+		t.Fatalf("terminal event failure type=%T, want *SynthesisAuditPersistenceError", commitErr)
+	}
+	if auditErr.Operation != "terminal_event" {
+		t.Fatalf("audit failure operation=%q, want terminal_event", auditErr.Operation)
+	}
+
+	var currentCount int
+	var currentOutputID string
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*), MAX(id)
+		FROM synthesis_outputs
+		WHERE principal = $1 AND cadence = $2
+			AND window_start = $3 AND window_end = $4
+			AND lifecycle_state = 'current'
+	`, principal, string(baseCandidate.Key.Cadence), baseCandidate.Key.WindowStart,
+		baseCandidate.Key.WindowEnd).Scan(&currentCount, &currentOutputID); err != nil {
+		t.Fatalf("read current output after terminal event failure: %v", err)
+	}
+	if currentCount != 1 || currentOutputID != prior.OutputID {
+		t.Fatalf("terminal event failure current outputs=%d id=%s, want prior %s",
+			currentCount, currentOutputID, prior.OutputID)
+	}
+
+	var forensicOutputID, forensicLifecycle, runState, runLifecycle, attemptState string
+	if err := pool.QueryRow(ctx, `
+		SELECT o.id, o.lifecycle_state, r.state, r.lifecycle_state, a.state
+		FROM synthesis_outputs o
+		JOIN synthesis_runs r ON r.id = o.run_id
+		JOIN synthesis_run_attempts a ON a.run_id = r.id AND a.attempt_no = $2
+		WHERE r.id = $1
+	`, replacementAttempt.RunID, replacementAttempt.AttemptNo).Scan(
+		&forensicOutputID, &forensicLifecycle, &runState, &runLifecycle, &attemptState,
+	); err != nil {
+		t.Fatalf("read compensated replacement: %v", err)
+	}
+	if forensicOutputID == "" || forensicLifecycle != "superseded" || runLifecycle != "superseded" {
+		t.Fatalf("compensated replacement output/lifecycle/run-lifecycle=%s/%s/%s, want forensic/superseded/superseded",
+			forensicOutputID, forensicLifecycle, runLifecycle)
+	}
+	if runState != "running" || attemptState != "running" {
+		t.Fatalf("rolled-back terminal summary state run/attempt=%s/%s, want running/running",
+			runState, attemptState)
+	}
+
+	var startedEvents, falseTerminalEvents int
+	if err := pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE event_type = 'attempt_started'),
+			COUNT(*) FILTER (WHERE event_type IN ('persisted', 'quiet', 'partial'))
+		FROM synthesis_run_events
+		WHERE run_id = $1 AND attempt_no = $2
+	`, replacementAttempt.RunID, replacementAttempt.AttemptNo).Scan(
+		&startedEvents, &falseTerminalEvents,
+	); err != nil {
+		t.Fatalf("read terminal-event failure chain: %v", err)
+	}
+	if startedEvents != 1 || falseTerminalEvents != 0 {
+		t.Fatalf("terminal-event failure events started=%d false-terminal=%d, want 1/0",
+			startedEvents, falseTerminalEvents)
+	}
+}
+
+// SCN-004-004-C15 / T004-C15-READBACK. A test-only PostgreSQL trigger renames
+// a relation after the final citation write, so the content commit succeeds but
+// the production aggregate reader fails. Repairing the relation and rerunning
+// the same logical input must append recovered through production code.
+func TestSynthesisReadbackFailurePersistsFailureBeforeVerifiedRecovery(t *testing.T) {
+	pool := synthesisTestPool(t)
+	defer pool.Close()
+	resetSynthesisTables(t, pool)
+
+	persistence, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct persistence: %v", err)
+	}
+	ctx := context.Background()
+	principal := "test-c15-readback"
+	baseCandidate := synthesisCompleteCandidate(principal)
+	baseAttempt := startSynthesisTestAttempt(t, persistence, baseCandidate.Key,
+		intelligence.TriggerScheduled, "test-c15-initial", time.Now().UTC())
+	prior := commitSynthesisTestAttempt(t, persistence, baseAttempt, baseCandidate,
+		synthesisAuthorizedSources(), time.Now().UTC())
+
+	replacementCandidate := synthesisCompleteCandidate(principal)
+	replacementCandidate.Key.SourceIDs = append(replacementCandidate.Key.SourceIDs, "art-delta")
+	authorized := append(synthesisAuthorizedSources(), "art-delta")
+	replacementAttempt := startSynthesisTestAttempt(t, persistence, replacementCandidate.Key,
+		intelligence.TriggerOperatorRetry, "test-c15-replacement", time.Now().UTC())
+	repairReadback := installReadbackRelationFailure(t, pool)
+	defer repairReadback()
+
+	_, readbackErr := persistence.CommitAttempt(ctx, replacementAttempt, replacementCandidate,
+		synthesisTestPolicy(), authorized, time.Now().UTC())
+	if readbackErr == nil {
+		t.Fatal("replacement returned success while the production aggregate relation was unavailable")
+	}
+	var typedReadback *intelligence.SynthesisReadbackError
+	if !errors.As(readbackErr, &typedReadback) {
+		t.Fatalf("read-back failure type=%T, want *SynthesisReadbackError", readbackErr)
+	}
+
+	var forensicOutputID, forensicLifecycle string
+	if err := pool.QueryRow(ctx, `
+		SELECT id, lifecycle_state FROM synthesis_outputs WHERE run_id = $1
+	`, replacementAttempt.RunID).Scan(&forensicOutputID, &forensicLifecycle); err != nil {
+		t.Fatalf("read committed-unverified forensic output: %v", err)
+	}
+	if forensicLifecycle != "superseded" {
+		t.Fatalf("committed-unverified output lifecycle=%q, want superseded", forensicLifecycle)
+	}
+	if typedReadback.OutputID != forensicOutputID {
+		t.Fatalf("typed read-back output=%s, forensic output=%s", typedReadback.OutputID, forensicOutputID)
+	}
+
+	var currentCount int
+	var currentOutputID string
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*), MAX(id)
+		FROM synthesis_outputs
+		WHERE principal = $1 AND cadence = $2
+			AND window_start = $3 AND window_end = $4
+			AND lifecycle_state = 'current'
+	`, principal, string(baseCandidate.Key.Cadence), baseCandidate.Key.WindowStart,
+		baseCandidate.Key.WindowEnd).Scan(&currentCount, &currentOutputID); err != nil {
+		t.Fatalf("read current output after read-back failure: %v", err)
+	}
+	if currentCount != 1 || currentOutputID != prior.OutputID {
+		t.Fatalf("read-back failure current outputs=%d id=%s, want prior %s",
+			currentCount, currentOutputID, prior.OutputID)
+	}
+
+	var failedEvents int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM synthesis_run_events
+		WHERE run_id = $1 AND attempt_no = $2
+			AND event_type = 'readback_failed'
+			AND output_id = $3 AND failure_code = 'readback_failed'
+	`, replacementAttempt.RunID, replacementAttempt.AttemptNo, forensicOutputID).Scan(&failedEvents); err != nil {
+		t.Fatalf("read durable readback_failed event: %v", err)
+	}
+	if failedEvents != 1 {
+		t.Fatalf("got %d durable readback_failed events, want 1", failedEvents)
+	}
+
+	repairReadback()
+	recoveryAttempt := startSynthesisTestAttempt(t, persistence, replacementCandidate.Key,
+		intelligence.TriggerOperatorRetry, "test-c15-recovery", time.Now().UTC())
+	recovered, err := persistence.CommitAttempt(ctx, recoveryAttempt, replacementCandidate,
+		synthesisTestPolicy(), authorized, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("verified recovery: %v", err)
+	}
+	if recovered.Outcome != intelligence.EventRecovered || recovered.OutputID != forensicOutputID {
+		t.Fatalf("recovery outcome/output=%s/%s, want recovered/%s",
+			recovered.Outcome, recovered.OutputID, forensicOutputID)
+	}
+
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*), MAX(id)
+		FROM synthesis_outputs
+		WHERE principal = $1 AND cadence = $2
+			AND window_start = $3 AND window_end = $4
+			AND lifecycle_state = 'current'
+	`, principal, string(baseCandidate.Key.Cadence), baseCandidate.Key.WindowStart,
+		baseCandidate.Key.WindowEnd).Scan(&currentCount, &currentOutputID); err != nil {
+		t.Fatalf("read current output after recovery: %v", err)
+	}
+	if currentCount != 1 || currentOutputID != forensicOutputID {
+		t.Fatalf("recovery current outputs=%d id=%s, want recovered %s",
+			currentCount, currentOutputID, forensicOutputID)
+	}
+
+	var recoveredEvents, supersededEvents int
+	if err := pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE event_type = 'recovered' AND output_id = $2),
+			COUNT(*) FILTER (WHERE event_type = 'superseded'
+				AND output_id = $2 AND related_output_id = $3)
+		FROM synthesis_run_events
+		WHERE run_id = $1
+	`, replacementAttempt.RunID, forensicOutputID, prior.OutputID).Scan(
+		&recoveredEvents, &supersededEvents,
+	); err != nil {
+		t.Fatalf("read recovery event chain: %v", err)
+	}
+	if recoveredEvents != 1 || supersededEvents != 1 {
+		t.Fatalf("recovery events recovered=%d superseded=%d, want exactly 1 each",
+			recoveredEvents, supersededEvents)
+	}
+
+	var priorLifecycle string
+	if err := pool.QueryRow(ctx,
+		`SELECT lifecycle_state FROM synthesis_outputs WHERE id = $1`, prior.OutputID,
+	).Scan(&priorLifecycle); err != nil {
+		t.Fatalf("read prior lifecycle after recovery: %v", err)
+	}
+	if priorLifecycle != "superseded" {
+		t.Fatalf("prior lifecycle after verified recovery=%q, want superseded", priorLifecycle)
 	}
 }
 

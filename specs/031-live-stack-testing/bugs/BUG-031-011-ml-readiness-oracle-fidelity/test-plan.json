@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "specId": "BUG-031-011",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T01:50:26Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Repair The ML Readiness Regression Oracle",
+      "tests": [
+        {"id": "TP-031-011-01", "type": "pre-fix-mutation-survival", "category": "functional", "file": "tests/stress/ml_readiness_timeout_stress_test.go", "scenarioId": "SCN-BUG-031-011-001", "description": "Temporarily make every completed HTTP response healthy and prove the old one-sided oracle lets the mutant survive.", "command": "./smackerel.sh test stress --go-run '^TestMLReadinessAlways200Regression$'", "liveSystem": false},
+        {"id": "TP-031-011-02", "type": "Regression E2E readiness discriminator", "category": "stress", "file": "tests/stress/ml_readiness_timeout_stress_test.go", "scenarioId": "SCN-BUG-031-011-001", "description": "The production readiness loop reports HTTP 200 ready and HTTP 503 not ready through real HTTP transport.", "command": "./smackerel.sh test stress --go-run '^TestMLReadinessNonReadyDependencyCannotBeMaskedAsReady$'", "liveSystem": false},
+        {"id": "TP-031-011-03", "type": "integration-companion-regression", "category": "integration", "file": "tests/integration/ml_readiness_test.go", "scenarioId": "SCN-BUG-031-011-002", "description": "Existing delayed-health and timeout-fallback controls retain their behavior.", "command": "./smackerel.sh test integration --go-run '^TestMLReadiness_(WaitForHealthy|TimeoutFallback)$'", "liveSystem": false},
+        {"id": "TP-031-011-04", "type": "broader-e2e-regression", "category": "e2e-api", "file": "tests/e2e", "scenarioId": "SCN-BUG-031-011-003", "description": "Existing live API journeys retain their behavior after the test-only correction.", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"id": "TP-031-011-05", "type": "broader-stress-regression", "category": "stress", "file": "tests/stress", "scenarioId": "SCN-BUG-031-011-001", "description": "The complete stress lane remains green after the focused test correction.", "command": "./smackerel.sh test stress", "liveSystem": true},
+        {"id": "TP-031-011-06", "type": "regression-quality-guard", "category": "functional", "file": "tests/stress/ml_readiness_timeout_stress_test.go", "scenarioId": "SCN-BUG-031-011-001", "description": "The repaired regression contains no bailout or tautological bugfix pattern.", "command": "bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/stress/ml_readiness_timeout_stress_test.go", "liveSystem": false}
+      ]
+    }
+  ]
+}

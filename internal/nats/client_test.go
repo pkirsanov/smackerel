@@ -1,7 +1,10 @@
 package nats
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -272,6 +275,37 @@ func TestConnect_EmptyURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty NATS URL")
 	}
+}
+
+func TestNATSDisconnectNilDoesNotWarn(t *testing.T) {
+	output := captureNATSDisconnectLog(nil)
+	if output != "" {
+		t.Fatalf("normal NATS close emitted a warning: %q", output)
+	}
+}
+
+func TestNATSDisconnectErrorWarnsOnce(t *testing.T) {
+	const safeError = "test transport interruption"
+	output := captureNATSDisconnectLog(errors.New(safeError))
+	if warnings := strings.Count(output, "level=WARN"); warnings != 1 {
+		t.Fatalf("real NATS disconnect emitted %d warnings, want 1: %q", warnings, output)
+	}
+	if !strings.Contains(output, `msg="NATS disconnected"`) {
+		t.Fatalf("disconnect warning missing safe message: %q", output)
+	}
+	if !strings.Contains(output, safeError) {
+		t.Fatalf("disconnect warning missing safe error: %q", output)
+	}
+}
+
+func captureNATSDisconnectLog(err error) string {
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	defer slog.SetDefault(previousLogger)
+
+	logNATSDisconnect(err)
+	return output.String()
 }
 
 // TestEnsureStreams_NilCapsRejected — Spec 046 FR-046-003 adversarial

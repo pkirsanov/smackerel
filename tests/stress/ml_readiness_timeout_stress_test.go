@@ -31,7 +31,9 @@
 package stress
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -43,6 +45,30 @@ import (
 
 	"github.com/smackerel/smackerel/internal/api"
 )
+
+const expectedMLReadinessTimeoutWarning = "ML sidecar readiness timeout — using text fallback"
+
+func captureMLReadinessTimeoutWarning(run func() bool) (bool, string) {
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	defer slog.SetDefault(previousLogger)
+
+	return run(), output.String()
+}
+
+func assertMLReadinessTimeoutWarning(t *testing.T, output string, boundary time.Duration) {
+	t.Helper()
+	if warnings := strings.Count(output, "level=WARN"); warnings != 1 {
+		t.Fatalf("captured ML readiness timeout warnings = %d, want 1: %q", warnings, output)
+	}
+	if !strings.Contains(output, expectedMLReadinessTimeoutWarning) {
+		t.Fatalf("captured warning missing expected timeout message: %q", output)
+	}
+	if boundaryField := "timeout=" + boundary.String(); !strings.Contains(output, boundaryField) {
+		t.Fatalf("captured warning missing configured boundary %q: %q", boundaryField, output)
+	}
+}
 
 // sstReadinessTimeout reads the ML readiness timeout from the SST env contract.
 // Order of precedence:
@@ -169,9 +195,12 @@ func TestMLReadinessTimeoutBoundary(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	ready := engine.WaitForMLReady(ctx, boundary)
+	ready, warningOutput := captureMLReadinessTimeoutWarning(func() bool {
+		return engine.WaitForMLReady(ctx, boundary)
+	})
 	elapsed := time.Since(start)
 	probes := atomic.LoadInt32(&probeCount)
+	assertMLReadinessTimeoutWarning(t, warningOutput, boundary)
 
 	if ready {
 		t.Fatalf("adversarial-silent-bypass: WaitForMLReady returned ready=true while mock /health returned 503 (probes=%d elapsed=%s) — timeout boundary was bypassed", probes, elapsed)
@@ -221,9 +250,12 @@ func TestMLReadinessTimeoutSilentBypass(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	ready := engine.WaitForMLReady(ctx, compressedBoundary)
+	ready, warningOutput := captureMLReadinessTimeoutWarning(func() bool {
+		return engine.WaitForMLReady(ctx, compressedBoundary)
+	})
 	elapsed := time.Since(start)
 	probes := atomic.LoadInt32(&probeCount)
+	assertMLReadinessTimeoutWarning(t, warningOutput, compressedBoundary)
 
 	if ready {
 		t.Fatalf("adversarial-silent-bypass: WaitForMLReady returned ready=true with 503 mock (probes=%d elapsed=%s)", probes, elapsed)
@@ -241,45 +273,115 @@ func TestMLReadinessTimeoutSilentBypass(t *testing.T) {
 	t.Logf("silent-bypass guard: boundary=%s observed=%s probes=%d", compressedBoundary, elapsed, probes)
 }
 
-// TestMLReadinessAlways200Regression (SCN-BUG-031-006-007) is adversarial
-// case 2: if /ml/readyz (or the underlying /health probe) returns 200
-// unconditionally — i.e. the production code path is short-circuited or stubbed
-// out — WaitForMLReady would return ready=true without actually probing.
-// Asserting probes > 0 in addition to ready=true catches the bypass.
-func TestMLReadinessAlways200Regression(t *testing.T) {
+// TestMLReadinessNonReadyDependencyCannotBeMaskedAsReady covers
+// SCN-BUG-031-011-001 and SCN-BUG-031-011-002 through the production
+// WaitForMLReady request to ${MLSidecarURL}/health. Core /readyz is a separate
+// database readiness route and is intentionally not exercised here.
+func TestMLReadinessNonReadyDependencyCannotBeMaskedAsReady(t *testing.T) {
 	requireDisposableStack(t)
 	_ = sstReadinessTimeout(t)
 
-	var probeCount int32
-	mockML := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&probeCount, 1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockML.Close()
+	t.Run("non_ready_dependency", func(t *testing.T) {
+		const (
+			boundary          = 2 * time.Second
+			maxExpectedProbes = 6
+		)
 
-	engine := &api.SearchEngine{
-		MLSidecarURL:   mockML.URL,
-		HealthCacheTTL: 100 * time.Millisecond,
-	}
+		var probeCount int32
+		var unexpectedRequestCount int32
+		mockML := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet || request.URL.Path != "/health" {
+				atomic.AddInt32(&unexpectedRequestCount, 1)
+				http.NotFound(w, request)
+				return
+			}
+			atomic.AddInt32(&probeCount, 1)
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer mockML.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+		engine := &api.SearchEngine{
+			MLSidecarURL:   mockML.URL,
+			HealthCacheTTL: 100 * time.Millisecond,
+		}
 
-	start := time.Now()
-	ready := engine.WaitForMLReady(ctx, 5*time.Second)
-	elapsed := time.Since(start)
-	probes := atomic.LoadInt32(&probeCount)
+		ctx, cancel := context.WithTimeout(context.Background(), boundary+3*time.Second)
+		defer cancel()
 
-	if !ready {
-		t.Fatalf("always-200 regression: WaitForMLReady returned ready=false while mock /health returned 200 (probes=%d elapsed=%s)", probes, elapsed)
-	}
-	if probes == 0 {
-		t.Fatalf("adversarial-no-probes: WaitForMLReady returned ready=true without probing — code path bypassed (elapsed=%s)", elapsed)
-	}
-	// First probe fires at 500ms (ticker cadence). Detection MUST be under 2s.
-	if elapsed > 2*time.Second {
-		t.Fatalf("always-200 regression: WaitForMLReady took %s to detect healthy 200 (probes=%d) — ticker cadence drift", elapsed, probes)
-	}
+		start := time.Now()
+		ready, warningOutput := captureMLReadinessTimeoutWarning(func() bool {
+			return engine.WaitForMLReady(ctx, boundary)
+		})
+		elapsed := time.Since(start)
+		probes := atomic.LoadInt32(&probeCount)
+		unexpectedRequests := atomic.LoadInt32(&unexpectedRequestCount)
+		assertMLReadinessTimeoutWarning(t, warningOutput, boundary)
 
-	t.Logf("always-200 guard: ready=true within %s probes=%d", elapsed, probes)
+		if ready {
+			t.Fatalf("adversarial-always-ready: WaitForMLReady returned ready=true while ML /health returned 503 (probes=%d elapsed=%s)", probes, elapsed)
+		}
+		if unexpectedRequests != 0 {
+			t.Fatalf("ML readiness issued %d request(s) outside GET /health", unexpectedRequests)
+		}
+		if probes == 0 {
+			t.Fatalf("adversarial-no-probes: WaitForMLReady returned without probing GET /health")
+		}
+		if probes > maxExpectedProbes {
+			t.Fatalf("adversarial-unbounded-probes: GET /health probes=%d, want <=%d within %s", probes, maxExpectedProbes, boundary)
+		}
+		if elapsed < boundary-500*time.Millisecond {
+			t.Fatalf("adversarial-too-fast: WaitForMLReady returned after %s, before bounded timeout %s", elapsed, boundary)
+		}
+		if elapsed > boundary+1500*time.Millisecond {
+			t.Fatalf("adversarial-too-slow: WaitForMLReady returned after %s, beyond bounded timeout %s", elapsed, boundary+1500*time.Millisecond)
+		}
+
+		t.Logf("non-ready ML /health remained not ready: boundary=%s observed=%s probes=%d", boundary, elapsed, probes)
+	})
+
+	t.Run("healthy_control", func(t *testing.T) {
+		const boundary = 5 * time.Second
+
+		var probeCount int32
+		var unexpectedRequestCount int32
+		mockML := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet || request.URL.Path != "/health" {
+				atomic.AddInt32(&unexpectedRequestCount, 1)
+				http.NotFound(w, request)
+				return
+			}
+			atomic.AddInt32(&probeCount, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer mockML.Close()
+
+		engine := &api.SearchEngine{
+			MLSidecarURL:   mockML.URL,
+			HealthCacheTTL: 100 * time.Millisecond,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), boundary)
+		defer cancel()
+
+		start := time.Now()
+		ready := engine.WaitForMLReady(ctx, boundary)
+		elapsed := time.Since(start)
+		probes := atomic.LoadInt32(&probeCount)
+		unexpectedRequests := atomic.LoadInt32(&unexpectedRequestCount)
+
+		if !ready {
+			t.Fatalf("healthy control: WaitForMLReady returned ready=false while ML /health returned 200 (probes=%d elapsed=%s)", probes, elapsed)
+		}
+		if unexpectedRequests != 0 {
+			t.Fatalf("ML readiness issued %d request(s) outside GET /health", unexpectedRequests)
+		}
+		if probes == 0 {
+			t.Fatalf("adversarial-no-probes: WaitForMLReady returned ready=true without probing GET /health")
+		}
+		if elapsed > 2*time.Second {
+			t.Fatalf("healthy control: WaitForMLReady took %s to observe HTTP 200 (probes=%d)", elapsed, probes)
+		}
+
+		t.Logf("healthy ML /health reported ready: observed=%s probes=%d", elapsed, probes)
+	})
 }

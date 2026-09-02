@@ -61,25 +61,10 @@ type SynthesisRunKey struct {
 	SourceIDs     []string
 }
 
-// LogicalKey is the stable identity of one synthesis window.
-//
-// SOURCE SET IS DELIBERATELY NOT PART OF IT. It was, and that made identity
-// move with the corpus: on a system that ingests continuously, two operator
-// triggers seconds apart saw different source sets, hashed to different keys,
-// and produced TWO outputs for one window -- exactly the duplicate
-// SCN-004-004-02 forbids. Identity that changes while you are looking at it is
-// not identity.
-//
-// The scenario names "principal/cadence/window/source-set/policy", but its
-// load-bearing REQUIREMENT is that duplicate triggers converge on one durable
-// identity. Those two cannot both hold against a live corpus, so the
-// requirement wins and the field list yields.
-//
-// Provenance is not lost: source_set_digest is still recorded on the run row,
-// so what was actually read remains inspectable. What changed is that it
-// describes the run rather than naming it. A window whose inputs changed enough
-// to deserve a fresh answer is superseded through the lifecycle, which is the
-// mechanism built for exactly that.
+// LogicalKey is the stable identity of one synthesis input. Source and policy
+// identity belong here so changed input creates a replacement run; concurrency
+// is serialized separately by synthesisWindowLockKey, which intentionally uses
+// only actor, cadence, and normalized window.
 func (k SynthesisRunKey) LogicalKey() string {
 	h := sha256.New()
 	// Length-prefix every field. Without it, cadence "a" + principal "bc" and
@@ -90,6 +75,7 @@ func (k SynthesisRunKey) LogicalKey() string {
 		k.WindowStart.UTC().Format(time.RFC3339Nano),
 		k.WindowEnd.UTC().Format(time.RFC3339Nano),
 		k.PolicyVersion,
+		k.SourceSetDigest(),
 	} {
 		fmt.Fprintf(h, "%d:%s|", len(part), part)
 	}
@@ -118,6 +104,12 @@ type SynthesisAggregate struct {
 	Insights               []SynthesisInsight
 	IncludedClasses        []string
 	OmittedClasses         []string
+	Outcome                SynthesisEventType
+	Principal              string
+	Cadence                SynthesisCadence
+	WindowStart            time.Time
+	WindowEnd              time.Time
+	LifecycleState         string
 }
 
 // SynthesisPersistence commits synthesis aggregates durably.
@@ -192,6 +184,9 @@ func (p *SynthesisPersistence) Commit(
 	// Rollback is unconditional on every path that does not reach Commit; after
 	// a successful Commit it is a no-op.
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, synthesisWindowLockKey(key)); err != nil {
+		return nil, fmt.Errorf("lock synthesis window: %w", err)
+	}
 
 	citationCount := 0
 	for _, in := range insights {
@@ -207,8 +202,10 @@ func (p *SynthesisPersistence) Commit(
 	err = tx.QueryRow(ctx, `
 		INSERT INTO synthesis_runs
 			(id, logical_key, cadence, principal, window_start, window_end,
-			 policy_version, source_set_digest, state, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'succeeded', $9, $9)
+			 policy_version, source_set_digest, state, created_at, updated_at,
+			 lifecycle_state, attempt_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'succeeded', $9, $9,
+			'current', 0)
 		ON CONFLICT (logical_key) DO UPDATE
 		SET state = 'succeeded', updated_at = $9
 		WHERE synthesis_runs.state <> 'succeeded'
@@ -223,13 +220,44 @@ func (p *SynthesisPersistence) Commit(
 		return nil, fmt.Errorf("insert synthesis run: %w", err)
 	}
 
+	var priorOutputID, priorRunID string
+	priorErr := tx.QueryRow(ctx, `
+		SELECT o.id, o.run_id
+		FROM synthesis_outputs o
+		WHERE o.principal = $1 AND o.cadence = $2
+			AND o.window_start = $3 AND o.window_end = $4
+			AND o.lifecycle_state = 'current' AND o.run_id <> $5
+		FOR UPDATE
+	`, key.Principal, string(key.Cadence), key.WindowStart.UTC(),
+		key.WindowEnd.UTC(), runID).Scan(&priorOutputID, &priorRunID)
+	if priorErr != nil && !errors.Is(priorErr, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("read prior current synthesis output: %w", priorErr)
+	}
+	if priorOutputID != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE synthesis_outputs
+			SET lifecycle_state = 'superseded', superseded_at = $2
+			WHERE id = $1 AND lifecycle_state = 'current'
+		`, priorOutputID, now.UTC()); err != nil {
+			return nil, fmt.Errorf("supersede prior synthesis output: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE synthesis_runs SET lifecycle_state = 'superseded', updated_at = $2
+			WHERE id = $1
+		`, priorRunID, now.UTC()); err != nil {
+			return nil, fmt.Errorf("supersede prior synthesis run: %w", err)
+		}
+	}
+
 	_, err = tx.Exec(ctx, `
 		INSERT INTO synthesis_outputs
 			(id, run_id, output_kind, insight_count, citation_count,
-			 evaluated_artifact_count, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 evaluated_artifact_count, created_at, principal, cadence,
+			 window_start, window_end, lifecycle_state)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'current')
 	`, outputID, runID, string(c.Kind), len(insights), citationCount,
-		c.EvaluatedArtifactCount, now.UTC())
+		c.EvaluatedArtifactCount, now.UTC(), key.Principal, string(key.Cadence),
+		key.WindowStart.UTC(), key.WindowEnd.UTC())
 	if err != nil {
 		return nil, fmt.Errorf("insert synthesis output: %w", err)
 	}
@@ -297,6 +325,11 @@ func (p *SynthesisPersistence) Commit(
 			"post-commit read-back mismatch for output %s: stored insights=%d citations=%d, expected insights=%d citations=%d",
 			outputID, agg.InsightCount, agg.CitationCount, len(insights), citationCount)
 	}
+	if err := verifyAggregateReadback(agg, SynthesisAttempt{
+		RunID: runID, LogicalKey: logicalKey, Key: key,
+	}); err != nil {
+		return nil, fmt.Errorf("post-commit read-back verification failed for output %s: %w", outputID, err)
+	}
 	return agg, nil
 }
 
@@ -308,12 +341,16 @@ func (p *SynthesisPersistence) ReadAggregate(ctx context.Context, outputID strin
 	var kind string
 	err := p.pool.QueryRow(ctx, `
 		SELECT o.run_id, r.logical_key, o.output_kind, o.insight_count,
-		       o.citation_count, o.evaluated_artifact_count, o.created_at
+		       o.citation_count, o.evaluated_artifact_count, o.created_at,
+		       o.principal, o.cadence, o.window_start, o.window_end,
+		       o.lifecycle_state
 		FROM synthesis_outputs o
 		JOIN synthesis_runs r ON r.id = o.run_id
 		WHERE o.id = $1
 	`, outputID).Scan(&agg.RunID, &agg.LogicalKey, &kind, &agg.InsightCount,
-		&agg.CitationCount, &agg.EvaluatedArtifactCount, &agg.CreatedAt)
+		&agg.CitationCount, &agg.EvaluatedArtifactCount, &agg.CreatedAt,
+		&agg.Principal, &agg.Cadence, &agg.WindowStart, &agg.WindowEnd,
+		&agg.LifecycleState)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrSynthesisOutputNotFound
@@ -414,28 +451,62 @@ func (p *SynthesisPersistence) RecordAttempt(
 	failureClass string,
 	failureMessage string,
 ) error {
-	switch outcome {
-	case AttemptSucceeded, AttemptIdempotentNoChange:
-		if failureClass != "" {
-			return fmt.Errorf("outcome %q must not carry a failure class", outcome)
-		}
-	case AttemptFailed:
-		if failureClass == "" {
-			return fmt.Errorf("failed attempt requires a failure class")
-		}
-	default:
-		return fmt.Errorf("unknown synthesis attempt outcome %q", outcome)
+	safeMessage, err := validateLegacyAttempt(outcome, failureClass, failureMessage)
+	if err != nil {
+		return err
 	}
+	at := time.Now().UTC()
 
-	_, err := p.pool.Exec(ctx, `
+	_, err = p.pool.Exec(ctx, `
 		INSERT INTO synthesis_run_attempts
-			(logical_key, outcome, failure_class, failure_message)
-		VALUES ($1, $2, $3, $4)
-	`, logicalKey, string(outcome), nullIfEmpty(failureClass), nullIfEmpty(failureMessage))
+			(logical_key, outcome, failure_class, failure_message, recorded_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, logicalKey, string(outcome), nullIfEmpty(failureClass),
+		nullIfEmpty(safeMessage), at)
 	if err != nil {
 		return fmt.Errorf("record synthesis attempt: %w", err)
 	}
 	return nil
+}
+
+func validateLegacyAttempt(
+	outcome SynthesisAttemptOutcome,
+	failureClass string,
+	failureMessage string,
+) (string, error) {
+	if strings.TrimSpace(failureMessage) != "" && outcome != AttemptFailed {
+		return "", fmt.Errorf("outcome %q must not carry a failure message", outcome)
+	}
+	switch outcome {
+	case AttemptSucceeded:
+		if failureClass != "" {
+			return "", fmt.Errorf("outcome %q must not carry a failure class", outcome)
+		}
+		return "", nil
+	case AttemptIdempotentNoChange:
+		if failureClass != "" {
+			return "", fmt.Errorf("outcome %q must not carry a failure class", outcome)
+		}
+		return "", nil
+	case AttemptFailed:
+		if failureClass == "" {
+			return "", fmt.Errorf("failed attempt requires a failure class")
+		}
+		if len(failureClass) > 128 {
+			return "", fmt.Errorf("failed attempt failure class exceeds 128 bytes")
+		}
+		for _, r := range failureClass {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' && r != '-' {
+				return "", fmt.Errorf("failed attempt failure class contains an unsafe character")
+			}
+		}
+		// Legacy callers historically passed raw database errors here. Persist a
+		// fixed diagnostic instead so an unlinked compatibility row cannot leak
+		// SQL or corpus-derived content while retaining the safe failure class.
+		return "attempt failed", nil
+	default:
+		return "", fmt.Errorf("unknown synthesis attempt outcome %q", outcome)
+	}
 }
 
 func nullIfEmpty(s string) any {
@@ -499,13 +570,18 @@ func (p *SynthesisPersistence) RecordAttemptWithKind(
 	if outcome != AttemptFailed && failureKind != "" {
 		return fmt.Errorf("outcome %q must not carry a failure kind", outcome)
 	}
+	safeMessage, err := validateLegacyAttempt(outcome, failureClass, failureMessage)
+	if err != nil {
+		return err
+	}
+	at := time.Now().UTC()
 
 	if _, err := p.pool.Exec(ctx, `
 		INSERT INTO synthesis_run_attempts
-			(logical_key, outcome, failure_class, failure_kind, failure_message)
-		VALUES ($1, $2, $3, $4, $5)
+			(logical_key, outcome, failure_class, failure_kind, failure_message, recorded_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`, logicalKey, string(outcome), nullIfEmpty(failureClass),
-		nullIfEmpty(failureKind), nullIfEmpty(failureMessage)); err != nil {
+		nullIfEmpty(failureKind), nullIfEmpty(safeMessage), at); err != nil {
 		return fmt.Errorf("record synthesis attempt: %w", err)
 	}
 	return nil

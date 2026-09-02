@@ -39,6 +39,19 @@
 
 ---
 
+## Scope 7 Design Mirror
+
+Parent Scope 7 follows the authoritative
+[child SCOPE-03A migration 067 compatibility amendment](bugs/BUG-004-004-synthesis-persistence-and-health-truth/design.md#scope-7--scope-03a-migration-067-compatibility-amendment).
+Migration 067 keeps legacy 064-066 attempts nullable and unlinked. It derives
+output identity from the referenced run without fabricating events. Causal
+writes and one-current enforcement remain strict. The local source canary does
+not select Scope 8's operator-owned pre-deploy pointer. Code rollback preserves
+migration 067 and its history. Exceptional restore remains a separate
+operator-authorized data action.
+
+---
+
 ## ADR-001: Synchronous Intelligence Pipeline (PRD-002)
 
 **Status:** Accepted  

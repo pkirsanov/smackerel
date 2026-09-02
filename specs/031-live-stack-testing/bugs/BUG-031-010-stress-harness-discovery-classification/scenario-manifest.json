@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-010-stress-harness-discovery-classification",
+  "generatedAt": "2026-09-02T00:00:00Z",
+  "generatedBy": "bubbles.bug",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-031-010-001",
+      "scope": "scope-1-stress-harness-discovery-classification",
+      "title": "List failure propagates",
+      "gherkin": {
+        "given": "The readiness canary passed and go test -list emits a diagnostic before exiting non-zero",
+        "when": "The harness evaluates workload packages for a selector",
+        "then": "The harness preserves the discovery status and does not report a selector miss"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_ListFailurePropagates"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/readiness/canary_test.go",
+          "plannedTestId": "TestGoStressHarness_ListFailurePropagates",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": ["report.md#root-cause-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-031-010-002",
+      "scope": "scope-1-stress-harness-discovery-classification",
+      "title": "JSON warning is rejected",
+      "gherkin": {
+        "given": "A successful workload emits a direct JSON level WARN record",
+        "when": "The harness classifies captured output",
+        "then": "The harness fails with a runtime warning diagnostic"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_JSONWarningAndQuotedLiteralClassification"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/readiness/canary_test.go",
+          "plannedTestId": "TestGoStressHarness_JSONWarningAndQuotedLiteralClassification/json-warning",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": ["report.md#root-cause-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-031-010-003",
+      "scope": "scope-1-stress-harness-discovery-classification",
+      "title": "Quoted warning literal is benign",
+      "gherkin": {
+        "given": "A successful workload emits warning-shaped text only inside a quoted message",
+        "when": "The harness classifies captured output",
+        "then": "The clean workload result is preserved"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_JSONWarningAndQuotedLiteralClassification"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/readiness/canary_test.go",
+          "plannedTestId": "TestGoStressHarness_JSONWarningAndQuotedLiteralClassification/quoted-literal",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": ["report.md#root-cause-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-031-010-004",
+      "scope": "scope-1-stress-harness-discovery-classification",
+      "title": "Grep failure fails loud",
+      "gherkin": {
+        "given": "The classifier grep command exits with an execution error",
+        "when": "The harness classifies otherwise clean output",
+        "then": "The harness exits non-zero because classification is untrusted"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_ClassifierCommandFailurePropagates"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/readiness/canary_test.go",
+          "plannedTestId": "TestGoStressHarness_ClassifierCommandFailurePropagates",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": ["report.md#root-cause-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-031-010-005",
+      "scope": "scope-1-stress-harness-discovery-classification",
+      "title": "Capture failure fails loud",
+      "gherkin": {
+        "given": "The output capture writer fails",
+        "when": "The harness runs a checked package",
+        "then": "The harness exits non-zero before classifying incomplete output"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_CaptureFailurePropagates"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/readiness/canary_test.go",
+          "plannedTestId": "TestGoStressHarness_CaptureFailurePropagates",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": ["report.md#root-cause-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-031-010-006",
+      "scope": "scope-1-stress-harness-discovery-classification",
+      "title": "Failure paths clean captures",
+      "gherkin": {
+        "given": "Each adversarial fixture owns an isolated temporary capture directory",
+        "when": "Discovery, classifier, capture, forbidden-output, and workload failures complete",
+        "then": "Every capture directory is empty"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_FailurePathsCleanCaptureFiles"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/readiness/canary_test.go",
+          "plannedTestId": "TestGoStressHarness_FailurePathsCleanCaptureFiles",
+          "status": "not-yet-authored",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": ["report.md#root-cause-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -196,7 +196,7 @@ func (l *Linter) checkStaleKnowledge(ctx context.Context) ([]LintFinding, error)
 	rows, err := l.pool.Query(ctx, `
 		SELECT kc.id, kc.title, kc.updated_at
 		FROM knowledge_concepts kc
-		WHERE kc.updated_at < NOW() - ($1 || ' days')::interval
+		WHERE kc.updated_at < NOW() - make_interval(days => $1)
 		  AND EXISTS (
 			SELECT 1 FROM artifacts a
 			WHERE a.id = ANY(kc.source_artifact_ids)

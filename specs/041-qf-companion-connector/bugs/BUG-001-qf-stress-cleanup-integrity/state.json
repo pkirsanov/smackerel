@@ -1,0 +1,165 @@
+{
+  "version": 3,
+  "bugId": "BUG-001",
+  "featureDir": "specs/041-qf-companion-connector/bugs/BUG-001-qf-stress-cleanup-integrity",
+  "featureName": "QF Stress Cleanup Integrity",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "Artifact-only bug packet created. Runtime reproduction, test authoring, implementation, execution, and validate-owned certification have not run.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/041-qf-companion-connector"
+  ],
+  "workBoundary": {
+    "repositoryRoots": [
+      "smackerel"
+    ],
+    "specTargets": [
+      "specs/041-qf-companion-connector/bugs/BUG-001-qf-stress-cleanup-integrity"
+    ],
+    "allowedPaths": [
+      "specs/041-qf-companion-connector/bugs/BUG-001-qf-stress-cleanup-integrity/**",
+      "tests/stress/qf_decisions_sync_stress_test.go",
+      "tests/stress/qf_decision_event_replay_test.go"
+    ],
+    "crossRepoPolicy": "forbidden"
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "goalContractRef": null,
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
+    "currentScope": "SCOPE-01",
+    "substate": "needs_reverification",
+    "runStartedAt": "2026-09-02T02:32:03Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "select",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-09-02T01:52:06Z",
+        "summary": "Created the full artifact-only BUG-001 packet from current-tree inspection. No source/test edit, Docker command, product test, validation, audit, chaos, commit, or push is claimed."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Deterministic QF Stress Fixture Teardown",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "invalidationLedger": []
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "on",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "user-constraint"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": [
+        "select"
+      ],
+      "statusBefore": "missing_state",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-09-02T01:52:06Z",
+      "runEndedAt": "2026-09-02T01:52:06Z",
+      "summary": "Initialized one focused full bug packet with exact two-test-file boundary, four scenario contracts, eight planned test rows, truthful not-run evidence, and no runtime/source/test change."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "createdAt": "2026-09-02T01:52:06Z",
+  "lastUpdatedAt": "2026-09-02T01:52:06Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
+    "specDoneRequires": "All scopes done and validate-owned certification permits promotion."
+  },
+  "notes": "Packet creation only. The next delivery phase must first execute and record the RED regression, then route test edits through the owning implementation/test specialists."
+}

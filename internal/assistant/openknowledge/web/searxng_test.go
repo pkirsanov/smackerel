@@ -144,14 +144,46 @@ func TestSearxNG_Search_HTTP429(t *testing.T) {
 	}
 }
 
-func TestSearxNG_Search_MalformedJSON(t *testing.T) {
-	p, _ := newTestSearxNG(t, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"results": [not json`)
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+// Regression for R-015: accepting a well-formed results=[] response as an
+// upstream no-hit must not turn malformed protocol or transport failures into
+// successful empty searches.
+func TestSearxNG_Search_AdversarialNoHitDoesNotMaskBrokenIntegration(t *testing.T) {
+	t.Run("malformed JSON remains an error", func(t *testing.T) {
+		p, _ := newTestSearxNG(t, func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `{"results": [not json`)
+		})
+		got, err := p.Search(context.Background(), "q", 3)
+		if got != nil {
+			t.Fatalf("malformed response returned snippets: %#v", got)
+		}
+		if !errors.Is(err, ErrMalformedResponse) {
+			t.Fatalf("want ErrMalformedResponse, got %v", err)
+		}
 	})
-	_, err := p.Search(context.Background(), "q", 3)
-	if !errors.Is(err, ErrMalformedResponse) {
-		t.Fatalf("want ErrMalformedResponse, got %v", err)
-	}
+
+	t.Run("transport failure remains an error", func(t *testing.T) {
+		transportErr := errors.New("adversarial transport failure")
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, transportErr
+		})}
+		p, err := NewSearxNG("http://searxng.invalid", client)
+		if err != nil {
+			t.Fatalf("NewSearxNG: %v", err)
+		}
+		got, err := p.Search(context.Background(), "q", 3)
+		if got != nil {
+			t.Fatalf("transport failure returned snippets: %#v", got)
+		}
+		if !errors.Is(err, ErrProviderUnreachable) {
+			t.Fatalf("want ErrProviderUnreachable, got %v", err)
+		}
+	})
 }
 
 func TestSearxNG_Search_InvalidQuery(t *testing.T) {
@@ -200,22 +232,6 @@ func TestSearxNG_Search_AdversarialEmptyURL(t *testing.T) {
 	}
 	if got[0].URL != "https://real.example/x" {
 		t.Fatalf("unexpected survivor: %+v", got[0])
-	}
-}
-
-func TestSearxNG_Search_TransportError(t *testing.T) {
-	// Construct a provider against a server we immediately close so
-	// the round-trip fails at transport level (no HTTP status).
-	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	url := srv.URL
-	srv.Close()
-	p, err := NewSearxNG(url, http.DefaultClient)
-	if err != nil {
-		t.Fatalf("NewSearxNG: %v", err)
-	}
-	_, err = p.Search(context.Background(), "q", 3)
-	if !errors.Is(err, ErrProviderUnreachable) {
-		t.Fatalf("want ErrProviderUnreachable, got %v", err)
 	}
 }
 

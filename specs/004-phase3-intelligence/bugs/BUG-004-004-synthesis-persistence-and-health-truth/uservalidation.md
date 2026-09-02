@@ -1,5 +1,19 @@
 # User Validation: [BUG-004-004]
 
+## Corrective Plan Authorization - 2026-08-30
+
+- [x] The operator authorizes execution of the corrected SCOPE-03A and SCOPE-04A plan recorded in [scopes.md](scopes.md), including SCOPE-05 regression revalidation after the causal read model is corrected.
+
+This checked row records planning authorization only. It does not accept implementation, runtime behavior, test results, candidate recovery, deployment admission, or rollback.
+
+### Corrective Runtime Acceptance - Not Yet Granted
+
+- [ ] The immutable causal event ledger, audit-write failure propagation, changed-source replacement, and read-back recovery contracts are accepted after new SCOPE-03A evidence is reviewed in [report.md](report.md#corrective-scope-03a-evidence).
+- [ ] Cadence-scoped health, startup reconciliation, fail-closed strict readiness, and verified recovery contracts are accepted after new SCOPE-04A evidence is reviewed in [report.md](report.md#corrective-scope-04a-evidence).
+- [ ] The historical Today and Status behavior is accepted against the corrected model after SCOPE-05 regression revalidation evidence is reviewed in [report.md](report.md#corrective-scope-04a-evidence).
+
+**Authorization source:** The operator's 2026-08-30 instruction to finish this planning reconciliation and set `nextRequiredOwner` to `bubbles.implement`.
+
 ## Automation Readiness
 
 Automation verified the delivered behavior far enough to be worth a human's

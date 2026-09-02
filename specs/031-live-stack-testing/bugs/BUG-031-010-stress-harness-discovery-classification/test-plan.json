@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "specId": "BUG-031-010",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T00:00:00Z",
+  "scopes": [
+    {
+      "scopeId": "scope-1-stress-harness-discovery-classification",
+      "scopeName": "Make Stress Discovery and Output Classification Fail Loud",
+      "tests": [
+        {
+          "id": "TP-031-010-01",
+          "type": "adversarial-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_ListFailurePropagates",
+          "scenarioId": "SCN-031-010-001",
+          "description": "Fake go test -list failure preserves its exact status and cannot become selector no-match.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-02",
+          "type": "classifier-matrix-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_JSONWarningAndQuotedLiteralClassification",
+          "scenarioIds": ["SCN-031-010-002", "SCN-031-010-003"],
+          "description": "Direct JSON WARN records fail while quoted logfmt, timestamp, and escaped JSON warning literals remain clean.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-03",
+          "type": "adversarial-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_ClassifierCommandFailurePropagates",
+          "scenarioId": "SCN-031-010-004",
+          "description": "Fake grep execution failure terminates classification instead of producing clean.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-04",
+          "type": "adversarial-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_CaptureFailurePropagates",
+          "scenarioId": "SCN-031-010-005",
+          "description": "Fake capture-writer failure terminates before incomplete output can be classified.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-05",
+          "type": "cleanup-matrix-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_FailurePathsCleanCaptureFiles",
+          "scenarioId": "SCN-031-010-006",
+          "description": "Every injected failure path owns and empties an isolated capture directory.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-06",
+          "type": "classifier-regression-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_ZeroSkipZeroRuntimeWarningContract",
+          "scenarioIds": ["SCN-031-010-002", "SCN-031-010-003"],
+          "description": "Existing clean, skip, warning, and benign no-tests output contracts remain protected.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-07",
+          "type": "status-regression-unit",
+          "category": "unit",
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_WorkloadFailurePropagatesAfterCanary",
+          "scenarioIds": ["SCN-031-010-001", "SCN-031-010-006"],
+          "description": "Readiness ordering and workload failure status propagation remain intact.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-031-010-08",
+          "type": "live-stress-regression",
+          "category": "stress",
+          "file": "scripts/runtime/go-stress.sh",
+          "scenarioIds": ["SCN-031-010-001", "SCN-031-010-002", "SCN-031-010-003", "SCN-031-010-004", "SCN-031-010-005", "SCN-031-010-006"],
+          "description": "The full disposable-stack stress runner preserves readiness, selection, workload, classification, and cleanup behavior.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true,
+          "executionConstraint": "Run only after the active E2E lane is idle."
+        }
+      ]
+    }
+  ]
+}

@@ -149,7 +149,7 @@ func Connect(ctx context.Context, url string, authToken string) (*Client, error)
 		// during container restarts or brief network blips.
 		nats.MaxReconnects(-1),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
-			slog.Warn("NATS disconnected", "error", err)
+			logNATSDisconnect(err)
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			slog.Info("NATS reconnected", "url", nc.ConnectedUrl())
@@ -173,6 +173,13 @@ func Connect(ctx context.Context, url string, authToken string) (*Client, error)
 
 	slog.Info("connected to NATS", "url", nc.ConnectedUrl())
 	return &Client{Conn: nc, JetStream: js}, nil
+}
+
+func logNATSDisconnect(err error) {
+	if err == nil {
+		return
+	}
+	slog.Warn("NATS disconnected", "error", err)
 }
 
 // EnsureStreams creates or updates all required JetStream streams.

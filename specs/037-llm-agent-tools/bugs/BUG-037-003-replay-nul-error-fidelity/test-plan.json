@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "specId": "BUG-037-003",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T01:50:26Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-01",
+      "scopeName": "Tighten The Replay NUL Error Oracle",
+      "tests": [
+        {
+          "id": "TP-037-003-01",
+          "type": "pre-fix-mutation-survival",
+          "category": "functional",
+          "file": "tests/stress/agent/chaos_round1_test.go",
+          "scenarioId": "SCN-BUG-037-003-002",
+          "description": "Temporarily point the NUL case at a missing binary and prove the current open-set oracle false-passes.",
+          "command": "./smackerel.sh test stress --go-run '^TestChaos_037_ReplayCLIErrorPaths/null_byte_in_trace_id$'",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-037-003-02",
+          "type": "Regression E2E CLI error identity",
+          "category": "stress",
+          "file": "tests/stress/agent/chaos_round1_test.go",
+          "scenarioId": "SCN-BUG-037-003-001",
+          "description": "The built binary exists, the context is active, and the NUL launch error wraps syscall EINVAL.",
+          "command": "./smackerel.sh test stress --go-run '^TestChaos_037_ReplayCLIErrorPaths/null_byte_in_trace_id$'",
+          "liveSystem": false
+        },
+        {
+          "id": "TP-037-003-03",
+          "type": "replay-exit-code-companion",
+          "category": "stress",
+          "file": "tests/stress/agent/chaos_round1_test.go",
+          "scenarioId": "SCN-BUG-037-003-003",
+          "description": "Non-NUL malformed trace IDs execute the CLI and return replay ERROR exit code 2.",
+          "command": "./smackerel.sh test stress --go-run '^TestChaos_037_ReplayCLIErrorPaths$'",
+          "liveSystem": true
+        },
+        {
+          "id": "TP-037-003-04",
+          "type": "broader-e2e-regression",
+          "category": "e2e-api",
+          "file": "tests/e2e/agent",
+          "scenarioId": "SCN-BUG-037-003-003",
+          "description": "Replay PASS, FAIL, and ERROR workflows remain intact after the test-only correction.",
+          "command": "./smackerel.sh test e2e --go-package assistant",
+          "liveSystem": true
+        },
+        {
+          "id": "TP-037-003-05",
+          "type": "broader-stress-regression",
+          "category": "stress",
+          "file": "tests/stress/agent",
+          "scenarioId": "SCN-BUG-037-003-001",
+          "description": "The complete stress lane remains green after the focused test correction.",
+          "command": "./smackerel.sh test stress",
+          "liveSystem": true
+        },
+        {
+          "id": "TP-037-003-06",
+          "type": "regression-quality-guard",
+          "category": "functional",
+          "file": "tests/stress/agent/chaos_round1_test.go",
+          "scenarioId": "SCN-BUG-037-003-001",
+          "description": "The repaired NUL regression contains no bailout or open-set false-pass pattern.",
+          "command": "bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/stress/agent/chaos_round1_test.go",
+          "liveSystem": false
+        }
+      ]
+    }
+  ]
+}

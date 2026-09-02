@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-006-knowledge-lint-zero-scale",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T01:51:33Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-B025006-001",
+      "scope": "scope-1-prove-knowledge-lint-scale",
+      "title": "Production lint starts with exactly 1000 owned artifacts",
+      "gherkin": {
+        "given": "a disposable stress PostgreSQL database and a unique run ownership token",
+        "when": "the stress test seeds its synthetic artifact workload",
+        "then": "owned rows, distinct artifact IDs, and distinct content hashes each equal 1000 before production lint starts"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "internal-contract",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_LintAt1000ArtifactScale"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-B025006-002",
+      "scope": "scope-1-prove-knowledge-lint-scale",
+      "title": "Production lint returns a fresh result within budget",
+      "gherkin": {
+        "given": "exactly 1000 owned synthetic artifacts exist",
+        "when": "the test invokes the production knowledge linter",
+        "then": "a fresh persisted report returns and wall and report durations are each at most five minutes"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_LintAt1000ArtifactScale"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-B025006-003",
+      "scope": "scope-1-prove-knowledge-lint-scale",
+      "title": "Zero or drifted scale fails before lint",
+      "gherkin": {
+        "given": "the observed owned count is zero, 999, or 1001",
+        "when": "the cardinality guard expects exactly 1000",
+        "then": "the guard returns an exact cardinality error before production lint can run"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "internal-contract",
+      "changeType": "regression",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_LintScaleCardinalityGuardRejectsZeroAndDrift"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-B025006-004",
+      "scope": "scope-1-prove-knowledge-lint-scale",
+      "title": "Cleanup proves zero owned residue",
+      "gherkin": {
+        "given": "the test created owned artifacts and one lint report",
+        "when": "cleanup runs",
+        "then": "only test-owned rows are deleted and any remaining owned row fails the test"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "internal-contract",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_LintAt1000ArtifactScale"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-B025006-005",
+      "scope": "scope-1-prove-knowledge-lint-scale",
+      "title": "Stress dependency failures remain fail loud",
+      "gherkin": {
+        "given": "required stress configuration, a dependency, or a knowledge endpoint is unavailable",
+        "when": "the knowledge stress lane reaches that path",
+        "then": "the test fails with the observed reason and no required path skips"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_LintAt1000ArtifactScale"
+        },
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_ConceptQueryPerformance"
+        },
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_SearchWithKnowledgeLayerPerformance"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

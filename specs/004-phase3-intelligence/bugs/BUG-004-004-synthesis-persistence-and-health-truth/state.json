@@ -5,8 +5,8 @@
   "featureName": "Synthesis Persistence And Health Are Not Truthful",
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
-  "status": "done",
-  "statusReason": "All five scopes Done with 88 Definition of Done rows closed and none open. Eight phases recorded with provenance: implement, test, regression, security, simplify, stabilize, validate and audit. The full integration lane exits 0 after two pre-existing test defects were repaired in e4fdc6c4. The human acceptance gate is satisfied by the operator sign-off recorded in uservalidation.md.",
+  "status": "in_progress",
+  "statusReason": "Reopened on 2026-08-30 after the operator-reported live strict-health contradiction and planning reconciliation identified missing immutable event-ledger and causal actor/cadence projection obligations. SCOPE-03 and SCOPE-04 corrective work is active; SCOPE-05 remains historically done but requires regression revalidation.",
   "workflowMode": "bugfix-fastlane",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -15,8 +15,8 @@
   "specDependsOn": [
     "specs/004-phase3-intelligence"
   ],
-  "certifiedAt": "2026-08-27T02:30:00Z",
-  "requiresRevalidation": false,
+  "certifiedAt": null,
+  "requiresRevalidation": true,
   "requirementsRecovery": {
     "reviewId": "2026-07-24-independent-planning-review",
     "status": "analyst_reconciled",
@@ -31,9 +31,9 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "SCOPE-04",
-    "substate": "implemented",
-    "runStartedAt": "2026-07-26T02:34:00Z",
+    "currentScope": "SCOPE-03",
+    "substate": "needs_reverification",
+    "runStartedAt": "2026-08-30T07:22:08Z",
     "completedPhaseClaims": [
       {
         "phase": "implement",
@@ -224,40 +224,18 @@
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
-      "SCOPE-03",
-      "SCOPE-04",
       "SCOPE-05"
     ],
-    "completedPhases": [
-      "implement",
-      "test",
-      "regression",
-      "security",
-      "simplify",
-      "stabilize",
-      "validate",
-      "audit"
-    ]
+    "completedPhases": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
-      "SCOPE-03",
-      "SCOPE-04",
       "SCOPE-05"
     ],
-    "certifiedCompletedPhases": [
-      "implement",
-      "test",
-      "regression",
-      "security",
-      "simplify",
-      "stabilize",
-      "validate",
-      "audit"
-    ],
+    "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
         "scope": 1,
@@ -285,7 +263,7 @@
         "scope": 3,
         "scopeId": "SCOPE-03",
         "name": "Durable Scheduler Retry And Lifecycle",
-        "status": "done",
+        "status": "in_progress",
         "dependsOn": [
           "SCOPE-02"
         ],
@@ -297,7 +275,7 @@
         "scope": 4,
         "scopeId": "SCOPE-04",
         "name": "Canonical Read Health Alert And API Truth",
-        "status": "done",
+        "status": "in_progress",
         "dependsOn": [
           "SCOPE-03"
         ],
@@ -315,24 +293,51 @@
         ],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": null,
+        "requiresRevalidation": true
       }
     ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
     },
-    "invalidationLedger": [],
-    "completedPhases": [
-      "implement",
-      "test",
-      "regression",
-      "security",
-      "simplify",
-      "stabilize",
-      "validate",
-      "audit"
-    ]
+    "invalidationLedger": [
+      {
+        "invalidatedAt": "2026-08-30T07:22:08Z",
+        "invalidatedBy": "operator-authorized planning reconciliation",
+        "claimSource": "operator-reported diagnostic plus report.md#current-tree-findings",
+        "priorStatus": "done",
+        "priorCertifiedAt": "2026-08-27T02:30:00Z",
+        "priorCompletedScopes": [
+          "SCOPE-01",
+          "SCOPE-02",
+          "SCOPE-03",
+          "SCOPE-04",
+          "SCOPE-05"
+        ],
+        "priorCertifiedCompletedPhases": [
+          "implement",
+          "test",
+          "regression",
+          "security",
+          "simplify",
+          "stabilize",
+          "validate",
+          "audit"
+        ],
+        "reason": "The operator-reported live candidate remained strict-health non-green and was refused. The corrective planning record also identifies the design-required immutable synthesis_run_events ledger and causal actor/cadence latest-state projection as absent from the certified behavior.",
+        "reopenedScopes": [
+          "SCOPE-03",
+          "SCOPE-04"
+        ],
+        "revalidationRequiredScopes": [
+          "SCOPE-05"
+        ],
+        "evidenceRef": "report.md#corrective-planning-reconciliation---2026-08-30",
+        "nextRequiredOwner": "bubbles.implement"
+      }
+    ],
+    "completedPhases": []
   },
   "policySnapshot": {
     "grill": {
@@ -439,12 +444,63 @@
       "runStartedAt": "2026-07-26T02:34:00Z",
       "runEndedAt": "2026-07-26T02:48:00Z",
       "summary": "Wired the HEALTH-TRUTH mapping into the live /api/health path: internal/api/health.go::getCachedIntelligenceHealth now builds a SynthesisPersistenceOutcome from the queryable synthesis run-state (GetLastSynthesisTime result+error) and sets IntelligenceStatus from intelligence.DeriveSynthesisHealth(outcome) -- query error -> PhaseProbeError -> down; epoch/never-run sentinel -> PhaseNoRun -> down; a real persisted timestamp -> PhaseCommitted+ReadBackOK+OutputKindFull with Stale vs a 48h budget -> up when fresh, stale when old. The DeriveSynthesisHealth pure mapping is UNCHANGED (reused, not reimplemented); the TTL cache, nil-pool down branch, and alert-delivery probe are preserved; added const intelligenceSynthesisFreshnessBudget. Added live test tests/integration/synthesis/health_test.go::TestNeverRunAndProbeFailureAreNeverUp (SCN-004-004-05 / T004-05-HEALTH). Proven this session: RED against the unwired code (./smackerel.sh test integration-light --go-run, never-run reported up, exit 1) then GREEN against the wired code (full ./smackerel.sh test integration --go-run, never-run+probe-error->down, fresh->up, exit 0); the disposable stack was torn down on exit and a defensive ./smackerel.sh down confirmed zero stray containers. check exit 0; lint exit 0; ok internal/api + ok internal/intelligence with no regression (the suite-level unit non-zero is an orthogonal pre-existing/concurrent internal/docfreshness failure for internal/acceptance + internal/experience undocumented in the forbidden docs/Development.md, not caused by this change). Checked one SCOPE-04 Test-Evidence DoD item (T004-05-HEALTH). No git, and no change to spec, design, scenario-manifest, uservalidation, certification, or any concurrent-owned file. Packet stays blocked on the deferred durable transactional-persistence scopes (SCOPE-01..03) and the remaining SCOPE-04 live API/alert/telemetry rows."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-08-30T07:06:11Z",
+      "runEndedAt": "2026-08-30T07:22:08Z",
+      "claimSource": "operator-reported diagnostic plus current planning artifacts",
+      "outcome": "route_required",
+      "evidenceRef": "report.md#corrective-planning-reconciliation---2026-08-30",
+      "invalidatedTerminalClaims": {
+        "status": "done",
+        "certifiedAt": "2026-08-27T02:30:00Z",
+        "completedScopes": [
+          "SCOPE-01",
+          "SCOPE-02",
+          "SCOPE-03",
+          "SCOPE-04",
+          "SCOPE-05"
+        ],
+        "certifiedCompletedPhases": [
+          "implement",
+          "test",
+          "regression",
+          "security",
+          "simplify",
+          "stabilize",
+          "validate",
+          "audit"
+        ]
+      },
+      "summary": "Reopened SCOPE-03 and SCOPE-04 after the operator-reported live strict-health contradiction and the planning record of missing immutable event-ledger, causal projection, startup reconciliation, cadence SST, and fail-closed recovery requirements. SCOPE-05 remains a historical completion that requires regression revalidation after the corrected model lands.",
+      "nextRequiredOwner": "bubbles.implement"
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-09-01T20:00:00Z",
+      "runEndedAt": "2026-09-01T20:16:54Z",
+      "claimSource": "executed",
+      "outcome": "route_required",
+      "evidenceRef": "report.md#2026-09-01-planning-owner-post-evidence-reconciliation",
+      "summary": "Reconciled SCOPE-03A after the test-evidence handoff. Corrected stale C15 strict-health prose and reran child and parent artifact, traceability, and implementation-reality gates. No corrective DoD row was checked because the inherited test runs belong to another session, the current C15 receipt verification did not reproduce before its bounded timeout, and current tracked plus untracked changes cross the declared boundary. SCOPE-03A remains In Progress; SCOPE-04A is untouched.",
+      "nextRequiredOwner": "bubbles.test"
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-08-25T15:08:30Z",
+  "lastUpdatedAt": "2026-09-01T20:16:54Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
@@ -483,20 +539,13 @@
     ],
     "specDoneRequires": "All scopes done and validate-owned certification permits promotion."
   },
-  "notes": "Owner routes required: bubbles.design, bubbles.plan, bubbles.ux. Blocks truthful synthesis/readiness in BUG-102-001 and coherent product claims.",
-  "completedPhases": [
-    "implement",
-    "test",
-    "regression",
-    "security",
-    "simplify",
-    "stabilize",
-    "validate",
-    "audit"
-  ],
-  "progressNote": "SCOPE-01 has real progress: migration 064 applied, persistence layer implemented, 9 of 14 Scope 1 DoD items closed with executed evidence (7 unit + 4 live-DB integration tests green). Status moved blocked -> in_progress because the parked live-DB rows are now written. Remaining Scope 1 items (bootstrap canary, end-to-end adversarial RED against the return-and-log producer, rollback-compat) need RunSynthesis wired to the layer, which is SCOPE-02/03 work. Scopes 2-5 remain Not Started.",
+  "notes": "Corrective implementation is authorized. SCOPE-03A precedes SCOPE-04A; SCOPE-05 regression revalidation follows the corrected causal read model.",
+  "nextRequiredOwner": "bubbles.test",
+  "completedPhases": [],
+  "progressNote": "SCOPE-03A post-evidence planning reconciliation is complete, but no corrective DoD row is current-session eligible. The test owner must supply reproducible current-session evidence and resolve or classify the crossed change boundary. SCOPE-04A remains untouched and blocked by SCOPE-03A.",
   "completedScopes": [
     "SCOPE-01",
-    "SCOPE-02"
+    "SCOPE-02",
+    "SCOPE-05"
   ]
 }

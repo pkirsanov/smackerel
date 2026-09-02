@@ -945,6 +945,72 @@ surfacing spans without adding generated text or source content.
 
 ## Migration And Rollback
 
+### Scope 7 / SCOPE-03A Migration 067 Compatibility Amendment
+
+**Authority:** This subsection supersedes only migration 067 compatibility
+language elsewhere in this design. Every unrelated design decision remains
+unchanged.
+
+#### Certified Source And Artifact Boundary
+
+The exact certified prior source is full commit
+`7c3838e3b2de9ecba2e6a7764493a0412c4ed268`. The public Actions query for this
+SHA returned `total_count: 0`. It provides no historical Actions build artifact,
+canonical image, or build manifest for compatibility testing. The source commit
+must not be described as an existing release artifact.
+
+#### Legacy And Causal Attempt Shapes
+
+Migration 067 accepts two explicit attempt shapes:
+
+| Shape | Required facts | Migration 067 rule |
+|---|---|---|
+| Legacy 064-066 | `logical_key`, `outcome`, optional 064 failure fields, optional 066 `failure_kind`, and `recorded_at` | Every 067 causal field remains nullable. The migration does not derive causal state or time from `outcome` or `recorded_at`. |
+| Causal 067 | `run_id`, positive `attempt_no`, known `trigger_kind`, known `state`, `started_at`, source-class arrays, and nonnegative counts | The complete linked tuple is mandatory. Terminal rows require `finished_at`. Output-bearing states require an output from the same run. |
+
+Legacy attempts remain historical summaries. They receive no inferred run,
+attempt, trigger, output, start, finish, count, or event fact. Migration 067
+creates no `synthesis_run_events` row for a legacy attempt. Only a causal writer
+may create run-linked events, and each causal attempt remains subject to the
+strict start, terminal, foreign-key, uniqueness, and output-shape constraints.
+
+Migration 067 projects each output's principal, cadence, normalized window, and
+initial lifecycle deterministically from its referenced `synthesis_runs` row.
+The projection covers existing rows and legacy inserts before constraints are
+checked. A supplied value must equal the referenced run. The projection uses no
+session identity, clock substitution, configuration value, or constant
+fallback.
+
+The one-current partial unique index applies to every projected output. Existing
+duplicates are classified deterministically before index creation. New causal
+writes must supersede the prior current output and insert its replacement within
+one actor/cadence/window transaction. Legacy compatibility does not weaken this
+rule or causal-writer strictness.
+
+#### One-Time Local Source Canary
+
+SCOPE-03A builds one compatibility image from a detached worktree at the exact
+certified commit. It invokes that revision's `./smackerel.sh build` command and
+pins the canary by the resulting local image digest. It makes no byte-identity
+claim against a historical image because no such Actions artifact exists.
+
+The runtime canary uses that digest against a disposable database migrated
+through 067. Runtime network access is disabled. The local run requires the Git
+object to exist and never fetches it. CI checks out full history before the
+canary boundary, then performs no test-time source fetch.
+
+#### Deployment Pointer And Rollback Separation
+
+The source canary proves only migration compatibility. It does not choose a
+deployment rollback artifact. [Parent Scope 8](../../scopes.md#scope-8-causal-synthesis-health-recovery-and-deployment-acceptance)
+separately verifies and uses the operator-owned pre-deploy pointer.
+
+Normal code rollback changes the selected code or image while leaving migration
+067 and its append-only history in place. A pre-migration backup restore is an
+exceptional, operator-authorized data replacement. It requires a write freeze
+and a proven restore procedure because it may discard post-backup history. A
+pointer rollback and a database restore must never be treated as one operation.
+
 ### Expand-Contract Release Waves
 
 The symbolic migration is allocated only when the implementation merge wave

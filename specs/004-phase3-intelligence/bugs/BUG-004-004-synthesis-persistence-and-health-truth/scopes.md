@@ -1,5 +1,32 @@
 # BUG-004-004 Execution Scopes
 
+## Corrective Planning Reopen - 2026-08-30
+
+The operator authorized unattended reconciliation after post-certification runtime evidence contradicted the delivered claims in SCOPE-03 and SCOPE-04. Those scopes are active again. Their original checked items and linked report evidence remain unchanged as historical certification receipts, but they do not certify the corrective work added by this reopen. New corrective scenarios, Test Plan rows, and unchecked DoD items are appended to the affected scopes after repository and evidence reconciliation.
+
+**Active corrective sequence:** SCOPE-03 must restore durable causal event, retry, restart, and supersession truth before SCOPE-04 restores cadence-scoped read, health, recovery, readiness, and deploy truth. SCOPE-05 requires regression revalidation after both corrective scopes complete; its prior UI delivery record remains historical until then.
+
+### Corrective Phase Order
+
+1. **SCOPE-03A - Causal run-event ledger and replacement lifecycle:** add the immutable event relation and refactor claim, attempt, terminal, read-back, recovery, and changed-source replacement into one causal run/attempt/output model.
+2. **SCOPE-04A - Cadence-scoped health, startup reconciliation, and fail-closed release proof:** derive reader and readiness state per configured actor and cadence, reconcile abandoned work without inventing success, and prove recovery through the real deploy verification boundary.
+3. **SCOPE-05R - Existing surface revalidation:** rerun the unchanged Today/Status privacy, accessibility, and state-exclusivity contracts against the corrected read model. This is a revalidation checkpoint inside SCOPE-04A, not a new production implementation scope.
+
+### Corrective Types And Signatures
+
+- additive migration `<next>_synthesis_run_event_truth.sql`; existing migrations 064 through 066 remain byte-preserved
+- `SynthesisRunEvent{RunID, AttemptNo, EventType, OutputID, FailureCode, InsightCount, CitationCount, CreatedAt}`
+- `SynthesisPersistence.AppendEvent`, `StartAttempt`, `FinishAttempt`, `CommitReplacement`, `RecordReadbackFailure`, `RecordRecovery`
+- `SynthesisReadQuery{Actor, Cadence, FreshnessBudget, ObservedAt}` and `SynthesisReadSnapshot{LatestAttempt, CurrentOutput, Health}`
+- `SynthesisCoordinator.ReconcileStartup(ctx, actor, cadence, now)`
+- required cadence-specific freshness values in the Smackerel SST, generated environment, runtime config, scheduler, web projection, health, alerts, and tests
+
+### Corrective Validation Checkpoints
+
+- **After SCOPE-03A:** migration/immutability canary, causal linkage, audit-write failure propagation, changed-source replacement, and concurrent same-window tests must pass before health code changes.
+- **After SCOPE-04A local validation:** per-actor/per-cadence reader, running/failure/recovery precedence, startup reconciliation, SST parity, strict readiness, observability, and rollback tests must pass before a candidate deploy.
+- **After candidate deploy:** the target adapter must refuse unhealthy intelligence, then accept only a newly persisted and read-back-verified recovery; prior release rollback must restore service safely without erasing the candidate's database history.
+
 ## Execution Outline
 
 ### Phase Order
@@ -46,11 +73,11 @@ flowchart LR
 
 | Scope | Outcome | Surfaces | Depends On | Status |
 |---|---|---|---|---|
-| SCOPE-01 | Synthesis output is atomically durable and readable | migrations, PostgreSQL repository, transaction/read-back | - | Not Started |
-| SCOPE-02 | Only validated source-cited candidates reach persistence | daily/weekly producers, source/schema policy | SCOPE-01 | Not Started |
-| SCOPE-03 | Retries and lifecycle are durable and idempotent | scheduler, coordinator, claims, retention | SCOPE-02 | Not Started |
-| SCOPE-04 | APIs, health, and alerts derive from durable truth | authenticated API, health, metrics, alerts | SCOPE-03 | Not Started |
-| SCOPE-05 | Today/Status expose truthful accessible behavior | `/digest`, `/status`, Playwright, privacy | SCOPE-04 | Not Started |
+| SCOPE-01 | Synthesis output is atomically durable and readable | migrations, PostgreSQL repository, transaction/read-back | - | Done |
+| SCOPE-02 | Only validated source-cited candidates reach persistence | daily/weekly producers, source/schema policy | SCOPE-01 | Done |
+| SCOPE-03 | Retries and lifecycle are durable and idempotent | scheduler, coordinator, claims, retention | SCOPE-02 | In Progress - corrective revalidation |
+| SCOPE-04 | APIs, health, and alerts derive from durable truth | authenticated API, health, metrics, alerts | SCOPE-03 | In Progress - blocked by SCOPE-03 corrective completion |
+| SCOPE-05 | Today/Status expose truthful accessible behavior | `/digest`, `/status`, Playwright, privacy | SCOPE-04 | Done historically; revalidation required |
 
 ---
 
@@ -277,7 +304,7 @@ Scenario: SCN-004-004-08 Permitted partial output names omissions
 ## Scope 3: Durable Scheduler Retry And Lifecycle
 
 **Scope ID:** SCOPE-03  
-**Status:** Done
+**Status:** In Progress - corrective revalidation
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-02
 
@@ -315,7 +342,154 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 5. Implement current-to-stale/superseded/archived lifecycle without hard-deleting attempts or citation provenance.
 6. Gate surfacing/delivery on persisted read-back. Treat delivery failure separately from synthesis durability.
 
+### 2026-08-30 Corrective Extension - Causal Event Ledger And Replacement Lifecycle (SCOPE-03A)
+
+**Corrective Status:** In Progress
+**Corrective Depends On:** SCOPE-02 historical foundation; SCOPE-04A is blocked until this extension is Done.
+**Priority:** P0
+
+The original SCOPE-03 implementation record remains historical. The following scenarios and unchecked DoD rows are the active contract for recertification.
+
+Post-evidence reconciliation is scope-local: a corrective DoD row is eligible for completion only when its linked report anchor contains current-session executable evidence for that exact claim. SCOPE-04A remains outside this reconciliation.
+
+For the 2026-09-01 continuation, non-Docker artifact and planning gates may validate packet consistency but cannot substitute for any unit, integration, E2E, stress, restart, or lifecycle execution named below. T004-C15-RESTART remains limited to event and latest/history/detail API truth; strict-health proof remains exclusively in SCOPE-04A.
+
+#### Corrective Requirements And Scenarios
+
+- SYNTH-002, SYNTH-003, SYNTH-006, SYNTH-009, SYNTH-010
+- SCN-004-004-C11 through SCN-004-004-C15, plus SCN-004-004-C21
+
+```gherkin
+Scenario: SCN-004-004-C11 Every trigger has one causal attempt and immutable event history
+  Given a scheduled or operator trigger for the configured actor, cadence, and normalized window
+  When the trigger is claimed, executed, and reaches a terminal outcome
+  Then attempt_started and exactly one causal terminal event reference the same run and attempt number
+  And the event history cannot be updated or deleted and contains no synthesis text or source content
+
+Scenario: SCN-004-004-C12 Audit persistence failure cannot be swallowed
+  Given a trigger reaches a terminal success, failure, idempotent, or read-back-failed outcome
+  When persistence of the required terminal event fails
+  Then the producer and scheduler surface a typed audit-persistence failure
+  And neither delivery nor a healthy or persisted claim is emitted for that trigger
+
+Scenario: SCN-004-004-C13 Changed source supersedes current output atomically
+  Given a current output exists for one configured actor, cadence, and normalized window
+  And the authorized source-set or policy fingerprint changes
+  When the rerun commits under the actor/cadence/window advisory lock
+  Then one replacement run and output become current and the prior output becomes superseded in the same transaction
+  And a superseded event links the prior and replacement output identities while exactly one current output remains
+
+Scenario: SCN-004-004-C14 Same-source replay remains idempotent under concurrency
+  Given a current output exists for one actor, cadence, window, source-set, and policy identity
+  When scheduled and operator triggers race across processes
+  Then all triggers serialize on the actor/cadence/window lock and resolve to one output
+  And every trigger records its own idempotent or terminal attempt outcome without cross-run linkage
+
+Scenario: SCN-004-004-C15 Read-back failure is durable and recoverable without false success
+  Given a content transaction commits but the production aggregate reader cannot verify the output
+  When the trigger finishes
+  Then readback_failed is appended for that run and attempt and the output is not surfaced or treated as recovered
+  And a later verified attempt appends recovered only after its output and citations read back coherently
+
+Scenario: SCN-004-004-C21 The certified prior source remains locally compatible without becoming a deployment pointer
+  Given full source commit 7c3838e3b2de9ecba2e6a7764493a0412c4ed268 exists in the local Git object database
+  And a disposable database is migrated through 067
+  When an isolated detached worktree builds that source through its own ./smackerel.sh command and the resulting digest boots with runtime network access disabled
+  Then authenticated liveness and prior-source reads succeed against the migrated database
+  And prior-source daily and weekly writes either remain compatible or fail closed without a fabricated causal event
+  And the current candidate retains migration 067 data and appends a strict causal write after the prior-source container stops
+  And every worktree, image, container, network, volume, database, and unique test reference is removed
+  But this local source compatibility proof neither selects nor verifies an operator deployment pointer or exceptional backup restore
+```
+
+#### Corrective Implementation Plan
+
+1. Allocate the next migration number at implementation time. Add `synthesis_run_events` with closed event types `claimed`, `attempt_started`, `idempotent`, `persisted`, `quiet`, `partial`, `rolled_back`, `retryable_failure`, `failed`, `readback_failed`, `recovered`, and `superseded`. Add run/attempt/output foreign keys, an attempt linkage constraint, ordered history indexes, and an update/delete rejection trigger or equivalent database privilege enforcement. Add any missing design-required linkage and cadence-payload fields in this additive wave. Do not edit migrations 064, 065, or 066.
+2. Add only additive columns and indexes required to make `synthesis_run_attempts` causal: run ID, attempt number, trigger kind, state, output ID where applicable, start/finish timestamps, safe failure code, and uniqueness per `(run_id, attempt_no)`. Backfill legacy summary rows as historical/unlinked only when linkage is provable; never fabricate run or output identity.
+3. Restore the design's identity split. `source_set_digest` and policy version identify same-input replay. A separately derived actor/cadence/window key owns the advisory lock. Never solve changed-source replacement by removing the source-set from logical identity or by allowing unrelated actors/cadences to share a lock.
+4. Replace fire-and-forget `recordAttempt` and `recordFailedAttempt` calls with error-returning persistence operations. A required attempt or terminal-event failure propagates to scheduler/API callers and blocks delivery/healthy claims. Preserve committed content for forensic recovery, but classify it committed-unverified until the event and read-back contracts complete.
+5. Move terminal summary mutation and its matching immutable event into one short transaction. Move supersede-before-insert, replacement output, terminal event, superseded event, and one-current verification into the serializable content transaction under the actor/cadence/window lock.
+6. Make same-source replay append an idempotent attempt/event against the existing output. Make changed-source rerun append a distinct run/output and invoke the production supersession path. Remove the test-only reachability condition in which `MarkSuperseded` has no runtime caller.
+7. Append `readback_failed` when post-commit aggregate verification fails. Append `recovered` only when the same actor/cadence has a later complete/quiet output whose production aggregate read verifies output, insight, citation, and event counts.
+8. Route both daily and weekly scheduler jobs through the coordinator and persistence/read-back path. Persist the design-defined cadence payload rather than delivering `GenerateWeeklySynthesis` memory directly. No scheduler log or Telegram delivery may precede the terminal event plus read-back gate.
+9. Implement the existing design's fail-loud actor, retry budget/backoff, lease, policy version, source-class policy, and retention SST fields through generated configuration and runtime wiring. Remove hardcoded principals and retry/lease values from scheduler, API, producer, and `cmd/core` wiring.
+10. Emit bounded attempt/run/event metrics and spans for claim, attempt, transaction, read-back, recovery, and supersession. Attributes may contain cadence, trigger, safe state/code, attempt number, bounded counts, and authorized operator run identity. They must not contain prose, titles, artifact/source IDs, fingerprints, SQL, raw errors, or credentials.
+11. Preserve `scripts/lib/runtime.sh::smackerel_compose` as the shared Compose boundary: an `exec` launched from terminal stdin receives `/dev/null`, an `exec` launched with piped or redirected stdin receives that input unchanged, and non-`exec` commands retain their existing argv and stdin behavior.
+12. Add `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh` and register it as `lifecycle` and `required` in `tests/e2e/run_all.sh`. The test must require the full pinned SHA `7c3838e3b2de9ecba2e6a7764493a0412c4ed268` in the local object database, refuse any runtime fetch, create a detached worktree, build through that revision's `./smackerel.sh`, record the final local image digest and resolved build inputs, boot the old core against a disposable database migrated through 067, perform authenticated liveness/read checks plus old daily and weekly write-or-fail-closed checks, switch to the current candidate, prove 067 data retention plus one strict candidate causal write, and remove every owned resource on success, failure, or interruption.
+13. Extend `tests/unit/cli/synthesis_test_harness_contract_test.sh` with a static contract that parses the lifecycle script and its `run_all.sh` registration. It must enforce the full SHA, local-object precondition, absence of fetch commands, detached-worktree build through the old revision's CLI, digest/build-input recording, runtime-network denial, lifecycle/required registration, unique resource references, and cleanup traps for every owned resource family.
+
+#### Shared Infrastructure Impact Sweep
+
+- Cover additive PostgreSQL migration ordering, fresh bootstrap, and databases carrying migrations 064 through 066. Replay the exact historical attempt and output INSERT shapes after 067. Preserve nullable 067 causal fields. Project output identity from its referenced run. Create no synthetic event for a legacy attempt. Prove new linked writers remain strict.
+- Cover local source compatibility at exact commit `7c3838e3b2de9ecba2e6a7764493a0412c4ed268`. Inspect the detached revision's resolved build inputs. Pin the local image by its final digest. Deny runtime network access. Use unique worktree, image, container, network, volume, database, and test references. Clean every reference on each exit path.
+- scheduler and operator-retry callers, process restart, lease reclamation, and concurrent actors/cadences/windows
+- run history and operator evidence readers that currently consume summary tables
+- health, Prometheus alert, Today, Status, and strict deployment verification consumers
+- disposable integration/E2E/stress fixture reset order and database trigger-based fault profiles
+- every caller of the high-fan-out `smackerel_compose` helper, with special attention to `exec` callers that stream SQL or other payloads on stdin and ordinary terminal callers that must never block for input; no caller-specific rewrite is permitted
+
+SCOPE-03A canaries run before broad suites in this order: execute the focused Compose-stdin unit regression; execute the exact legacy-shape migration integration contract against 067 and a fresh bootstrap; execute the static lifecycle-harness contract; execute the local prior-source lifecycle E2E; append one current-candidate causal chain; restart the current core; and verify the chain is immutable and readable. If the shared-helper canary finds collateral behavior change, revert only the `smackerel_compose` stdin conditional before any broad suite and keep SCOPE-03A incomplete until all three stdin and argv contracts hold.
+
+SCOPE-03A does not run or claim the operator's pre-deploy pointer rollback, write freeze, pre-migration backup, or exceptional restore. Those host actions remain SCOPE-04A and operator-owned acceptance contracts. Local prior-source compatibility is a Scope 7 prerequisite; exceptional data restore is not.
+
+#### Change Boundary
+
+**Allowed:** the newly allocated additive migration; synthesis persistence/coordinator/producer code; synthesis scheduler wiring; synthesis-specific metrics/traces; synthesis migration, integration, E2E, stress, security, and replacement-transaction rollback tests; `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh`; its lifecycle/required registration in `tests/e2e/run_all.sh`; its focused static contract in `tests/unit/cli/synthesis_test_harness_contract_test.sh`; the `smackerel_compose` function in `scripts/lib/runtime.sh`; `tests/unit/cli/runtime_compose_stdin_test.sh`; `docker-compose.synthesis-cadence-e2e.override.yml` only when selected by `tests/e2e/synthesis_scheduler_cadence_e2e_test.sh` through `SMACKEREL_COMPOSE_OVERRIDE_FILE`; `internal/deploy/synthesis_cadence_overlay_contract_test.go`; planning-owned packet files.
+
+**Excluded:** every other function in `scripts/lib/runtime.sh`; all existing `smackerel_compose` call sites; top-level test dispatchers other than the exact `tests/e2e/run_all.sh` lifecycle/required registration; every other Compose definition and profile; unrelated digest storage; graph candidate semantics; assistant/Open Knowledge synthesis; connector providers; Python ML sidecar; generic auth/session middleware; unrelated readiness capabilities; host-specific deployment topology; operator pre-deploy pointer selection or mutation; write-freeze, backup, restore, and exceptional data-replacement procedures; and SCOPE-04A implementation.
+
 ### Test Plan
+
+| ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
+|---|---|---|---|---|---|---|
+| T004-C11-MIGRATE | Migration integration | `integration` | SCN-004-004-C11 | `tests/integration/synthesis_migration_test.go` - `TestSynthesisMigration_PreservesLegacy064Through066InsertShapesAndEnforcesCausal067Writes`; execute the exact legacy attempt/output INSERT shapes after 067, assert projected output identity, nullable legacy causal fields, zero fabricated events, and strict rejection of incomplete new linked writes | `./smackerel.sh test integration` | Yes |
+| T004-C11-IMMUTABLE | Security integration | `integration` | SCN-004-004-C11 | `tests/integration/synthesis_event_ledger_test.go` - `TestSynthesisRunEvents_RejectUpdateDeleteAndContentLeakage` | `./smackerel.sh test integration` | Yes |
+| T004-C11-CAUSAL | Integration | `integration` | SCN-004-004-C11 | `tests/integration/synthesis_event_ledger_test.go` - `TestSynthesisRunEvents_LinkStartedAndTerminalEventToOneAttempt` | `./smackerel.sh test integration` | Yes |
+| T004-C11-WEEKLY | Regression E2E | `e2e-api` | SCN-004-004-C11 | `tests/e2e/synthesis_scheduler_cadence_e2e_test.sh` - `daily and weekly scheduler triggers both persist and read back before delivery`; selects only `docker-compose.synthesis-cadence-e2e.override.yml` through `SMACKEREL_COMPOSE_OVERRIDE_FILE`; supporting production-inert guard: `internal/deploy/synthesis_cadence_overlay_contract_test.go` | `./smackerel.sh test e2e --shell-run synthesis_scheduler_cadence_e2e_test.sh` | Yes |
+| T004-C11-COMPOSE-STDIN | Shared helper unit regression | `unit` | SCN-004-004-C11 | `tests/unit/cli/runtime_compose_stdin_test.sh` - `smackerel_compose preserves piped stdin, closes terminal exec stdin, and leaves non-exec behavior and argv unchanged` | `./smackerel.sh test unit` | No |
+| T004-C12-AUDIT-RED | Adversarial Regression E2E | `e2e-api` | SCN-004-004-C12 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_TerminalEventFailureCannotProduceDeliveryOrSuccess` | `./smackerel.sh test e2e` | Yes |
+| T004-C13-REPLACE | Integration | `integration` | SCN-004-004-C13 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisReplacement_ChangedSourceSupersedesUnderWindowLock` | `./smackerel.sh test integration` | Yes |
+| T004-C13-ROLLBACK | Integration | `integration` | SCN-004-004-C13 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisReplacement_FailedReplacementRestoresPriorCurrentAndAppendsFailure` | `./smackerel.sh test integration` | Yes |
+| T004-C14-RACE | Stress | `stress` | SCN-004-004-C14 | `tests/stress/synthesis_retry_stress_test.go` - `TestSynthesisSameAndChangedSourceRacesLeaveOneCurrentAndCompleteEventChains` | `./smackerel.sh test stress` | Yes |
+| T004-C14-ACTOR-CADENCE | Integration | `integration` | SCN-004-004-C14 | `tests/integration/synthesis_event_ledger_test.go` - `TestSynthesisAttempts_DoNotCrossPairActorsCadencesRunsOrAttempts` | `./smackerel.sh test integration` | Yes |
+| T004-C14-CONFIG-UNIT | Unit contract | `unit` | SCN-004-004-C14 | `internal/config/validate_test.go` - `TestSynthesisRunPolicyIsRequiredAndHasNoFallback` | `./smackerel.sh test unit --go` | No |
+| T004-C14-CONFIG-RUNTIME | Runtime integration | `integration` | SCN-004-004-C14 | `tests/integration/synthesis_runtime_config_test.go` - `TestSynthesisRunPolicyReachesCoordinatorAndBothCadences` | `./smackerel.sh test integration` | Yes |
+| T004-C15-READBACK | Integration | `integration` | SCN-004-004-C15 | `tests/integration/synthesis_persistence_test.go` - `TestSynthesisReadbackFailurePersistsFailureBeforeVerifiedRecovery` | `./smackerel.sh test integration` | Yes |
+| T004-C15-RESTART | Regression E2E | `e2e-api` | SCN-004-004-C15 | `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `committed-unverified state survives restart and recovery appends after verified read-back`. Scope boundary: event and latest/history/detail API truth only. | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
+| T004-C21-HARNESS | Lifecycle harness unit contract | `unit` | SCN-004-004-C21 | `tests/unit/cli/synthesis_test_harness_contract_test.sh` - `prior-source lifecycle pins the full SHA, forbids fetch, records digest and inputs, owns unique refs, registers lifecycle required, and cleans every resource` | `./smackerel.sh test unit` | No |
+| T004-C21-PRIOR-SOURCE | Prior-source compatibility lifecycle E2E | `e2e-api` | SCN-004-004-C21 | `tests/e2e/synthesis_prior_source_compatibility_e2e_test.sh` - `pinned local prior source and current candidate preserve migration 067 without fabricated causal history`; lifecycle/required in `tests/e2e/run_all.sh`, authenticated live API, old daily and weekly write-or-fail-closed, candidate causal write, full cleanup | `./smackerel.sh test e2e --shell-run synthesis_prior_source_compatibility_e2e_test.sh` | Yes |
+| T004-C03-BROAD | Broad Regression E2E | `e2e-api` | SCN-004-004-C11..C15, C21 | existing synthesis API, restart, state-matrix, scheduler, and prior-source lifecycle E2E tests plus the event-failure test | `./smackerel.sh test e2e` | Yes |
+
+#### Corrective Definition of Done - Unchecked Until New Execution
+
+- [ ] SCN-004-004-C11: every scheduled/operator trigger has one run-linked, attempt-numbered `attempt_started` event and exactly one terminal event; history is immutable and content-free. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] SCN-004-004-C12: required attempt/terminal-event persistence errors propagate and prevent delivery, persisted, recovered, and healthy claims. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] SCN-004-004-C13: changed-source/policy reruns supersede-before-insert under the actor/cadence/window lock, leave exactly one current output, and retain both run histories. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] SCN-004-004-C14: same-source races converge idempotently while actors, cadences, runs, and attempts cannot cross-pair. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] SCN-004-004-C15: read-back failure appends a durable failure state and only a later coherent aggregate read appends `recovered`. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] SCN-004-004-C21: exact local source `7c3838e3b2de9ecba2e6a7764493a0412c4ed268` builds in an isolated detached worktree, runs by final local digest without runtime fetch, proves authenticated prior-source read and daily/weekly write-or-fail-closed behavior through 067, then yields to a current-candidate causal write with all resources removed. No deployment pointer or restore claim is inferred. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C11-MIGRATE executes the exact legacy 064, 065, and 066 attempt/output INSERT shapes after 067 and proves output projection, nullable legacy causal fields, zero fabricated legacy events, strict new linked-writer constraints, and fresh-bootstrap compatibility. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C11-IMMUTABLE passes and proves UPDATE/DELETE rejection plus event-content redaction. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C11-CAUSAL passes and proves start/terminal linkage to one run attempt. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C11-WEEKLY passes and proves both scheduler cadences persist/read back before any delivery or success log. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C11-COMPOSE-STDIN passes through the canonical unit lane and directly proves that piped stdin reaches `docker compose exec`, terminal-backed `exec` sees closed stdin, and non-`exec` Compose behavior and argv remain unchanged. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C12-AUDIT-RED fails against swallowed event-write errors and passes only when the typed error reaches the real trigger boundary. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C13-REPLACE passes for a changed-source replacement under the window lock. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C13-ROLLBACK passes and proves a failed replacement restores the prior current output. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C14-RACE passes under simultaneous same-source and changed-source triggers. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C14-ACTOR-CADENCE passes with deliberately interleaved actors, daily/weekly cadences, run IDs, attempt numbers, and timestamps. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C14-CONFIG-UNIT passes with missing, empty, zero, negative, malformed, and unknown values refused without fallback. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C14-CONFIG-RUNTIME passes with distinct configured actor/retry/lease/policy values observed in both cadence paths. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C15-READBACK passes with a forced production-reader failure followed by a newly verified recovery. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C15-RESTART passes across a real core restart. It proves durable committed-unverified event and latest/history/detail API truth, followed by `recovered` only after a later coherent read-back. Strict-health certification belongs exclusively to T004-C20-STRICT in SCOPE-04A. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C21-HARNESS enforces the full pinned SHA, local-object-only/no-fetch rule, old-revision CLI build, final digest and resolved-input recording, runtime-network denial, lifecycle/required registration, unique resource references, and cleanup traps. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C21-PRIOR-SOURCE passes as a live `e2e-api` lifecycle test and proves prior-source compatibility or fail-closed writes, zero fabricated causal events, retained 067 data, one current-candidate causal write, and complete owned-resource cleanup. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] T004-C03-BROAD passes with zero required skips and no internal request interception. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] SCOPE-03A completion evidence remains limited to local migration and source compatibility. Operator pre-deploy pointer rollback, write freeze, backup, and exceptional restore remain SCOPE-04A/operator acceptance contracts and are not Scope 7 prerequisites. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] Change Boundary is respected and zero excluded file families change. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+- [ ] Build Quality Gate passes: unit/integration/E2E/stress/security checks, check/lint/format, migration integrity, content-free observability, artifact lint, traceability, documentation alignment, zero warnings, and zero required skips. → Evidence: [report.md](report.md#corrective-scope-03a-evidence)
+
+#### Historical Executed Test Plan
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
@@ -359,7 +533,7 @@ Scenario: SCN-004-004-06 Lifecycle and recovery remain truthful
 ## Scope 4: Canonical Read Health Alert And API Truth
 
 **Scope ID:** SCOPE-04  
-**Status:** Done
+**Status:** In Progress - blocked by SCOPE-03 corrective completion
 **Scope-Kind:** runtime-behavior  
 **Depends On:** SCOPE-03
 
@@ -403,7 +577,142 @@ Scenario: SCN-004-004-09 Authorization and telemetry preserve privacy
 5. Preserve aggregate-only unauthenticated health and redact other-user/operator-only metadata.
 6. Emit content-free run/health/retry metrics and spans; assert no prose, titles, source IDs, actor IDs, or raw errors become labels or logs.
 
+### 2026-08-30 Corrective Extension - Cadence-Scoped Health, Startup Reconciliation, And Release Proof (SCOPE-04A)
+
+**Corrective Status:** In Progress - blocked by SCOPE-03A
+**Corrective Depends On:** SCOPE-03A
+**Priority:** P0
+
+The original SCOPE-04 implementation record remains historical. The following scenarios and unchecked DoD rows are the active contract for recertification.
+
+#### Corrective Requirements And Scenarios
+
+- SYNTH-007, SYNTH-008, SYNTH-009, SYNTH-010, SYNTH-012
+- SCN-004-004-C16 through SCN-004-004-C20
+
+```gherkin
+Scenario: SCN-004-004-C16 Latest state is causal per configured actor and cadence
+  Given interleaved daily and weekly runs for more than one principal with successes, failures, and running attempts
+  When the configured global-corpus actor's daily or weekly state is read
+  Then the latest attempt and current output come from the same requested actor/cadence causal history
+  And an unrelated cadence, principal, run, or timestamp cannot be paired into the result
+
+Scenario: SCN-004-004-C17 Running, failed, and recovered states follow event order
+  Given a prior verified output followed by a running attempt, a failed attempt, or a newly verified recovery for the same actor and cadence
+  When health, API, Today, Status, metrics, and alerts evaluate that cadence
+  Then running and failed remain visible until a later persisted read-back-verified complete or quiet event occurs
+  And that recovery clears the earlier failure without erasing its event history
+
+Scenario: SCN-004-004-C18 Startup reconciles abandoned work without inventing success
+  Given restart finds an expired running attempt or a committed output lacking a successful read-back event
+  When startup reconciliation runs before normal scheduling
+  Then the abandoned attempt receives a typed terminal or readback_failed event and remains non-healthy
+  And any retry starts a new attempt whose success is recognized only after a new verified read-back
+
+Scenario: SCN-004-004-C19 One cadence-specific SST controls every freshness consumer
+  Given explicit daily and weekly freshness values in the Smackerel SST
+  When config generation, runtime wiring, health, web projection, metrics, alerts, and tests evaluate synthesis age
+  Then each cadence uses its one configured value with no hardcoded fallback or digest-threshold alias
+  And missing, invalid, or unpropagated freshness configuration fails loudly
+
+Scenario: SCN-004-004-C20 Release verification remains fail-closed through recovery and rollback
+  Given a candidate release whose synthesis state is failed, stale, running, read-degraded, or never-run beyond its cadence admission window
+  When strict readiness and the target deployment verification boundary run
+  Then the candidate is refused and intelligence health is never ignored or overridden
+  And promotion succeeds only after a newly persisted read-back-verified recovery, while rollback preserves the append-only history and restores the accepted prior release
+```
+
+#### Corrective Implementation Plan
+
+1. Replace `LatestOutcome(ctx, freshnessBudget, now)` and separate global `Latest()` lookups with a required `SynthesisReadQuery` carrying configured actor, cadence, cadence freshness, and observation time. Use one SQL statement or one snapshot transaction rooted in `synthesis_run_events` and run/attempt/output keys. Never combine the globally newest attempt with the globally newest output.
+2. Return explicit latest-attempt identity/state, current-output identity/state, and causal relation. Resolve `PhaseRunning` from an active unexpired attempt. Resolve failed versus recovered by event order for the same actor/cadence; a verified terminal success newer than a failure clears current health while the earlier failure remains in history.
+3. Add startup reconciliation before scheduler registration or readiness admission. Expired running attempts become typed terminal audit facts. Committed outputs without a read-back-success event become `readback_failed` or remain committed-unverified. Reconciliation must not append `persisted`, `quiet`, `partial`, or `recovered` without executing the production aggregate reader successfully.
+4. Add required daily and weekly synthesis freshness values to `config/smackerel.yaml`, generated environment, config loader/validator, runtime wiring, web projection, health, alert expressions/annotations, and tests. Remove the hardcoded 48-hour health constant and stop aliasing synthesis freshness to `DIGEST_STALE_AFTER_HOURS`.
+5. Evaluate required synthesis cadences as a set. Public health stays aggregate-only. Authorized status/API may show per-cadence detail. Overall intelligence and strict health must fail closed when a required cadence is never-run past admission, running without a fresh prior output, stale, partial, failed, or read-degraded.
+6. Keep container liveness separate from capability readiness. Ensure `/api/health?strict=true` and the deployment adapter's existing strict verification boundary consume the synthesis verdict rather than ignoring it. Do not add a bypass, degradation exemption, or success-on-unavailable branch.
+7. Update Today, Status, latest/history/detail/retry, and Prometheus metrics/alerts to consume the same cadence-scoped snapshot. Preserve all authorization and no-existence-leak rules. Revalidate SCOPE-05 without redesigning the UI.
+8. Add spans for startup reconciliation and read snapshot assembly. Mine validate-plane traces during integration/E2E/stress for error spans, long critical paths, fan-out, retries, and missing causal attributes. Record only safe run/attempt identities and bounded labels.
+9. Exercise candidate rejection and recovery through the normal Smackerel build/deploy contract and operator-owned target adapter. Verify the prior release rollback by pointer swap/code rollback only; never edit host topology or weaken the target gate from this product packet.
+
+#### Consumer Impact Sweep
+
+- `cmd/core` synthesis producer/coordinator/read-model wiring and scheduler startup order
+- daily and weekly scheduler triggers plus operator retry
+- `/api/synthesis/latest`, history, detail, retry, `/api/health`, and strict health response
+- Today `/digest` and operator `/status` shared projection
+- synthesis Prometheus gauges and four alert rules
+- generated dev/test/deploy environment contracts and config validation
+- product deployment contract/config-bundle consumers and the knb-owned target verification adapter
+- Operations, Development, API, and deployment documentation that currently describe global latest or a digest-derived freshness threshold
+- stale-reference scans for `intelligenceSynthesisFreshnessBudget`, synthesis use of `DigestStaleAfterHours`, global no-argument `LatestOutcome`, and production-free `MarkSuperseded`
+
+#### Shared Infrastructure Impact Sweep
+
+- startup sequence before scheduler and readiness admission
+- health-cache semantics and stale snapshot behavior
+- config generation and deployment bundle projection
+- migration/backup/restore and prior-release rollback
+- shared integration/E2E/stress stack, test clock, and target adapter verification
+
+Independent canaries: config generation with distinct daily/weekly values; startup over expired-running and committed-unverified fixtures; strict readiness against every non-green state; candidate deploy refusal followed by real recovery and accepted promotion; rollback to the accepted prior release while querying retained event history.
+
+#### Change Boundary
+
+**Allowed:** synthesis-specific SST keys and generated projection; synthesis read/health/startup/scheduler/API/web/metrics/alerts code; synthesis and strict-readiness tests; generic product deploy contract seam only if required; planning-owned packet files.
+**Excluded:** weakening generic strict-health semantics, target-specific knb files, unrelated readiness capabilities, unrelated digest freshness behavior, auth/session redesign, provider integrations, graph semantics, Python ML sidecar, and manual host operations.
+
 ### Test Plan
+
+| ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
+|---|---|---|---|---|---|---|
+| T004-C16-QUERY | Integration | `integration` | SCN-004-004-C16 | `tests/integration/synthesis_health_test.go` - `TestSynthesisReadSnapshot_IsCausalPerActorAndCadence` | `./smackerel.sh test integration` | Yes |
+| T004-C16-CROSSPAIR-RED | Adversarial Regression E2E | `e2e-api` | SCN-004-004-C16 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_InterleavedCadencesAndPrincipalsCannotCrossPairAttemptAndOutput` | `./smackerel.sh test e2e` | Yes |
+| T004-C17-PRECEDENCE | Integration | `integration` | SCN-004-004-C17 | `tests/integration/synthesis_health_test.go` - `TestSynthesisHealth_RunningFailureAndRecoveryFollowCausalEventOrder` | `./smackerel.sh test integration` | Yes |
+| T004-C17-ALERT | E2E API regression | `e2e-api` | SCN-004-004-C17 | Planned location for SCOPE-04A execution: tests/e2e/synthesis_recovery_health_e2e_test.sh - `failure alert clears only after a later verified persisted recovery` | `./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
+| T004-C18-STARTUP | Integration | `integration` | SCN-004-004-C18 | `tests/integration/synthesis_coordinator_test.go` - `TestSynthesisStartupReconciliation_ExpiresRunningAndRefusesUnverifiedCommit` | `./smackerel.sh test integration` | Yes |
+| T004-C18-RESTART | Regression E2E | `e2e-api` | SCN-004-004-C18 | `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `startup reconciliation preserves failure truth across real restart` | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
+| T004-C19-CONFIG | Unit contract | `unit` | SCN-004-004-C19 | `internal/config/validate_test.go` - `TestSynthesisFreshnessPerCadenceIsRequiredPositiveAndHasNoFallback` | `./smackerel.sh test unit --go` | No |
+| T004-C19-RUNTIME | Integration | `integration` | SCN-004-004-C19 | Planned location for SCOPE-04A execution: tests/integration/synthesis_freshness_sst_test.go - `TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers` | `./smackerel.sh test integration` | Yes |
+| T004-C19-STALE-SCAN | Contract regression | `unit` | SCN-004-004-C19 | Planned location for SCOPE-04A execution: internal/intelligence/synthesis_freshness_contract_test.go - `TestSynthesisFreshness_HasOneSSTAndNo48hDigestAlias` | `./smackerel.sh test unit --go` | No |
+| T004-C20-STRICT | E2E API regression | `e2e-api` | SCN-004-004-C20 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_StrictHealthRefusesEveryNonGreenRequiredCadence` | `./smackerel.sh test e2e` | Yes |
+| T004-C20-DEPLOY | Deploy E2E | `e2e-api` | SCN-004-004-C20 | operator-owned target adapter verification - `candidate is refused while intelligence is down and accepted only after verified recovery` | `./smackerel.sh deploy <target>` | Yes |
+| T004-C20-ROLLBACK | Rollback E2E | `e2e-api` | SCN-004-004-C20 | operator-owned target adapter verification - `prior release pointer rollback restores service and retained event history remains queryable` | `./smackerel.sh deploy <target> --rollback` | Yes |
+| T004-C20-UI-REVALIDATE | E2E UI regression | `e2e-ui` | SCN-004-004-C16..C20 plus SCN-004-004-01..10 | `web/pwa/tests/synthesis_truth.spec.ts` - existing Today/Status state, privacy, retry, and accessibility suite against corrected snapshots | `./smackerel.sh test e2e-ui` | Yes |
+| T004-C20-STRESS | Stress | `stress` | SCN-004-004-C16..C20 | `tests/stress/synthesis_retry_stress_test.go` - `TestSynthesisHealthSnapshotConcurrentTriggersRemainCausalAndBounded` | `./smackerel.sh test stress` | Yes |
+| T004-C20-SECURITY | Security integration | `integration` | SCN-004-004-C16..C20 | `tests/integration/synthesis_telemetry_test.go` - `TestSynthesisEventsAndTracesExposeNoCorpusContentOrHighCardinalityLabels` | `./smackerel.sh test integration` | Yes |
+| T004-C20-OBS | Observability integration | `integration` | SCN-004-004-C17..C20 | validate-plane trace capture for synthesis trigger, read-back, recovery, and startup reconciliation; 3 AM reconstructibility plus error/latency/fan-out scan | `./smackerel.sh test integration` | Yes |
+| T004-C04-BROAD | Broad Regression E2E | `e2e-api` | SCN-004-004-C16..C20 | full synthesis API, restart, state-matrix, strict-readiness, recovery, and browser suites | `./smackerel.sh test e2e` | Yes |
+
+#### Corrective Definition of Done - Unchecked Until New Execution
+
+- [ ] SCN-004-004-C16: latest attempt and output are selected causally for the configured global-corpus actor and requested cadence; interleaved actors/cadences/runs cannot cross-pair. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] SCN-004-004-C17: running and failure remain visible until a later verified complete/quiet recovery for the same actor/cadence clears current health without deleting history. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] SCN-004-004-C18: startup reconciles expired-running and committed-unverified work to typed non-green states and never fabricates success. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] SCN-004-004-C19: one required cadence-specific SST contract reaches every freshness consumer with no hardcoded 48-hour value or digest-threshold alias. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] SCN-004-004-C20: strict readiness and deployment verification refuse non-green synthesis and accept only a newly persisted read-back-verified recovery; rollback preserves event history. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C16-QUERY passes with interleaved actor/cadence histories. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C16-CROSSPAIR-RED fails against the two-global-query implementation and passes against the causal snapshot query. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C17-PRECEDENCE passes for prior-success/running, prior-success/failure, and failure/new-recovery sequences. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C17-ALERT passes and proves the real alert remains active until verified recovery. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C18-STARTUP passes without success-shaped reconciliation events. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C18-RESTART passes across a real core restart. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C19-CONFIG passes for missing, zero, negative, invalid, daily, and weekly values. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C19-RUNTIME passes with deliberately different daily and weekly values at API, web, health, metrics, and alert consumers. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C19-STALE-SCAN passes with zero hardcoded synthesis freshness constants and zero synthesis aliases to digest freshness. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-STRICT passes for never-run, running, stale, partial, failed, read-degraded, and recovered states. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-DEPLOY executes through the normal target adapter and captures refusal while intelligence is non-green plus acceptance only after verified recovery. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-ROLLBACK executes through the normal pointer rollback and proves the prior release plus retained append-only history. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-UI-REVALIDATE passes the existing Today/Status privacy, accessibility, retry, and state-exclusivity suite against the corrected causal model. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-STRESS passes under concurrent mixed-cadence triggers with bounded query latency and no cross-pairing. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-SECURITY passes with no synthesis text, source title/ID, fingerprint, principal, raw error, SQL, credential, or unbounded run ID in metrics/logs/traces or denied responses. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-OBS captures reconstructible validate-plane traces and reports zero unresolved error-span, latency, retry, fan-out, or missing-span findings. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] T004-C04-BROAD passes with zero required skips and no internal request interception. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] Independent startup/config/strict-readiness/deploy/rollback canaries run in order before broad suites. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] Consumer Impact Sweep finds zero stale synthesis freshness, global latest-query, production supersession, readiness, API, UI, metric, alert, config-bundle, documentation, or target-adapter references. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] Change Boundary is respected and zero excluded file families change. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+- [ ] Build Quality Gate passes: build/check/lint/format, unit/integration/E2E API/E2E UI/stress/security/observability/migration/rollback/deploy checks, artifact lint, traceability, docs alignment, zero warnings, zero required skips, and no unresolved findings. → Evidence: [report.md](report.md#corrective-scope-04a-evidence)
+
+#### Historical Executed Test Plan
 
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
@@ -523,7 +832,7 @@ Scenario: SCN-004-004-10 Synthesis states and Retry are accessible and responsiv
 | T004-05-07-UI | E2E shell regression | `e2e-ui` | SCN-004-004-05/07 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - `all seven durable states render exclusively on Today and Status` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |
 | T004-06-08-UI | E2E shell regression | `e2e-ui` | SCN-004-004-06/08 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - `stale partial and failed states name the durable output behind them` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |
 | T004-RETRY-UI | E2E UI regression | `e2e-ui` | SCN-004-004-02/03/06 | `web/pwa/tests/synthesis_truth.spec.ts` - `a retry reports a persisted outcome and the page agrees with it` | `./smackerel.sh test e2e-ui` | Yes |
-| T004-09-10-UI | E2E UI | `e2e-ui` | SCN-004-004-09/10 | `web/pwa/tests/synthesis_truth.spec.ts` - `auth loss removes synthesis content from the accessibility tree, not just the DOM` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-09-10-UI | E2E UI | `e2e-ui` | SCN-004-004-09, SCN-004-004-10 | `web/pwa/tests/synthesis_truth.spec.ts` - `auth loss removes synthesis content from the accessibility tree, not just the DOM` | `./smackerel.sh test e2e-ui` | Yes |
 | T004-UI-UNIT | UI unit | `ui-unit` | SCN-004-004-05..10 | `internal/web/synthesis_projection_test.go` - `TestSynthesisProjection_ClosedStatesAreExclusive` | `./smackerel.sh test unit` | No |
 | T004-BROAD | Broad E2E regression | `e2e-ui` | SCN-004-004-01..10 | existing Today/Status plus `web/pwa/tests/synthesis_truth.spec.ts` - `Today and Status report the same durable synthesis state` | `./smackerel.sh test e2e-ui` | Yes |
 | T004-05-REGRESSION-E2E | Regression E2E | `e2e-ui` | SCN-004-004-01..10 | `tests/e2e/synthesis_state_matrix_e2e_test.sh` - all seven durable states asserted on both `/digest` and `/status` | `./smackerel.sh test e2e --shell-run synthesis_state_matrix_e2e_test.sh` | Yes |

@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "featureDir": "specs/037-llm-agent-tools/bugs/BUG-037-003-replay-nul-error-fidelity",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-09-02T01:50:26Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-037-003-001",
+      "scope": "SCOPE-01",
+      "title": "NUL argument receives exact EINVAL rejection",
+      "gherkin": {
+        "given": "The built replay CLI exists as a regular file and the command context is active",
+        "when": "The CLI receives a trace ID containing a NUL byte",
+        "then": "Launch fails before execution with an error wrapping syscall EINVAL while the context remains active"
+      },
+      "behaviorClass": "cli",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/agent/chaos_round1_test.go",
+          "plannedTestId": "TestChaos_037_ReplayCLIErrorPaths/null_byte_in_trace_id",
+          "status": "existing-test-repair-required",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-037-003-002",
+      "scope": "SCOPE-01",
+      "title": "Missing binary cannot false-pass",
+      "gherkin": {
+        "given": "The NUL case points at a missing binary",
+        "when": "The subtest runs",
+        "then": "The subtest fails the binary precondition or EINVAL identity assertion"
+      },
+      "behaviorClass": "cli",
+      "changeType": "regression",
+      "requiredTestType": "functional",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/agent/chaos_round1_test.go",
+          "plannedTestId": "TestChaos_037_ReplayCLIErrorPaths/null_byte_in_trace_id",
+          "status": "mutation-proof-required",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-037-003-003",
+      "scope": "SCOPE-01",
+      "title": "Ordinary malformed trace IDs still return replay ERROR",
+      "gherkin": {
+        "given": "A malformed trace ID contains no NUL byte",
+        "when": "The built replay CLI executes",
+        "then": "The process returns replay ERROR exit code 2"
+      },
+      "behaviorClass": "cli",
+      "changeType": "regression",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedFile": "tests/stress/agent/chaos_round1_test.go",
+          "plannedTestId": "TestChaos_037_ReplayCLIErrorPaths",
+          "status": "existing-revalidation-required",
+          "owner": "bubbles.test"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

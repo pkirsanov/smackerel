@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -193,12 +194,6 @@ func (s *Scheduler) runTopicMomentumJob() {
 	s.runGuarded(&s.muHourly, "hourly", "topic-momentum", s.doTopicMomentumJob)
 }
 
-// synthesisPrincipal is the single-tenant owner every scheduled run is
-// attributed to. It is part of the logical key, so it is a constant rather than
-// a derived value: a drifting principal would make each run look new and defeat
-// the duplicate check.
-const synthesisPrincipal = "scheduler"
-
 func (s *Scheduler) doTopicMomentumJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 	defer cancel()
@@ -227,7 +222,7 @@ func (s *Scheduler) doSynthesisJob() {
 			"reason", "synthesis_producer_unset")
 	} else {
 		agg, err := s.synthesisProducer.RunAndPersist(
-			ctx, intelligence.CadenceDaily, synthesisPrincipal, time.Now().UTC())
+			ctx, intelligence.CadenceDaily, intelligence.TriggerScheduled, time.Now().UTC())
 		switch {
 		case err != nil:
 			slog.Error("synthesis failed", "error", err)
@@ -330,19 +325,79 @@ func (s *Scheduler) doWeeklySynthesisJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 	defer cancel()
 
-	ws, err := s.engine.GenerateWeeklySynthesis(ctx)
+	if s.synthesisProducer == nil {
+		slog.Error("weekly synthesis skipped: no durable persistence wired",
+			"reason", "synthesis_producer_unset")
+		return
+	}
+
+	agg, err := s.synthesisProducer.RunAndPersist(
+		ctx, intelligence.CadenceWeekly, intelligence.TriggerScheduled, time.Now().UTC())
 	if err != nil {
 		slog.Error("weekly synthesis failed", "error", err)
-	} else if s.bot != nil && ws.SynthesisText != "" {
-		if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
-			Producer: surfacing.ProducerWeeklySynthesis, Channel: surfacing.ChannelTelegram,
-			ContentKey: "weekly:" + ws.WeekOf, Priority: 3, ProposedAt: time.Now(),
-		}) {
-			return
-		}
-		s.bot.SendDigest(ws.SynthesisText)
-		slog.Info("weekly synthesis delivered", "words", ws.WordCount)
+		return
 	}
+	if agg == nil {
+		slog.Error("weekly synthesis returned no aggregate",
+			"reason", "verified_aggregate_missing")
+		return
+	}
+
+	if s.bot == nil {
+		slog.Info("weekly synthesis complete",
+			"run_id", agg.RunID,
+			"output_id", agg.OutputID,
+			"kind", string(agg.Kind),
+			"insights", agg.InsightCount,
+			"citations", agg.CitationCount)
+		return
+	}
+
+	message := renderPersistedWeeklySynthesis(agg)
+	if message == "" {
+		slog.Error("weekly synthesis aggregate has no renderable persisted payload",
+			"output_id", agg.OutputID,
+			"kind", string(agg.Kind))
+		return
+	}
+	if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+		Producer: surfacing.ProducerWeeklySynthesis, Channel: surfacing.ChannelTelegram,
+		ContentKey: "weekly:" + agg.OutputID, Priority: 3, ProposedAt: time.Now(),
+	}) {
+		return
+	}
+	if err := s.bot.SendDigest(message); err != nil {
+		slog.Error("weekly synthesis delivery failed",
+			"output_id", agg.OutputID,
+			"kind", string(agg.Kind))
+		return
+	}
+	slog.Info("weekly synthesis delivered",
+		"run_id", agg.RunID,
+		"output_id", agg.OutputID,
+		"kind", string(agg.Kind),
+		"insights", agg.InsightCount,
+		"citations", agg.CitationCount)
+}
+
+// renderPersistedWeeklySynthesis renders only fields returned by the durable
+// aggregate read-back. It must not invoke generation or reuse pre-commit data.
+func renderPersistedWeeklySynthesis(agg *intelligence.SynthesisAggregate) string {
+	if agg == nil {
+		return ""
+	}
+	if agg.Kind == intelligence.OutputKindQuiet {
+		return "Quiet week — not much to report. Keep exploring!"
+	}
+	if len(agg.Insights) == 0 {
+		return ""
+	}
+
+	lines := make([]string, 0, len(agg.Insights))
+	for _, insight := range agg.Insights {
+		lines = append(lines, fmt.Sprintf("• %s (confidence: %.0f%%)", insight.ThroughLine, insight.Confidence*100))
+	}
+	return "CONNECTION DISCOVERED:\n" + strings.Join(lines, "\n")
 }
 
 // runMonthlyReportJob generates monthly self-knowledge report — 1st of each month at 3 AM (R-506).

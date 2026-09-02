@@ -1376,6 +1376,78 @@ SURFACING_URGENT_ESCALATION_ENABLED="$(required_value surfacing.urgent_escalatio
 # validates it is >= max(suppression_window_hours, dedupe_window_hours).
 PROACTIVE_NUDGE_REF_TTL_HOURS="$(required_value proactive.nudge_ref_ttl_hours)"
 
+# Spec 004 Scope 7 — durable synthesis policy (SST-owned; no generator
+# defaults). Integer validation is string-first so malformed or oversized input
+# never reaches shell arithmetic. Values that reach arithmetic are bounded to
+# the signed 32-bit range consumed by the Go loader.
+validate_synthesis_uint() {
+  local path="$1"
+  local value="$2"
+  local min="$3"
+  local max="$4"
+  local normalized="$value"
+  local numeric
+
+  case "$value" in
+    "" | *[!0-9]*)
+      echo "Error: $path must be an ASCII decimal integer in range $min..$max, got '$value'" >&2
+      exit 1
+      ;;
+  esac
+
+  while [[ ${#normalized} -gt 1 && "$normalized" == 0* ]]; do
+    normalized="${normalized#0}"
+  done
+  if [[ ${#normalized} -gt ${#max} ]]; then
+    echo "Error: $path must be an ASCII decimal integer in range $min..$max, got '$value'" >&2
+    exit 1
+  fi
+
+  numeric=$((10#$normalized))
+  if ((numeric < min || numeric > max)); then
+    echo "Error: $path must be an ASCII decimal integer in range $min..$max, got '$value'" >&2
+    exit 1
+  fi
+}
+
+validate_synthesis_source_classes() {
+  local required_json="$1"
+  local optional_json="$2"
+
+  if [[ "$required_json" != '["canonical-graph"]' ]]; then
+    echo 'Error: intelligence.synthesis.required_source_classes must be exactly ["canonical-graph"]' >&2
+    exit 1
+  fi
+  if [[ "$optional_json" != '[]' ]]; then
+    echo 'Error: intelligence.synthesis.optional_source_classes must be exactly []' >&2
+    exit 1
+  fi
+}
+
+SYNTHESIS_ACTOR_USER_ID="$(required_value intelligence.synthesis.actor_user_id)"
+SYNTHESIS_DAILY_CRON="$(required_value intelligence.synthesis.daily_cron)"
+SYNTHESIS_WEEKLY_CRON="$(required_value intelligence.synthesis.weekly_cron)"
+SYNTHESIS_RETRY_BUDGET="$(required_value intelligence.synthesis.retry_budget)"
+SYNTHESIS_RETRY_BACKOFF_SECONDS="$(required_value intelligence.synthesis.retry_backoff_seconds)"
+SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS="$(required_value intelligence.synthesis.retry_max_backoff_seconds)"
+SYNTHESIS_LEASE_SECONDS="$(required_value intelligence.synthesis.lease_seconds)"
+SYNTHESIS_POLICY_VERSION="$(required_value intelligence.synthesis.policy_version)"
+SYNTHESIS_REQUIRED_SOURCE_CLASSES="$(required_json_value intelligence.synthesis.required_source_classes)"
+SYNTHESIS_OPTIONAL_SOURCE_CLASSES="$(required_json_value intelligence.synthesis.optional_source_classes)"
+SYNTHESIS_RETENTION_SECONDS="$(required_value intelligence.synthesis.retention_seconds)"
+
+validate_synthesis_uint "intelligence.synthesis.retry_budget" "$SYNTHESIS_RETRY_BUDGET" 0 10
+validate_synthesis_uint "intelligence.synthesis.retry_backoff_seconds" "$SYNTHESIS_RETRY_BACKOFF_SECONDS" 1 2147483647
+validate_synthesis_uint "intelligence.synthesis.retry_max_backoff_seconds" "$SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS" 1 2147483647
+validate_synthesis_uint "intelligence.synthesis.lease_seconds" "$SYNTHESIS_LEASE_SECONDS" 1 2147483647
+validate_synthesis_uint "intelligence.synthesis.retention_seconds" "$SYNTHESIS_RETENTION_SECONDS" 1 2147483647
+validate_synthesis_source_classes "$SYNTHESIS_REQUIRED_SOURCE_CLASSES" "$SYNTHESIS_OPTIONAL_SOURCE_CLASSES"
+
+if ((10#$SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS < 10#$SYNTHESIS_RETRY_BACKOFF_SECONDS)); then
+  echo "Error: intelligence.synthesis.retry_max_backoff_seconds must be greater than or equal to intelligence.synthesis.retry_backoff_seconds" >&2
+  exit 1
+fi
+
 # Spec 021 BUG-021-005 — relationship-cooling OPERATIONAL bounds (the cooling
 # judgment itself is LLM-driven; these are throughput/safety/anti-spam knobs).
 INTELLIGENCE_RELATIONSHIP_COOLING_MAX_CANDIDATES="$(required_value intelligence.relationship_cooling.max_candidates)"
@@ -2549,6 +2621,17 @@ SURFACING_SUPPRESSION_WINDOW_HOURS=${SURFACING_SUPPRESSION_WINDOW_HOURS}
 SURFACING_DEDUPE_WINDOW_HOURS=${SURFACING_DEDUPE_WINDOW_HOURS}
 SURFACING_URGENT_ESCALATION_ENABLED=${SURFACING_URGENT_ESCALATION_ENABLED}
 PROACTIVE_NUDGE_REF_TTL_HOURS=${PROACTIVE_NUDGE_REF_TTL_HOURS}
+SYNTHESIS_ACTOR_USER_ID=${SYNTHESIS_ACTOR_USER_ID:?intelligence.synthesis.actor_user_id resolved empty}
+SYNTHESIS_DAILY_CRON=${SYNTHESIS_DAILY_CRON:?intelligence.synthesis.daily_cron resolved empty}
+SYNTHESIS_WEEKLY_CRON=${SYNTHESIS_WEEKLY_CRON:?intelligence.synthesis.weekly_cron resolved empty}
+SYNTHESIS_RETRY_BUDGET=${SYNTHESIS_RETRY_BUDGET:?intelligence.synthesis.retry_budget resolved empty}
+SYNTHESIS_RETRY_BACKOFF_SECONDS=${SYNTHESIS_RETRY_BACKOFF_SECONDS:?intelligence.synthesis.retry_backoff_seconds resolved empty}
+SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS=${SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS:?intelligence.synthesis.retry_max_backoff_seconds resolved empty}
+SYNTHESIS_LEASE_SECONDS=${SYNTHESIS_LEASE_SECONDS:?intelligence.synthesis.lease_seconds resolved empty}
+SYNTHESIS_POLICY_VERSION=${SYNTHESIS_POLICY_VERSION:?intelligence.synthesis.policy_version resolved empty}
+SYNTHESIS_REQUIRED_SOURCE_CLASSES=${SYNTHESIS_REQUIRED_SOURCE_CLASSES:?intelligence.synthesis.required_source_classes resolved empty}
+SYNTHESIS_OPTIONAL_SOURCE_CLASSES=${SYNTHESIS_OPTIONAL_SOURCE_CLASSES:?intelligence.synthesis.optional_source_classes resolved empty}
+SYNTHESIS_RETENTION_SECONDS=${SYNTHESIS_RETENTION_SECONDS:?intelligence.synthesis.retention_seconds resolved empty}
 INTELLIGENCE_RELATIONSHIP_COOLING_MAX_CANDIDATES=${INTELLIGENCE_RELATIONSHIP_COOLING_MAX_CANDIDATES}
 INTELLIGENCE_RELATIONSHIP_COOLING_CONFIDENCE_FLOOR=${INTELLIGENCE_RELATIONSHIP_COOLING_CONFIDENCE_FLOOR}
 INTELLIGENCE_RELATIONSHIP_COOLING_DEDUP_WINDOW_DAYS=${INTELLIGENCE_RELATIONSHIP_COOLING_DEDUP_WINDOW_DAYS}

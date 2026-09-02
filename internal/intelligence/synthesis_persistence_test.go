@@ -27,25 +27,33 @@ func TestLogicalKey_IsDeterministic(t *testing.T) {
 	}
 }
 
-func TestLogicalKey_IsUnmovedByCorpusDrift(t *testing.T) {
-	// This is the guard on the defect that shipped: the source set WAS hashed
-	// into the key, so on a continuously ingesting system two triggers for one
-	// window saw different corpora and became two runs. Identity has to sit
-	// still while the corpus moves underneath it.
+func TestLogicalKey_TracksCanonicalSourceSetIdentity(t *testing.T) {
 	base := baseKey()
-	for name, drift := range map[string][]string{
-		"reordered":       {"art-c", "art-a", "art-b"},
-		"duplicated":      {"art-a", "art-a", "art-b", "art-c", "art-c"},
-		"grew by ingest":  {"art-a", "art-b", "art-c", "art-d"},
-		"shrank by purge": {"art-a"},
-		"replaced":        {"art-x", "art-y"},
-		"emptied":         nil,
+	baseLogicalKey := base.LogicalKey()
+
+	reordered := baseKey()
+	reordered.SourceIDs = []string{"art-c", "art-a", "art-b"}
+	if reordered.LogicalKey() != baseLogicalKey {
+		t.Fatal("reordering the same source set changed the logical key")
+	}
+
+	// ADVERSARIAL: removing SourceSetDigest from LogicalKey makes every changed
+	// case collide with the base run. Changed inputs must create a replacement
+	// run; the separate actor/cadence/window advisory key serializes that change.
+	for _, changed := range []struct {
+		name      string
+		sourceIDs []string
+	}{
+		{name: "grew by ingest", sourceIDs: []string{"art-a", "art-b", "art-c", "art-d"}},
+		{name: "shrank by purge", sourceIDs: []string{"art-a"}},
+		{name: "replaced", sourceIDs: []string{"art-x", "art-y"}},
+		{name: "emptied", sourceIDs: nil},
 	} {
-		t.Run(name, func(t *testing.T) {
-			drifted := baseKey()
-			drifted.SourceIDs = drift
-			if drifted.LogicalKey() != base.LogicalKey() {
-				t.Fatalf("corpus %s changed the logical key; the window would produce a second output", name)
+		t.Run(changed.name, func(t *testing.T) {
+			candidate := baseKey()
+			candidate.SourceIDs = changed.sourceIDs
+			if candidate.LogicalKey() == baseLogicalKey {
+				t.Fatalf("changed source set %s did not change the logical key", changed.name)
 			}
 		})
 	}

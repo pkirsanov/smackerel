@@ -1,0 +1,100 @@
+{
+  "version": 3,
+  "bugId": "BUG-031-011",
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-011-ml-readiness-oracle-fidelity",
+  "featureName": "ML Readiness Oracle Fidelity",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "status": "in_progress",
+  "statusReason": "The two-sided test oracle is authored and its static regression guard passed. Runtime stress, mutation, integration, E2E, Docker, validation, and audit evidence are not run, so the packet remains in_progress.",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/031-live-stack-testing",
+    "specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift"
+  ],
+  "workBoundary": {
+    "repositoryRoots": ["smackerel"],
+    "specTargets": ["specs/031-live-stack-testing/bugs/BUG-031-011-ml-readiness-oracle-fidelity"],
+    "allowedPaths": [
+      "specs/031-live-stack-testing/bugs/BUG-031-011-ml-readiness-oracle-fidelity/**",
+      "specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/scenario-manifest.json",
+      "specs/031-live-stack-testing/scenario-manifest.json",
+      "tests/stress/ml_readiness_timeout_stress_test.go"
+    ],
+    "crossRepoPolicy": "forbidden"
+  },
+  "certifiedAt": null,
+  "requiresRevalidation": true,
+  "execution": {
+    "goalContractRef": null,
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
+    "currentScope": "SCOPE-01",
+    "substate": "needs_reverification",
+    "runStartedAt": "2026-09-02T01:50:26Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "audit": {"schemaVersion": "audit-run/v1", "runId": null, "currentAttemptId": null, "attempts": []}
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "scopeId": "SCOPE-01",
+        "name": "Repair The ML Readiness Regression Oracle",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {"active": false, "lockedScenarioIds": []}
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-mode"},
+    "autoCommit": {"mode": "off", "source": "user-constraint"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "workflow-mode"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug-discovery", "analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-09-02T01:50:26Z",
+      "runEndedAt": "2026-09-02T01:50:26Z",
+      "claimSource": "interpreted",
+      "outcome": "route_required",
+      "summary": "Created a full artifact packet from source inspection. The stress test supplies only HTTP 200 and expects readiness. Production probes ML /health, while core /readyz is a separate database readiness route. No source, test, Docker, validation, commit, push, or deployment action occurred."
+    }
+  ],
+  "activeBugs": ["BUG-031-011"],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-09-02T02:41:46Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json"
+  },
+  "notes": "The operator authorized the bounded test-only implementation. Runtime red-green, mutation, focused stress, integration, E2E, and full stress evidence remain required. No certification fields were changed."
+}
