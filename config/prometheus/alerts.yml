@@ -596,19 +596,19 @@ groups:
 - name: smackerel-synthesis
   rules:
   - alert: SmackerelSynthesisFailing
-    expr: smackerel_synthesis_state == 4
+    expr: (smackerel_synthesis_state == 3) or (smackerel_synthesis_state == 4)
     for: 30m
     labels:
       severity: critical
       component: synthesis
     annotations:
-      summary: "Smackerel synthesis is failing to persist"
+      summary: "Smackerel synthesis is partial or failing"
       description: |
-        The most recent synthesis attempt failed. An older verified
-        output may still exist; it does NOT clear this, because a
-        current failure is a current fact. Check
-        synthesis_run_attempts for the recorded failure_class — the
-        class is recorded, the candidate content deliberately is not.
+        The most recent synthesis result is partial or the attempt failed.
+        A partial result does not satisfy required-cadence readiness, and
+        an older verified output does NOT clear a current failure. Check
+        synthesis_run_attempts for the recorded state and failure_class —
+        operational state is recorded, candidate content deliberately is not.
 
   - alert: SmackerelSynthesisStale
     expr: smackerel_synthesis_state == 2

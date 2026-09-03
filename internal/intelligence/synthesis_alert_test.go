@@ -1,10 +1,13 @@
 package intelligence
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // BUG-004-004 SCOPE-04 — T004-06-ALERT.
@@ -152,6 +155,95 @@ func TestSynthesisAlertRules_ReferenceLivePublishedMetrics(t *testing.T) {
 			t.Fatalf("alert %q is absent; its state would be durable and unreported", alert)
 		}
 	}
+}
+
+type synthesisAlertDocument struct {
+	Groups []struct {
+		Rules []struct {
+			Alert string `yaml:"alert"`
+			Expr  string `yaml:"expr"`
+			For   string `yaml:"for"`
+		} `yaml:"rules"`
+	} `yaml:"groups"`
+}
+
+type synthesisAlertContract struct {
+	expression string
+	window     string
+}
+
+func TestSynthesisAlertRules_ConsumeCanonicalStateWithConfiguredForWindows(t *testing.T) {
+	rulesPath := filepath.Join("..", "..", "config", "prometheus", "alerts.yml")
+	body, err := os.ReadFile(rulesPath)
+	if err != nil {
+		t.Fatalf("read alert rules: %v", err)
+	}
+
+	if err := validateSynthesisAlertContracts(body); err != nil {
+		t.Fatal(err)
+	}
+
+	failingExpression := "(smackerel_synthesis_state == 3) or (smackerel_synthesis_state == 4)"
+	mutated := strings.Replace(string(body), failingExpression, "smackerel_synthesis_state == 4", 1)
+	if mutated == string(body) {
+		t.Fatal("adversarial setup could not remove partial state 3 from SmackerelSynthesisFailing")
+	}
+	if err := validateSynthesisAlertContracts([]byte(mutated)); err == nil {
+		t.Fatal("alert contract accepted SmackerelSynthesisFailing after partial state 3 was removed")
+	}
+}
+
+func validateSynthesisAlertContracts(body []byte) error {
+	want := map[string]synthesisAlertContract{
+		"SmackerelSynthesisFailing": {
+			expression: "(smackerel_synthesis_state == 3) or (smackerel_synthesis_state == 4)",
+			window:     "30m",
+		},
+		"SmackerelSynthesisStale": {
+			expression: "smackerel_synthesis_state == 2",
+			window:     "1h",
+		},
+		"SmackerelSynthesisNeverRun": {
+			expression: "smackerel_synthesis_state == 0",
+			window:     "24h",
+		},
+		"SmackerelSynthesisStateUnreadable": {
+			expression: "smackerel_synthesis_state == 5",
+			window:     "15m",
+		},
+	}
+
+	var document synthesisAlertDocument
+	if err := yaml.Unmarshal(body, &document); err != nil {
+		return fmt.Errorf("parse Prometheus alert YAML: %w", err)
+	}
+
+	seen := make(map[string]bool, len(want))
+	for _, group := range document.Groups {
+		for _, rule := range group.Rules {
+			expected, required := want[rule.Alert]
+			if !required {
+				continue
+			}
+			if seen[rule.Alert] {
+				return fmt.Errorf("synthesis alert %q is declared more than once", rule.Alert)
+			}
+			seen[rule.Alert] = true
+			if rule.Expr != expected.expression {
+				return fmt.Errorf("synthesis alert %q expression = %q, want %q", rule.Alert, rule.Expr, expected.expression)
+			}
+			if rule.For != expected.window {
+				return fmt.Errorf("synthesis alert %q for window = %q, want %q", rule.Alert, rule.For, expected.window)
+			}
+		}
+	}
+
+	for alert := range want {
+		if !seen[alert] {
+			return fmt.Errorf("required synthesis alert %q is absent", alert)
+		}
+	}
+	return nil
 }
 
 // A failing run must not be reported healthy merely because time has passed, so
