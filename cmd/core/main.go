@@ -144,6 +144,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("construct synthesis runtime: %w", err)
 	}
+	if err := reconcileSynthesisStartup(ctx, cfg, synthesisRT, time.Now()); err != nil {
+		return fmt.Errorf("reconcile synthesis startup: %w", err)
+	}
 
 	// Register and start all connectors
 	if err := registerConnectors(ctx, cfg, svc); err != nil {

@@ -167,6 +167,7 @@ func initAssistantTracing(ctx context.Context, cfg *config.Config) (*assistanttr
 type synthesisRuntime struct {
 	readModel       *intelligence.SynthesisReadModel
 	persistence     *intelligence.SynthesisPersistence
+	coordinator     *intelligence.SynthesisCoordinator
 	producer        *intelligence.SynthesisProducer
 	freshnessPolicy intelligence.SynthesisFreshnessPolicy
 }
@@ -180,6 +181,9 @@ func (r *synthesisRuntime) validate() error {
 	}
 	if r.persistence == nil {
 		return fmt.Errorf("synthesis runtime requires persistence")
+	}
+	if r.coordinator == nil {
+		return fmt.Errorf("synthesis runtime requires a coordinator")
 	}
 	if r.producer == nil {
 		return fmt.Errorf("synthesis runtime requires a coordinated producer")
@@ -269,6 +273,7 @@ func newSynthesisRuntime(cfg *config.Config, svc *coreServices) (*synthesisRunti
 	runtime := &synthesisRuntime{
 		readModel:       readModel,
 		persistence:     persistence,
+		coordinator:     coordinator,
 		producer:        producer.WithCoordinator(coordinator),
 		freshnessPolicy: freshnessPolicy,
 	}
@@ -276,6 +281,39 @@ func newSynthesisRuntime(cfg *config.Config, svc *coreServices) (*synthesisRunti
 		return nil, err
 	}
 	return runtime, nil
+}
+
+func reconcileSynthesisStartup(
+	ctx context.Context,
+	cfg *config.Config,
+	synthesisRT *synthesisRuntime,
+	now time.Time,
+) error {
+	if ctx == nil {
+		return fmt.Errorf("synthesis startup reconciliation requires a context")
+	}
+	if cfg == nil {
+		return fmt.Errorf("synthesis startup reconciliation requires configuration")
+	}
+	if err := synthesisRT.validate(); err != nil {
+		return fmt.Errorf("synthesis startup reconciliation requires a valid runtime: %w", err)
+	}
+	if now.IsZero() {
+		return fmt.Errorf("synthesis startup reconciliation requires an observation time")
+	}
+
+	observedAt := now.UTC()
+	for _, cadence := range synthesisRT.freshnessPolicy.RequiredCadences() {
+		summary, err := synthesisRT.coordinator.ReconcileStartup(ctx, cfg.Synthesis.ActorUserID, cadence, observedAt)
+		if err != nil {
+			return fmt.Errorf("reconcile synthesis startup cadence %q: %w", cadence, err)
+		}
+		slog.Info("synthesis startup reconciliation completed",
+			"cadence", cadence,
+			"expired_attempts", summary.ExpiredAttempts,
+			"readback_failures", summary.ReadbackFailures)
+	}
+	return nil
 }
 
 // buildAPIDeps assembles the api.Dependencies struct including annotation and
