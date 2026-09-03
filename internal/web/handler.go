@@ -72,10 +72,9 @@ type Handler struct {
 	// rendered by Today and Status. Production wiring must provide both.
 	SynthesisPrincipal string
 	SynthesisCadence   intelligence.SynthesisCadence
-	// SynthesisFreshnessBudget is how long a verified output stays current.
-	// Zero keeps stale determination inert rather than calling every output
-	// stale, matching the DigestStaleAfter contract directly above.
-	SynthesisFreshnessBudget time.Duration
+	// SynthesisFreshnessPolicy resolves the required currentness budget for the
+	// configured cadence. An invalid policy renders synthesis unavailable.
+	SynthesisFreshnessPolicy intelligence.SynthesisFreshnessPolicy
 	// ClockOverride, when non-nil, replaces time.Now for deterministic stale-age
 	// tests. Production leaves it nil. It is an observation seam only.
 	ClockOverride func() time.Time

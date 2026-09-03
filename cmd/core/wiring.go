@@ -165,9 +165,10 @@ func initAssistantTracing(ctx context.Context, cfg *config.Config) (*assistanttr
 // by API retry and scheduler callers. The database coordinator remains the
 // authority across processes.
 type synthesisRuntime struct {
-	readModel   *intelligence.SynthesisReadModel
-	persistence *intelligence.SynthesisPersistence
-	producer    *intelligence.SynthesisProducer
+	readModel       *intelligence.SynthesisReadModel
+	persistence     *intelligence.SynthesisPersistence
+	producer        *intelligence.SynthesisProducer
+	freshnessPolicy intelligence.SynthesisFreshnessPolicy
 }
 
 func (r *synthesisRuntime) validate() error {
@@ -182,6 +183,11 @@ func (r *synthesisRuntime) validate() error {
 	}
 	if r.producer == nil {
 		return fmt.Errorf("synthesis runtime requires a coordinated producer")
+	}
+	for _, cadence := range []intelligence.SynthesisCadence{intelligence.CadenceDaily, intelligence.CadenceWeekly} {
+		if _, err := r.freshnessPolicy.BudgetFor(cadence); err != nil {
+			return fmt.Errorf("synthesis runtime requires a valid freshness policy: %w", err)
+		}
 	}
 	return nil
 }
@@ -220,6 +226,13 @@ func newSynthesisRuntime(cfg *config.Config, svc *coreServices) (*synthesisRunti
 		return nil, fmt.Errorf("synthesis runtime requires the postgres service")
 	}
 
+	freshnessPolicy, err := intelligence.NewSynthesisFreshnessPolicy(
+		cfg.Synthesis.DailyFreshness,
+		cfg.Synthesis.WeeklyFreshness,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("construct synthesis freshness policy: %w", err)
+	}
 	readModel, err := intelligence.NewSynthesisReadModel(svc.pg.Pool)
 	if err != nil {
 		return nil, fmt.Errorf("construct synthesis read model: %w", err)
@@ -254,9 +267,10 @@ func newSynthesisRuntime(cfg *config.Config, svc *coreServices) (*synthesisRunti
 	}
 
 	runtime := &synthesisRuntime{
-		readModel:   readModel,
-		persistence: persistence,
-		producer:    producer.WithCoordinator(coordinator),
+		readModel:       readModel,
+		persistence:     persistence,
+		producer:        producer.WithCoordinator(coordinator),
+		freshnessPolicy: freshnessPolicy,
 	}
 	if err := runtime.validate(); err != nil {
 		return nil, err
@@ -338,7 +352,7 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, sy
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		SynthesisReadModel:              synthesisRT.readModel,
 		SynthesisReadPrincipal:          cfg.Synthesis.ActorUserID,
-		SynthesisReadCadence:            intelligence.CadenceDaily,
+		SynthesisFreshnessPolicy:        synthesisRT.freshnessPolicy,
 		IntelligenceHealthCacheTTL:      time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		TrustedProxies:                  cfg.RuntimeTrustedProxies,
@@ -378,7 +392,7 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, sy
 		synthesisRT.readModel,
 		synthesisRT.persistence,
 		cfg.Synthesis.ActorUserID,
-		time.Duration(cfg.DigestStaleAfterHours)*time.Hour,
+		synthesisRT.freshnessPolicy,
 	)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("construct synthesis handlers: %w", err)
@@ -395,7 +409,7 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices, sy
 		svc.webHandler.SynthesisAggregates = synthesisRT.persistence
 		svc.webHandler.SynthesisPrincipal = cfg.Synthesis.ActorUserID
 		svc.webHandler.SynthesisCadence = intelligence.CadenceWeekly
-		svc.webHandler.SynthesisFreshnessBudget = time.Duration(cfg.DigestStaleAfterHours) * time.Hour
+		svc.webHandler.SynthesisFreshnessPolicy = synthesisRT.freshnessPolicy
 	}
 
 	if cfg.QFDecisionsEnabled {

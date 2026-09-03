@@ -15,6 +15,8 @@ type synthesisSSTDocument struct {
 			ActorUserID            string   `yaml:"actor_user_id"`
 			DailyCron              string   `yaml:"daily_cron"`
 			WeeklyCron             string   `yaml:"weekly_cron"`
+			DailyFreshnessSeconds  int      `yaml:"daily_freshness_seconds"`
+			WeeklyFreshnessSeconds int      `yaml:"weekly_freshness_seconds"`
 			RetryBudget            int      `yaml:"retry_budget"`
 			RetryBackoffSeconds    int      `yaml:"retry_backoff_seconds"`
 			RetryMaxBackoffSeconds int      `yaml:"retry_max_backoff_seconds"`
@@ -37,6 +39,8 @@ var synthesisGeneratorFields = []synthesisGeneratorField{
 	{envKey: "SYNTHESIS_ACTOR_USER_ID", sstPath: "intelligence.synthesis.actor_user_id", readFunc: "required_value"},
 	{envKey: "SYNTHESIS_DAILY_CRON", sstPath: "intelligence.synthesis.daily_cron", readFunc: "required_value"},
 	{envKey: "SYNTHESIS_WEEKLY_CRON", sstPath: "intelligence.synthesis.weekly_cron", readFunc: "required_value"},
+	{envKey: "SYNTHESIS_DAILY_FRESHNESS_SECONDS", sstPath: "intelligence.synthesis.daily_freshness_seconds", readFunc: "required_value"},
+	{envKey: "SYNTHESIS_WEEKLY_FRESHNESS_SECONDS", sstPath: "intelligence.synthesis.weekly_freshness_seconds", readFunc: "required_value"},
 	{envKey: "SYNTHESIS_RETRY_BUDGET", sstPath: "intelligence.synthesis.retry_budget", readFunc: "required_value"},
 	{envKey: "SYNTHESIS_RETRY_BACKOFF_SECONDS", sstPath: "intelligence.synthesis.retry_backoff_seconds", readFunc: "required_value"},
 	{envKey: "SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS", sstPath: "intelligence.synthesis.retry_max_backoff_seconds", readFunc: "required_value"},
@@ -57,6 +61,8 @@ func assertSynthesisGeneratorContract(sstYAML, generator string) error {
 	if got.ActorUserID != "global-corpus" ||
 		got.DailyCron != "0 2 * * *" ||
 		got.WeeklyCron != "0 16 * * 0" ||
+		got.DailyFreshnessSeconds != 129600 ||
+		got.WeeklyFreshnessSeconds != 691200 ||
 		got.RetryBudget != 2 ||
 		got.RetryBackoffSeconds != 2 ||
 		got.RetryMaxBackoffSeconds != 30 ||
@@ -90,6 +96,8 @@ func assertSynthesisGeneratorContract(sstYAML, generator string) error {
 	}
 
 	for _, validation := range []string{
+		`validate_synthesis_uint "intelligence.synthesis.daily_freshness_seconds" "$SYNTHESIS_DAILY_FRESHNESS_SECONDS" 1 2147483647`,
+		`validate_synthesis_uint "intelligence.synthesis.weekly_freshness_seconds" "$SYNTHESIS_WEEKLY_FRESHNESS_SECONDS" 1 2147483647`,
 		`validate_synthesis_uint "intelligence.synthesis.retry_budget" "$SYNTHESIS_RETRY_BUDGET" 0 10`,
 		`validate_synthesis_uint "intelligence.synthesis.retry_backoff_seconds" "$SYNTHESIS_RETRY_BACKOFF_SECONDS" 1 2147483647`,
 		`validate_synthesis_uint "intelligence.synthesis.retry_max_backoff_seconds" "$SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS" 1 2147483647`,

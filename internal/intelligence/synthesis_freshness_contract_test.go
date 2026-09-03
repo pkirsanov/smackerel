@@ -37,8 +37,8 @@ func TestSynthesisFreshness_HasOneSSTAndNo48hDigestAlias(t *testing.T) {
 	}
 
 	wiring := readSynthesisFreshnessContractFile(t, root, "cmd/core/wiring.go")
-	if count := strings.Count(wiring, "DigestStaleAfterHours"); count != 1 {
-		t.Errorf("cmd/core/wiring.go has %d DigestStaleAfterHours consumers, want only the digest consumer", count)
+	if strings.Contains(wiring, "DigestStaleAfterHours") {
+		t.Error("cmd/core/wiring.go retains a synthesis alias to digest freshness")
 	}
 	if strings.Contains(wiring, "SynthesisFreshnessBudget") {
 		t.Error("cmd/core/wiring.go retains a cadence-blind synthesis freshness budget")

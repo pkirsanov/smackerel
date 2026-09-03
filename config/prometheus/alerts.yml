@@ -589,6 +589,9 @@ groups:
 # smackerel_synthesis_state is a single numeric gauge rather than a labelled
 # one on purpose: one gauge cannot hold two states at once, so exclusivity is
 # structural and a rule never has to assume it.
+# Core sets the stale state by resolving the configured cadence freshness from
+# SYNTHESIS_DAILY_FRESHNESS_SECONDS or SYNTHESIS_WEEKLY_FRESHNESS_SECONDS. The
+# alert consumes that policy-derived state and owns no independent threshold.
 #   0 never-run  1 up  2 stale  3 partial  4 failed  5 probe-error
 - name: smackerel-synthesis
   rules:
@@ -617,8 +620,11 @@ groups:
       summary: "Smackerel synthesis output is stale"
       description: |
         The newest read-back-verified synthesis output has aged past
-        its freshness budget. The scheduler may not be running, or
-        every recent window may have been claimed and abandoned.
+        its configured cadence freshness budget. Core derives this state
+        from SYNTHESIS_DAILY_FRESHNESS_SECONDS for daily reads or
+        SYNTHESIS_WEEKLY_FRESHNESS_SECONDS for weekly reads; this alert
+        has no separate fallback threshold. The scheduler may not be
+        running, or every recent window may have been claimed and abandoned.
         Check smackerel_synthesis_last_verified_output_unixtime and
         the lease_expires_at column on synthesis_runs.
 

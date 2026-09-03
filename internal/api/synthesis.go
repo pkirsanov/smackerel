@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -26,7 +27,7 @@ type SynthesisHandlers struct {
 	ReadModel       *intelligence.SynthesisReadModel
 	Persistence     *intelligence.SynthesisPersistence
 	Principal       string
-	FreshnessBudget time.Duration
+	FreshnessPolicy intelligence.SynthesisFreshnessPolicy
 	// Producer backs the operator retry route. Nil leaves retry unavailable
 	// rather than accepting a request it cannot act on -- a 202 for work that
 	// will never happen is the failure mode this packet exists to remove.
@@ -37,17 +38,19 @@ func NewSynthesisHandlers(
 	model *intelligence.SynthesisReadModel,
 	persistence *intelligence.SynthesisPersistence,
 	principal string,
-	freshnessBudget time.Duration,
+	freshnessPolicy intelligence.SynthesisFreshnessPolicy,
 ) (*SynthesisHandlers, error) {
 	if principal == "" {
 		return nil, errors.New("synthesis handlers require a principal")
 	}
-	if freshnessBudget <= 0 {
-		return nil, errors.New("synthesis handlers require a positive freshness budget")
+	for _, cadence := range []intelligence.SynthesisCadence{intelligence.CadenceDaily, intelligence.CadenceWeekly} {
+		if _, err := freshnessPolicy.BudgetFor(cadence); err != nil {
+			return nil, fmt.Errorf("synthesis handlers require a valid freshness policy: %w", err)
+		}
 	}
 	return &SynthesisHandlers{
 		ReadModel: model, Persistence: persistence,
-		Principal: principal, FreshnessBudget: freshnessBudget,
+		Principal: principal, FreshnessPolicy: freshnessPolicy,
 	}, nil
 }
 
@@ -91,7 +94,7 @@ type synthesisAttemptResponse struct {
 
 // GetLatest reports the newest verified output, or an explicit never-run state.
 func (h *SynthesisHandlers) GetLatest(w http.ResponseWriter, r *http.Request) {
-	if h == nil || h.ReadModel == nil || h.Principal == "" || h.FreshnessBudget <= 0 {
+	if h == nil || h.ReadModel == nil || h.Principal == "" {
 		writeError(w, http.StatusServiceUnavailable, "synthesis_unavailable", "Synthesis read model is not configured")
 		return
 	}
@@ -101,10 +104,15 @@ func (h *SynthesisHandlers) GetLatest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_cadence", err.Error())
 		return
 	}
+	freshnessBudget, err := h.FreshnessPolicy.BudgetFor(cadence)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "synthesis_unavailable", "Synthesis freshness policy is not configured")
+		return
+	}
 	snapshot, err := h.ReadModel.ReadSnapshot(r.Context(), intelligence.SynthesisReadQuery{
 		Principal:       h.Principal,
 		Cadence:         cadence,
-		FreshnessBudget: h.FreshnessBudget,
+		FreshnessBudget: freshnessBudget,
 		ObservedAt:      time.Now().UTC(),
 	})
 	if err != nil {

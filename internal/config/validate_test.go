@@ -567,6 +567,7 @@ func TestSynthesisFreshnessPerCadenceIsRequiredPositiveAndHasNoFallback(t *testi
 					t.Fatalf("invalid-value error must name %s: %v", key, err)
 				}
 			})
+		}
 	}
 
 	t.Run("valid distinct daily and weekly values parse", func(t *testing.T) {
@@ -736,6 +737,8 @@ var synthesisRunPolicyTestEnv = map[string]string{
 	"SYNTHESIS_ACTOR_USER_ID":             "global-corpus",
 	"SYNTHESIS_DAILY_CRON":                "0 2 * * *",
 	"SYNTHESIS_WEEKLY_CRON":               "0 16 * * 0",
+	"SYNTHESIS_DAILY_FRESHNESS_SECONDS":   "129600",
+	"SYNTHESIS_WEEKLY_FRESHNESS_SECONDS":  "691200",
 	"SYNTHESIS_RETRY_BUDGET":              "2",
 	"SYNTHESIS_RETRY_BACKOFF_SECONDS":     "2",
 	"SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS": "30",

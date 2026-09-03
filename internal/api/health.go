@@ -270,7 +270,7 @@ type Dependencies struct {
 	// TTL contract as KnowledgeHealthCacheTTL (ML_HEALTH_CACHE_TTL_S).
 	SynthesisReadModel         *intelligence.SynthesisReadModel
 	SynthesisReadPrincipal     string
-	SynthesisReadCadence       intelligence.SynthesisCadence
+	SynthesisFreshnessPolicy   intelligence.SynthesisFreshnessPolicy
 	IntelligenceHealthCacheTTL time.Duration
 	intelligenceHealthMu       sync.RWMutex
 	intelligenceHealthCache    *intelligenceHealthSnapshot
@@ -731,15 +731,10 @@ func (d *Dependencies) getCachedKnowledgeHealth(ctx context.Context) *KnowledgeH
 // probe errored, preserving the pre-cache behaviour of omitting the
 // "alert_delivery" service key from the response in that case.
 type intelligenceHealthSnapshot struct {
-	intelligenceStatus  string
-	alertDeliveryStatus string
+	intelligenceStatus      string
+	alertDeliveryStatus     string
+	synthesisCadenceHealths [intelligence.RequiredSynthesisCadenceCount]intelligence.SynthesisCadenceHealth
 }
-
-// intelligenceSynthesisFreshnessBudget is the age past which a durably-persisted
-// synthesis output is reported as stale by /api/health. Preserved from the
-// pre-fix 48h threshold; consumed when building the SynthesisPersistenceOutcome
-// that intelligence.DeriveSynthesisHealth maps to a truthful verdict.
-const intelligenceSynthesisFreshnessBudget = 48 * time.Hour
 
 // getCachedIntelligenceHealth returns a cached intelligence/alert-delivery
 // snapshot, refreshing when the TTL is exceeded. Mirrors getCachedKnowledgeHealth's
@@ -781,31 +776,48 @@ func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelli
 		// reported never-run indefinitely while real output accumulated, which is
 		// the same divergence between the report and the store that this packet
 		// exists to close, only pointing the other way.
-		readSnapshot, readErr := d.SynthesisReadModel.ReadSnapshot(ctx, intelligence.SynthesisReadQuery{
-			Principal:       d.SynthesisReadPrincipal,
-			Cadence:         d.SynthesisReadCadence,
-			FreshnessBudget: intelligenceSynthesisFreshnessBudget,
-			ObservedAt:      time.Now().UTC(),
-		})
-		var outcome intelligence.SynthesisPersistenceOutcome
-		if readErr != nil {
-			slog.Warn("intelligence read snapshot unavailable", "error", readErr)
-			outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseProbeError}
-		} else {
-			outcome = readSnapshot.Outcome
+		cadences := d.SynthesisFreshnessPolicy.RequiredCadences()
+		observedAt := time.Now().UTC()
+		var outcomes [intelligence.RequiredSynthesisCadenceCount]intelligence.SynthesisCadenceOutcome
+		var readSnapshots [intelligence.RequiredSynthesisCadenceCount]intelligence.SynthesisReadSnapshot
+		for index, cadence := range cadences {
+			outcomes[index].Cadence = cadence
+			freshnessBudget, readErr := d.SynthesisFreshnessPolicy.BudgetFor(cadence)
+			if readErr == nil {
+				readSnapshots[index], readErr = d.SynthesisReadModel.ReadSnapshot(ctx, intelligence.SynthesisReadQuery{
+					Principal:       d.SynthesisReadPrincipal,
+					Cadence:         cadence,
+					FreshnessBudget: freshnessBudget,
+					ObservedAt:      observedAt,
+				})
+			}
+			if readErr != nil {
+				slog.Warn("intelligence read snapshot unavailable", "cadence", cadence, "error", readErr)
+				outcomes[index].Outcome = intelligence.SynthesisPersistenceOutcome{Phase: intelligence.PhaseProbeError}
+				continue
+			}
+			outcomes[index].Outcome = readSnapshots[index].Outcome
 		}
-		snapshot.intelligenceStatus = intelligence.DeriveSynthesisHealth(outcome).IntelligenceStatus
+		aggregate := intelligence.AggregateRequiredSynthesisHealth(outcomes)
+		snapshot.intelligenceStatus = aggregate.IntelligenceStatus
+		snapshot.synthesisCadenceHealths = aggregate.Cadences
 
 		// Publish the same derivation as a scrapeable gauge. Health as a JSON
 		// field is something an operator has to go and look at; a gauge is
 		// something a rule can fire on while nobody is looking.
-		metrics.SynthesisState.Set(float64(intelligence.MetricStateFor(outcome)))
-		if readErr == nil && readSnapshot.CurrentOutput != nil {
-			metrics.SynthesisLastVerifiedOutputUnixtime.Set(float64(readSnapshot.CurrentOutput.Latest.CreatedAt.Unix()))
-		} else {
+		metrics.SynthesisState.Set(float64(aggregate.MetricState))
+		latestVerifiedOutputAt := time.Time{}
+		for _, readSnapshot := range readSnapshots {
+			if readSnapshot.CurrentOutput != nil && readSnapshot.CurrentOutput.Latest.CreatedAt.After(latestVerifiedOutputAt) {
+				latestVerifiedOutputAt = readSnapshot.CurrentOutput.Latest.CreatedAt
+			}
+		}
+		if latestVerifiedOutputAt.IsZero() {
 			// Zero rather than leaving the previous value: a stale reading that
 			// looks recent is worse than an obviously-absent one.
 			metrics.SynthesisLastVerifiedOutputUnixtime.Set(0)
+		} else {
+			metrics.SynthesisLastVerifiedOutputUnixtime.Set(float64(latestVerifiedOutputAt.Unix()))
 		}
 
 		// Alert delivery pipeline freshness: pending alerts older than 30 minutes

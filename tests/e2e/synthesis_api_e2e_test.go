@@ -13,9 +13,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +26,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/acceptance"
+	"github.com/smackerel/smackerel/internal/api"
+	smackdb "github.com/smackerel/smackerel/internal/db"
+	"github.com/smackerel/smackerel/internal/intelligence"
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 type synthesisLatestBody struct {
@@ -200,6 +207,390 @@ func containsE2E(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// SCN-004-004-C20 / T004-C20-STRICT. Every required cadence is read from its
+// own causal PostgreSQL history. A healthy daily cadence cannot mask a weekly
+// never-run, running, stale, partial, failed, or read-degraded state. The HTTP
+// checks use a real server and the lane's real Postgres and NATS dependencies;
+// no internal service or repository is mocked.
+func TestSynthesisAPI_StrictHealthRefusesEveryNonGreenRequiredCadence(t *testing.T) {
+	pool := synthesisE2EPool(t, "T004-C20-STRICT")
+	resetSynthesisE2EState(t, pool, "T004-C20-STRICT")
+	t.Cleanup(func() {
+		resetSynthesisE2EState(t, pool, "T004-C20-STRICT cleanup")
+	})
+
+	natsURL := strings.TrimSpace(os.Getenv("NATS_URL"))
+	if natsURL == "" {
+		t.Fatal("T004-C20-STRICT requires NATS_URL from ./smackerel.sh test e2e")
+	}
+	natsClient, err := smacknats.Connect(context.Background(), natsURL, "")
+	if err != nil {
+		t.Fatalf("connect T004-C20-STRICT NATS: %v", err)
+	}
+	t.Cleanup(natsClient.Close)
+
+	authToken := strings.TrimSpace(os.Getenv("SMACKEREL_AUTH_TOKEN"))
+	if authToken == "" {
+		t.Fatal("T004-C20-STRICT requires SMACKEREL_AUTH_TOKEN from ./smackerel.sh test e2e")
+	}
+	dailyFreshness := requiredSynthesisE2EDuration(t, "SYNTHESIS_DAILY_FRESHNESS_SECONDS")
+	weeklyFreshness := requiredSynthesisE2EDuration(t, "SYNTHESIS_WEEKLY_FRESHNESS_SECONDS")
+	freshnessPolicy, err := intelligence.NewSynthesisFreshnessPolicy(dailyFreshness, weeklyFreshness)
+	if err != nil {
+		t.Fatalf("construct T004-C20-STRICT freshness policy: %v", err)
+	}
+	persistence, err := intelligence.NewSynthesisPersistence(pool)
+	if err != nil {
+		t.Fatalf("construct T004-C20-STRICT persistence: %v", err)
+	}
+
+	type nonGreenCase struct {
+		name       string
+		wantStatus string
+		seedWeekly func(t *testing.T, principal string, now time.Time)
+	}
+	testCases := []nonGreenCase{
+		{
+			name:       "never-run",
+			wantStatus: "down",
+			seedWeekly: func(*testing.T, string, time.Time) {},
+		},
+		{
+			name:       "running",
+			wantStatus: "down",
+			seedWeekly: func(t *testing.T, principal string, now time.Time) {
+				startSynthesisC20Attempt(t, persistence, synthesisC20Key(principal, intelligence.CadenceWeekly, now), now)
+			},
+		},
+		{
+			name:       "stale",
+			wantStatus: "stale",
+			seedWeekly: func(t *testing.T, principal string, now time.Time) {
+				seedSynthesisC20Output(t, persistence, principal, intelligence.CadenceWeekly,
+					intelligence.OutputKindQuiet, now.Add(-weeklyFreshness-time.Hour))
+			},
+		},
+		{
+			name:       "partial",
+			wantStatus: "down",
+			seedWeekly: func(t *testing.T, principal string, now time.Time) {
+				seedSynthesisC20Output(t, persistence, principal, intelligence.CadenceWeekly,
+					intelligence.OutputKindPartial, now.Add(-time.Minute))
+			},
+		},
+		{
+			name:       "failed",
+			wantStatus: "down",
+			seedWeekly: func(t *testing.T, principal string, now time.Time) {
+				attempt := startSynthesisC20Attempt(t, persistence, synthesisC20Key(principal, intelligence.CadenceWeekly, now), now)
+				if err := persistence.FinishAttemptFailure(context.Background(), attempt,
+					intelligence.EventFailed, string(intelligence.FailureTransaction),
+					intelligence.FailureTerminal, now.Add(time.Second)); err != nil {
+					t.Fatalf("finish T004-C20-STRICT failed weekly attempt: %v", err)
+				}
+			},
+		},
+		{
+			name:       "read-degraded",
+			wantStatus: "down",
+			seedWeekly: func(t *testing.T, principal string, now time.Time) {
+				attempt := startSynthesisC20Attempt(t, persistence, synthesisC20Key(principal, intelligence.CadenceWeekly, now), now)
+				markSynthesisC20ReadDegraded(t, pool, persistence, attempt, now.Add(time.Second))
+			},
+		},
+	}
+
+	for index, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			principal := fmt.Sprintf("t004-c20-%d-%d", now.UnixNano(), index)
+			seedSynthesisC20Output(t, persistence, principal, intelligence.CadenceDaily,
+				intelligence.OutputKindQuiet, now.Add(-time.Minute))
+			testCase.seedWeekly(t, principal, now)
+
+			server := synthesisC20HealthServer(t, pool, natsClient, freshnessPolicy, principal, authToken)
+			cfg := e2eConfig{CoreURL: server.URL, AuthToken: authToken}
+			assertSynthesisC20StrictHealth(t, cfg, testCase.wantStatus, http.StatusServiceUnavailable, "degraded")
+
+			livenessStatus, livenessBody := synthesisGet(t, cfg, "/api/health", false)
+			if livenessStatus != http.StatusOK {
+				t.Fatalf("default liveness with weekly %s returned %d, want 200; body=%s", testCase.name, livenessStatus, string(livenessBody))
+			}
+		})
+	}
+
+	t.Run("daily and weekly healthy", func(t *testing.T) {
+		now := time.Now().UTC()
+		principal := fmt.Sprintf("t004-c20-green-%d", now.UnixNano())
+		seedSynthesisC20Output(t, persistence, principal, intelligence.CadenceDaily,
+			intelligence.OutputKindQuiet, now.Add(-time.Minute))
+		seedSynthesisC20Output(t, persistence, principal, intelligence.CadenceWeekly,
+			intelligence.OutputKindQuiet, now.Add(-time.Minute))
+
+		server := synthesisC20HealthServer(t, pool, natsClient, freshnessPolicy, principal, authToken)
+		cfg := e2eConfig{CoreURL: server.URL, AuthToken: authToken}
+		assertSynthesisC20StrictHealth(t, cfg, "up", http.StatusOK, "healthy")
+	})
+}
+
+func requiredSynthesisE2EDuration(t *testing.T, key string) time.Duration {
+	t.Helper()
+	raw := strings.TrimSpace(os.Getenv(key))
+	seconds, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || seconds <= 0 {
+		t.Fatalf("T004-C20-STRICT requires positive integer %s, got %q", key, raw)
+	}
+	duration := time.Duration(seconds) * time.Second
+	if duration/time.Second != time.Duration(seconds) {
+		t.Fatalf("T004-C20-STRICT %s overflows time.Duration: %q", key, raw)
+	}
+	return duration
+}
+
+func synthesisC20Key(principal string, cadence intelligence.SynthesisCadence, now time.Time) intelligence.SynthesisRunKey {
+	windowEnd := now.Add(-time.Hour)
+	windowLength := 24 * time.Hour
+	if cadence == intelligence.CadenceWeekly {
+		windowLength = 7 * 24 * time.Hour
+	}
+	return intelligence.SynthesisRunKey{
+		Cadence: cadence, Principal: principal,
+		WindowStart: windowEnd.Add(-windowLength), WindowEnd: windowEnd,
+		PolicyVersion: "t004-c20-strict-v1",
+	}
+}
+
+func startSynthesisC20Attempt(
+	t *testing.T,
+	persistence *intelligence.SynthesisPersistence,
+	key intelligence.SynthesisRunKey,
+	now time.Time,
+) intelligence.SynthesisAttempt {
+	t.Helper()
+	attempt, err := persistence.StartAttempt(context.Background(), key,
+		intelligence.TriggerScheduled, "t004-c20-"+string(key.Cadence), time.Hour, now)
+	if err != nil {
+		t.Fatalf("start T004-C20-STRICT %s attempt: %v", key.Cadence, err)
+	}
+	return attempt
+}
+
+func seedSynthesisC20Output(
+	t *testing.T,
+	persistence *intelligence.SynthesisPersistence,
+	principal string,
+	cadence intelligence.SynthesisCadence,
+	kind intelligence.SynthesisOutputKind,
+	committedAt time.Time,
+) {
+	t.Helper()
+	key := synthesisC20Key(principal, cadence, committedAt)
+	attempt := startSynthesisC20Attempt(t, persistence, key, committedAt.Add(-time.Minute))
+	candidate := intelligence.SynthesisCandidate{Key: key, Kind: kind}
+	policy := intelligence.SourceClassPolicy{Optional: []string{"optional-source"}}
+	if kind == intelligence.OutputKindPartial {
+		candidate.OmittedClasses = []string{"optional-source"}
+	}
+	if _, err := persistence.CommitAttempt(context.Background(), attempt, candidate, policy, nil, committedAt); err != nil {
+		t.Fatalf("commit T004-C20-STRICT %s %s output: %v", cadence, kind, err)
+	}
+}
+
+func markSynthesisC20ReadDegraded(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	persistence *intelligence.SynthesisPersistence,
+	attempt intelligence.SynthesisAttempt,
+	finishedAt time.Time,
+) {
+	t.Helper()
+	ctx := context.Background()
+	repairReadback := installSynthesisC20ReadbackFailure(t, pool)
+	t.Cleanup(repairReadback)
+
+	const artifactID = "t004-c20-readback-artifact"
+	candidate := intelligence.SynthesisCandidate{
+		Key:  attempt.Key,
+		Kind: intelligence.OutputKindFull,
+		Insights: []intelligence.SynthesisInsight{{
+			InsightType:       intelligence.InsightThroughLine,
+			ThroughLine:       "strict health observes a production read-back failure",
+			SourceArtifactIDs: []string{artifactID},
+			Confidence:        0.5,
+		}},
+		EvaluatedArtifactCount: 1,
+		IncludedClasses:        []string{"article"},
+	}
+	_, readbackErr := persistence.CommitAttempt(ctx, attempt, candidate,
+		intelligence.SourceClassPolicy{Required: []string{"article"}}, []string{artifactID}, finishedAt)
+	if readbackErr == nil {
+		t.Fatal("T004-C20-STRICT read-degraded attempt returned success while the production read-back relation was unavailable")
+	}
+	var typedReadback *intelligence.SynthesisReadbackError
+	if !errors.As(readbackErr, &typedReadback) {
+		t.Fatalf("T004-C20-STRICT read-degraded error type=%T, want *SynthesisReadbackError", readbackErr)
+	}
+	if typedReadback.OutputID == "" {
+		t.Fatal("T004-C20-STRICT typed read-back failure carried no output id")
+	}
+	repairReadback()
+
+	var attemptState, attemptOutputID string
+	if err := pool.QueryRow(ctx, `
+		SELECT state, output_id
+		FROM synthesis_run_attempts
+		WHERE run_id = $1 AND attempt_no = $2
+	`, attempt.RunID, attempt.AttemptNo).Scan(&attemptState, &attemptOutputID); err != nil {
+		t.Fatalf("read T004-C20-STRICT read-degraded attempt: %v", err)
+	}
+	if attemptState != string(intelligence.EventReadbackFailed) || attemptOutputID != typedReadback.OutputID {
+		t.Fatalf("T004-C20-STRICT read-degraded attempt state/output=%s/%s, want readback_failed/%s",
+			attemptState, attemptOutputID, typedReadback.OutputID)
+	}
+
+	var eventOutputID string
+	if err := pool.QueryRow(ctx, `
+		SELECT output_id
+		FROM synthesis_run_events
+		WHERE run_id = $1 AND attempt_no = $2
+			AND event_type = 'readback_failed' AND failure_code = 'readback_failed'
+	`, attempt.RunID, attempt.AttemptNo).Scan(&eventOutputID); err != nil {
+		t.Fatalf("read T004-C20-STRICT readback_failed event: %v", err)
+	}
+	if eventOutputID != typedReadback.OutputID {
+		t.Fatalf("T004-C20-STRICT readback_failed event output=%s, want %s", eventOutputID, typedReadback.OutputID)
+	}
+}
+
+func installSynthesisC20ReadbackFailure(t *testing.T, pool *pgxpool.Pool) func() {
+	t.Helper()
+	const install = `
+		CREATE OR REPLACE FUNCTION test_break_synthesis_c20_readback_relation()
+		RETURNS TRIGGER LANGUAGE plpgsql AS $$
+		BEGIN
+			ALTER TABLE synthesis_output_source_classes
+				RENAME TO synthesis_output_source_classes_c20_readback_fault;
+			RETURN NEW;
+		END;
+		$$;
+		CREATE TRIGGER test_break_synthesis_c20_readback_relation
+		AFTER INSERT ON synthesis_citations
+		FOR EACH ROW WHEN (NEW.artifact_id = 't004-c20-readback-artifact')
+		EXECUTE FUNCTION test_break_synthesis_c20_readback_relation();`
+	if _, err := pool.Exec(context.Background(), install); err != nil {
+		t.Fatalf("install T004-C20-STRICT read-back relation failure: %v", err)
+	}
+
+	repaired := false
+	return func() {
+		if repaired {
+			return
+		}
+		repairSucceeded := true
+		if _, err := pool.Exec(context.Background(), `
+			DROP TRIGGER IF EXISTS test_break_synthesis_c20_readback_relation ON synthesis_citations
+		`); err != nil {
+			repairSucceeded = false
+			t.Errorf("remove T004-C20-STRICT read-back failure trigger: %v", err)
+		}
+		if _, err := pool.Exec(context.Background(), `
+			DROP FUNCTION IF EXISTS test_break_synthesis_c20_readback_relation()
+		`); err != nil {
+			repairSucceeded = false
+			t.Errorf("remove T004-C20-STRICT read-back failure function: %v", err)
+		}
+		var faultRelationExists bool
+		if err := pool.QueryRow(context.Background(), `
+			SELECT to_regclass('public.synthesis_output_source_classes_c20_readback_fault') IS NOT NULL
+		`).Scan(&faultRelationExists); err != nil {
+			repairSucceeded = false
+			t.Errorf("probe T004-C20-STRICT read-back fault relation: %v", err)
+		} else if faultRelationExists {
+			if _, err := pool.Exec(context.Background(), `
+				ALTER TABLE synthesis_output_source_classes_c20_readback_fault
+					RENAME TO synthesis_output_source_classes
+			`); err != nil {
+				repairSucceeded = false
+				t.Errorf("repair T004-C20-STRICT read-back relation: %v", err)
+			}
+		}
+		if repairSucceeded {
+			repaired = true
+		}
+	}
+}
+
+func synthesisC20HealthServer(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	natsClient *smacknats.Client,
+	freshnessPolicy intelligence.SynthesisFreshnessPolicy,
+	principal string,
+	authToken string,
+) *httptest.Server {
+	t.Helper()
+	readModel, err := intelligence.NewSynthesisReadModel(pool)
+	if err != nil {
+		t.Fatalf("construct T004-C20-STRICT read model: %v", err)
+	}
+	dependencies := &api.Dependencies{
+		DB: &smackdb.Postgres{Pool: pool}, NATS: natsClient,
+		IntelligenceEngine: intelligence.NewEngine(pool, natsClient),
+		SynthesisReadModel: readModel, SynthesisReadPrincipal: principal,
+		SynthesisFreshnessPolicy:   freshnessPolicy,
+		IntelligenceHealthCacheTTL: 0,
+		StartTime:                  time.Now(), AuthToken: authToken,
+	}
+	server := httptest.NewServer(http.HandlerFunc(dependencies.HealthHandler))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func assertSynthesisC20StrictHealth(
+	t *testing.T,
+	cfg e2eConfig,
+	wantIntelligence string,
+	wantStatusCode int,
+	wantOverall string,
+) {
+	t.Helper()
+	status, body := synthesisGet(t, cfg, "/api/health?strict=true", true)
+	if status != wantStatusCode {
+		t.Fatalf("authenticated strict health returned %d, want %d; body=%s", status, wantStatusCode, string(body))
+	}
+	var authenticated api.HealthResponse
+	if err := json.Unmarshal(body, &authenticated); err != nil {
+		t.Fatalf("decode authenticated strict health: %v; body=%s", err, string(body))
+	}
+	if authenticated.Status != wantOverall {
+		t.Fatalf("authenticated strict overall=%q, want %q; body=%s", authenticated.Status, wantOverall, string(body))
+	}
+	if got := authenticated.Services["intelligence"].Status; got != wantIntelligence {
+		t.Fatalf("authenticated strict intelligence=%q, want %q; body=%s", got, wantIntelligence, string(body))
+	}
+	for name, service := range authenticated.Services {
+		if name == "intelligence" || name == "telegram_bot" || name == "ollama" {
+			continue
+		}
+		switch service.Status {
+		case "down", "stale", "error", "failing", "disconnected", "degraded":
+			t.Fatalf("strict-health control service %s=%q; intelligence must be the discriminating dependency; body=%s", name, service.Status, string(body))
+		}
+	}
+
+	publicStatus, publicBody := synthesisGet(t, cfg, "/api/health?strict=true", false)
+	if publicStatus != wantStatusCode {
+		t.Fatalf("public strict health returned %d, want %d; body=%s", publicStatus, wantStatusCode, string(publicBody))
+	}
+	var public api.HealthResponse
+	if err := json.Unmarshal(publicBody, &public); err != nil {
+		t.Fatalf("decode public strict health: %v; body=%s", err, string(publicBody))
+	}
+	if public.Status != wantOverall || len(public.Services) != 0 || public.Version != "" || public.CommitHash != "" || public.BuildTime != "" {
+		t.Fatalf("public strict health exposed detail or wrong aggregate: %+v body=%s", public, string(publicBody))
+	}
 }
 
 func synthesisPost(t *testing.T, cfg e2eConfig, path, body string, authorized bool) (int, []byte) {
@@ -542,8 +933,8 @@ const synthesisTerminalEventFailureProfile = "synthesis_terminal_event_persisten
 func TestSynthesisAPI_TerminalEventFailureCannotProduceDeliveryOrSuccess(t *testing.T) {
 	cfg := loadE2EConfig(t)
 	waitForHealth(t, cfg, 60*time.Second)
-	pool := synthesisAuditE2EPool(t)
-	resetSynthesisAuditE2EState(t, pool)
+	pool := synthesisE2EPool(t, "T004-C12-AUDIT-RED")
+	resetSynthesisE2EState(t, pool, "T004-C12-AUDIT-RED")
 
 	deactivateFault := activateSynthesisTerminalEventFailure(t, pool)
 	status, body := synthesisPost(t, cfg, "/api/synthesis/retry", `{"cadence":"daily"}`, true)
@@ -680,15 +1071,15 @@ func TestSynthesisAPI_TerminalEventFailureCannotProduceDeliveryOrSuccess(t *test
 	}
 }
 
-func synthesisAuditE2EPool(t *testing.T) *pgxpool.Pool {
+func synthesisE2EPool(t *testing.T, testID string) *pgxpool.Pool {
 	t.Helper()
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	if databaseURL == "" {
-		t.Fatal("T004-C12-AUDIT-RED requires DATABASE_URL from ./smackerel.sh test e2e")
+		t.Fatalf("%s requires DATABASE_URL from ./smackerel.sh test e2e", testID)
 	}
 	config, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		t.Fatalf("parse T004-C12 DATABASE_URL: %v", err)
+		t.Fatalf("parse %s DATABASE_URL: %v", testID, err)
 	}
 	config.MaxConns = 2
 	config.MinConns = 0
@@ -696,17 +1087,17 @@ func synthesisAuditE2EPool(t *testing.T) *pgxpool.Pool {
 	defer cancel()
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
-		t.Fatalf("connect T004-C12 PostgreSQL: %v", err)
+		t.Fatalf("connect %s PostgreSQL: %v", testID, err)
 	}
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		t.Fatalf("ping T004-C12 PostgreSQL: %v", err)
+		t.Fatalf("ping %s PostgreSQL: %v", testID, err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
 }
 
-func resetSynthesisAuditE2EState(t *testing.T, pool *pgxpool.Pool) {
+func resetSynthesisE2EState(t *testing.T, pool *pgxpool.Pool, testID string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -716,7 +1107,7 @@ func resetSynthesisAuditE2EState(t *testing.T, pool *pgxpool.Pool) {
 			synthesis_outputs, synthesis_run_attempts, synthesis_runs
 		RESTART IDENTITY CASCADE
 	`); err != nil {
-		t.Fatalf("reset T004-C12 synthesis state: %v", err)
+		t.Fatalf("reset %s synthesis state: %v", testID, err)
 	}
 }
 

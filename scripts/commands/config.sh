@@ -1427,6 +1427,8 @@ validate_synthesis_source_classes() {
 SYNTHESIS_ACTOR_USER_ID="$(required_value intelligence.synthesis.actor_user_id)"
 SYNTHESIS_DAILY_CRON="$(required_value intelligence.synthesis.daily_cron)"
 SYNTHESIS_WEEKLY_CRON="$(required_value intelligence.synthesis.weekly_cron)"
+SYNTHESIS_DAILY_FRESHNESS_SECONDS="$(required_value intelligence.synthesis.daily_freshness_seconds)"
+SYNTHESIS_WEEKLY_FRESHNESS_SECONDS="$(required_value intelligence.synthesis.weekly_freshness_seconds)"
 SYNTHESIS_RETRY_BUDGET="$(required_value intelligence.synthesis.retry_budget)"
 SYNTHESIS_RETRY_BACKOFF_SECONDS="$(required_value intelligence.synthesis.retry_backoff_seconds)"
 SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS="$(required_value intelligence.synthesis.retry_max_backoff_seconds)"
@@ -1436,6 +1438,8 @@ SYNTHESIS_REQUIRED_SOURCE_CLASSES="$(required_json_value intelligence.synthesis.
 SYNTHESIS_OPTIONAL_SOURCE_CLASSES="$(required_json_value intelligence.synthesis.optional_source_classes)"
 SYNTHESIS_RETENTION_SECONDS="$(required_value intelligence.synthesis.retention_seconds)"
 
+validate_synthesis_uint "intelligence.synthesis.daily_freshness_seconds" "$SYNTHESIS_DAILY_FRESHNESS_SECONDS" 1 2147483647
+validate_synthesis_uint "intelligence.synthesis.weekly_freshness_seconds" "$SYNTHESIS_WEEKLY_FRESHNESS_SECONDS" 1 2147483647
 validate_synthesis_uint "intelligence.synthesis.retry_budget" "$SYNTHESIS_RETRY_BUDGET" 0 10
 validate_synthesis_uint "intelligence.synthesis.retry_backoff_seconds" "$SYNTHESIS_RETRY_BACKOFF_SECONDS" 1 2147483647
 validate_synthesis_uint "intelligence.synthesis.retry_max_backoff_seconds" "$SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS" 1 2147483647
@@ -2624,6 +2628,8 @@ PROACTIVE_NUDGE_REF_TTL_HOURS=${PROACTIVE_NUDGE_REF_TTL_HOURS}
 SYNTHESIS_ACTOR_USER_ID=${SYNTHESIS_ACTOR_USER_ID:?intelligence.synthesis.actor_user_id resolved empty}
 SYNTHESIS_DAILY_CRON=${SYNTHESIS_DAILY_CRON:?intelligence.synthesis.daily_cron resolved empty}
 SYNTHESIS_WEEKLY_CRON=${SYNTHESIS_WEEKLY_CRON:?intelligence.synthesis.weekly_cron resolved empty}
+SYNTHESIS_DAILY_FRESHNESS_SECONDS=${SYNTHESIS_DAILY_FRESHNESS_SECONDS:?intelligence.synthesis.daily_freshness_seconds resolved empty}
+SYNTHESIS_WEEKLY_FRESHNESS_SECONDS=${SYNTHESIS_WEEKLY_FRESHNESS_SECONDS:?intelligence.synthesis.weekly_freshness_seconds resolved empty}
 SYNTHESIS_RETRY_BUDGET=${SYNTHESIS_RETRY_BUDGET:?intelligence.synthesis.retry_budget resolved empty}
 SYNTHESIS_RETRY_BACKOFF_SECONDS=${SYNTHESIS_RETRY_BACKOFF_SECONDS:?intelligence.synthesis.retry_backoff_seconds resolved empty}
 SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS=${SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS:?intelligence.synthesis.retry_max_backoff_seconds resolved empty}

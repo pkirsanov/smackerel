@@ -44,6 +44,25 @@ func TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers(t 
 	}
 	assertSynthesisCadenceBudget(t, policy, intelligence.CadenceDaily, time.Duration(dailySeconds)*time.Second)
 	assertSynthesisCadenceBudget(t, policy, intelligence.CadenceWeekly, time.Duration(weeklySeconds)*time.Second)
+	for _, test := range []struct {
+		name   string
+		daily  time.Duration
+		weekly time.Duration
+	}{
+		{name: "zero daily", daily: 0, weekly: time.Second},
+		{name: "negative daily", daily: -time.Second, weekly: time.Second},
+		{name: "zero weekly", daily: time.Second, weekly: 0},
+		{name: "negative weekly", daily: time.Second, weekly: -time.Second},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := intelligence.NewSynthesisFreshnessPolicy(test.daily, test.weekly); err == nil {
+				t.Fatal("non-positive synthesis freshness must be rejected")
+			}
+		})
+	}
+	if _, err := policy.BudgetFor(intelligence.SynthesisCadence("monthly")); err == nil {
+		t.Fatal("unknown synthesis cadence must be rejected")
+	}
 
 	consumerContracts := map[string][]string{
 		"cmd/core/wiring.go": {
@@ -64,8 +83,11 @@ func TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers(t 
 		"internal/web/synthesis_page.go": {
 			"BudgetFor",
 		},
-		"monitoring/prometheus/alerts.yml": {
-			"configured cadence freshness",
+		"config/prometheus/alerts.yml": {
+			"smackerel_synthesis_state == 2",
+			"SYNTHESIS_DAILY_FRESHNESS_SECONDS",
+			"SYNTHESIS_WEEKLY_FRESHNESS_SECONDS",
+			"owns no independent threshold",
 		},
 	}
 	for relativePath, requiredTokens := range consumerContracts {

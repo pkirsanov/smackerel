@@ -23,6 +23,8 @@ type SynthesisConfig struct {
 	ActorUserID           string
 	DailyCron             string
 	WeeklyCron            string
+	DailyFreshness        time.Duration
+	WeeklyFreshness       time.Duration
 	RetryBudget           int
 	RetryBackoff          time.Duration
 	RetryMaxBackoff       time.Duration
@@ -49,6 +51,8 @@ func loadSynthesisConfig() (SynthesisConfig, error) {
 	cfg.ActorUserID, errs = requiredTrimmedSynthesisString("SYNTHESIS_ACTOR_USER_ID", errs)
 	cfg.DailyCron, errs = parseSynthesisCron("SYNTHESIS_DAILY_CRON", errs)
 	cfg.WeeklyCron, errs = parseSynthesisCron("SYNTHESIS_WEEKLY_CRON", errs)
+	cfg.DailyFreshness, errs = parseSynthesisDuration("SYNTHESIS_DAILY_FRESHNESS_SECONDS", errs)
+	cfg.WeeklyFreshness, errs = parseSynthesisDuration("SYNTHESIS_WEEKLY_FRESHNESS_SECONDS", errs)
 	cfg.RetryBudget, errs = parseSynthesisRetryBudget("SYNTHESIS_RETRY_BUDGET", errs)
 	cfg.RetryBackoff, errs = parseSynthesisDuration("SYNTHESIS_RETRY_BACKOFF_SECONDS", errs)
 	cfg.RetryMaxBackoff, errs = parseSynthesisDuration("SYNTHESIS_RETRY_MAX_BACKOFF_SECONDS", errs)

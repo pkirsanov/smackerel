@@ -175,6 +175,30 @@ type SynthesisHealth struct {
 	IntelligenceStatus string
 }
 
+// SynthesisCadenceOutcome binds one durable outcome to the cadence whose
+// causal snapshot produced it.
+type SynthesisCadenceOutcome struct {
+	Cadence SynthesisCadence
+	Outcome SynthesisPersistenceOutcome
+}
+
+// SynthesisCadenceHealth preserves each bounded cadence verdict so metrics can
+// add bounded cadence labels later without repeating the database reads.
+type SynthesisCadenceHealth struct {
+	Cadence SynthesisCadence
+	Outcome SynthesisPersistenceOutcome
+	Health  SynthesisHealth
+}
+
+// RequiredSynthesisHealth is the aggregate readiness verdict for the closed
+// daily-and-weekly set plus the individual verdicts that produced it.
+type RequiredSynthesisHealth struct {
+	Cadences           [RequiredSynthesisCadenceCount]SynthesisCadenceHealth
+	Healthy            bool
+	IntelligenceStatus string
+	MetricState        int
+}
+
 // Coarse /api/health "intelligence" service status values. Kept unexported;
 // consumers should prefer the SynthesisHealth.Healthy / .Persisted booleans and
 // assign IntelligenceStatus verbatim to the existing health snapshot field.
@@ -183,6 +207,94 @@ const (
 	synthesisStatusStale = "stale"
 	synthesisStatusDown  = "down"
 )
+
+// AggregateRequiredSynthesisHealth derives every cadence through the canonical
+// health mapper, then combines them fail-closed. Up requires exactly one daily
+// and one weekly green verdict. Stale survives only when no cadence is down.
+func AggregateRequiredSynthesisHealth(
+	outcomes [RequiredSynthesisCadenceCount]SynthesisCadenceOutcome,
+) RequiredSynthesisHealth {
+	aggregate := RequiredSynthesisHealth{
+		Healthy:            true,
+		IntelligenceStatus: synthesisStatusUp,
+		MetricState:        SynthesisMetricUp,
+	}
+	seenDaily := false
+	seenWeekly := false
+	metricPriority := synthesisMetricStatePriority(aggregate.MetricState)
+
+	for index, cadenceOutcome := range outcomes {
+		health := DeriveSynthesisHealth(cadenceOutcome.Outcome)
+		aggregate.Cadences[index] = SynthesisCadenceHealth{
+			Cadence: cadenceOutcome.Cadence,
+			Outcome: cadenceOutcome.Outcome,
+			Health:  health,
+		}
+
+		switch cadenceOutcome.Cadence {
+		case CadenceDaily:
+			if seenDaily {
+				aggregate.Healthy = false
+			}
+			seenDaily = true
+		case CadenceWeekly:
+			if seenWeekly {
+				aggregate.Healthy = false
+			}
+			seenWeekly = true
+		default:
+			aggregate.Healthy = false
+		}
+
+		if !health.Healthy {
+			aggregate.Healthy = false
+		}
+		switch health.IntelligenceStatus {
+		case synthesisStatusDown:
+			aggregate.IntelligenceStatus = synthesisStatusDown
+		case synthesisStatusStale:
+			if aggregate.IntelligenceStatus == synthesisStatusUp {
+				aggregate.IntelligenceStatus = synthesisStatusStale
+			}
+		case synthesisStatusUp:
+		default:
+			aggregate.IntelligenceStatus = synthesisStatusDown
+			aggregate.Healthy = false
+		}
+
+		cadenceMetricState := MetricStateFor(cadenceOutcome.Outcome)
+		if priority := synthesisMetricStatePriority(cadenceMetricState); priority > metricPriority {
+			aggregate.MetricState = cadenceMetricState
+			metricPriority = priority
+		}
+	}
+
+	if !seenDaily || !seenWeekly {
+		aggregate.Healthy = false
+		aggregate.IntelligenceStatus = synthesisStatusDown
+		aggregate.MetricState = SynthesisMetricProbeError
+	}
+	return aggregate
+}
+
+func synthesisMetricStatePriority(state int) int {
+	switch state {
+	case SynthesisMetricProbeError:
+		return 6
+	case SynthesisMetricFailed:
+		return 5
+	case SynthesisMetricPartial:
+		return 4
+	case SynthesisMetricNeverRun:
+		return 3
+	case SynthesisMetricStale:
+		return 2
+	case SynthesisMetricUp:
+		return 1
+	default:
+		return 7
+	}
+}
 
 // DeriveSynthesisHealth is the single, pure, database-free HEALTH-TRUTH mapping
 // for durable synthesis. It is the SCOPE-04 authority that replaces the

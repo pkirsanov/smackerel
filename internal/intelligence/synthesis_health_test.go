@@ -288,6 +288,72 @@ func TestDeriveSynthesisHealth_ClosedVocabularyMapping(t *testing.T) {
 	}
 }
 
+func TestAggregateRequiredSynthesisHealth_FailsClosedAcrossCadences(t *testing.T) {
+	healthyFull := SynthesisPersistenceOutcome{
+		Phase:    PhaseCommitted,
+		ReadBack: ReadBackOK,
+		Output:   OutputKindFull,
+	}
+	healthyQuiet := SynthesisPersistenceOutcome{
+		Phase:    PhaseCommitted,
+		ReadBack: ReadBackOK,
+		Output:   OutputKindQuiet,
+	}
+	nonGreen := []struct {
+		name       string
+		outcome    SynthesisPersistenceOutcome
+		wantStatus string
+	}{
+		{name: "never-run", outcome: SynthesisPersistenceOutcome{Phase: PhaseNoRun}, wantStatus: "down"},
+		{name: "running", outcome: SynthesisPersistenceOutcome{Phase: PhaseRunning}, wantStatus: "down"},
+		{name: "partial", outcome: SynthesisPersistenceOutcome{Phase: PhaseCommitted, ReadBack: ReadBackOK, Output: OutputKindPartial}, wantStatus: "down"},
+		{name: "failed", outcome: SynthesisPersistenceOutcome{Phase: PhaseWriteFailed}, wantStatus: "down"},
+		{name: "read-degraded", outcome: SynthesisPersistenceOutcome{Phase: PhaseProbeError}, wantStatus: "down"},
+		{name: "stale", outcome: SynthesisPersistenceOutcome{Phase: PhaseCommitted, ReadBack: ReadBackOK, Output: OutputKindFull, Stale: true}, wantStatus: "stale"},
+	}
+
+	for _, testCase := range nonGreen {
+		t.Run("healthy daily cannot mask weekly "+testCase.name, func(t *testing.T) {
+			got := AggregateRequiredSynthesisHealth([RequiredSynthesisCadenceCount]SynthesisCadenceOutcome{
+				{Cadence: CadenceDaily, Outcome: healthyFull},
+				{Cadence: CadenceWeekly, Outcome: testCase.outcome},
+			})
+			if got.Healthy {
+				t.Fatalf("aggregate Healthy = true with weekly %s; every required cadence must be green", testCase.name)
+			}
+			if got.IntelligenceStatus != testCase.wantStatus {
+				t.Fatalf("aggregate IntelligenceStatus = %q with weekly %s, want %q", got.IntelligenceStatus, testCase.name, testCase.wantStatus)
+			}
+			if got.Cadences[0].Cadence != CadenceDaily || got.Cadences[1].Cadence != CadenceWeekly {
+				t.Fatalf("bounded cadence results lost identity: %+v", got.Cadences)
+			}
+			if !got.Cadences[0].Health.Healthy || got.Cadences[1].Health.Healthy {
+				t.Fatalf("per-cadence verdicts do not preserve healthy daily and non-green weekly: %+v", got.Cadences)
+			}
+		})
+	}
+
+	t.Run("hard down wins over stale", func(t *testing.T) {
+		got := AggregateRequiredSynthesisHealth([RequiredSynthesisCadenceCount]SynthesisCadenceOutcome{
+			{Cadence: CadenceDaily, Outcome: SynthesisPersistenceOutcome{Phase: PhaseCommitted, ReadBack: ReadBackOK, Output: OutputKindFull, Stale: true}},
+			{Cadence: CadenceWeekly, Outcome: SynthesisPersistenceOutcome{Phase: PhaseWriteFailed}},
+		})
+		if got.IntelligenceStatus != "down" || got.Healthy {
+			t.Fatalf("aggregate = %+v, want hard down to take precedence over stale", got)
+		}
+	})
+
+	t.Run("daily and weekly green are up", func(t *testing.T) {
+		got := AggregateRequiredSynthesisHealth([RequiredSynthesisCadenceCount]SynthesisCadenceOutcome{
+			{Cadence: CadenceDaily, Outcome: healthyFull},
+			{Cadence: CadenceWeekly, Outcome: healthyQuiet},
+		})
+		if !got.Healthy || got.IntelligenceStatus != "up" {
+			t.Fatalf("aggregate = %+v, want healthy up when every required cadence is green", got)
+		}
+	})
+}
+
 // --- Cross-cutting invariants over the full outcome space ----------------------
 
 // TestDeriveSynthesisHealth_Invariants enumerates the cartesian product of every

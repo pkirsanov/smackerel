@@ -47,10 +47,14 @@ func (h *Handler) synthesisModel(ctx context.Context, authorized bool) Synthesis
 	}
 
 	now := h.now()
+	freshnessBudget, err := h.SynthesisFreshnessPolicy.BudgetFor(h.SynthesisCadence)
+	if err != nil {
+		return SynthesisPageModel{State: SynthesisViewUnavailable}
+	}
 	snapshot, err := h.SynthesisReader.ReadSnapshot(ctx, intelligence.SynthesisReadQuery{
 		Principal:       h.SynthesisPrincipal,
 		Cadence:         h.SynthesisCadence,
-		FreshnessBudget: h.SynthesisFreshnessBudget,
+		FreshnessBudget: freshnessBudget,
 		ObservedAt:      now,
 	})
 	if err != nil {
