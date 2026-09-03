@@ -14,7 +14,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 5. **Scope 05 — Weekly Synthesis**: Weekly digest with 6 required sections, serendipity resurface, pattern recognition, 250-word cap
 6. **Scope 06 — Enhanced Daily Digest**: Upgrade Phase 1 daily digest with intelligence data: commitment-tracked TOP ACTIONS, meeting previews, hot-topic context
 7. **Scope 07 — Causal Synthesis Event Ledger And Replacement Lifecycle**: Parent execution route for the corrective causal-ledger and replacement-lifecycle contracts in [BUG-004-004](bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md), covering SCN-004-004-C11 through SCN-004-004-C15
-8. **Scope 08 — Causal Synthesis Health, Recovery, And Deployment Acceptance**: Parent execution route for the corrective health, recovery, and deployment-acceptance contracts in [BUG-004-004](bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md), covering SCN-004-004-C16 through SCN-004-004-C20 after Scope 07
+8. **Scope 08 — Causal Synthesis Health, Recovery, And Deployment Acceptance**: Parent execution route for the corrective health, recovery, accessibility, stress, observability, and approval-gated deployment contracts in [BUG-004-004](bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md), covering SCN-004-004-C16 through SCN-004-004-C20 after Scope 07
 
 ### New Types & Signatures
 - `SynthesisInsight` struct: through_line, key_tension, suggested_action, source_artifact_ids
@@ -33,7 +33,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 - After Scope 05: Weekly synthesis verified — all 6 sections, 250-word cap, serendipity, patterns
 - After Scope 06: Enhanced daily digest verified — commitment items, meeting previews, hot topics
 - After Scope 07: Corrective child-packet tests prove durable causal events, deterministic replacement, and historical ledger preservation before health work starts
-- After Scope 08: Corrective child-packet tests and deployment acceptance prove truthful health, bounded recovery, migration readiness, and end-to-end operator-visible behavior
+- After Scope 08 local canaries: Running-core API, real-browser UI, startup ordering, alert-rule, SST behavior, security, synthesis trace, and stress checks pass before the broad local API and separate Playwright suites. Only then may an explicit approval authorize knb-owned target deployment and later rollback; final certification follows target acceptance.
 
 ---
 
@@ -367,12 +367,12 @@ Scenario: SCN-004-004-C20 Release verification remains fail-closed through recov
 
 1. Replace global latest lookups with one causal actor/cadence read query rooted in run events.
 2. Derive running, failed, recovered, partial, stale, and read-degraded states from ordered events and coherent output identity.
-3. Reconcile expired-running and committed-unverified work before scheduler registration and readiness admission.
-4. Wire explicit daily and weekly synthesis freshness values through the fail-loud SST into every runtime consumer.
+3. Call `SynthesisCoordinator.ReconcileStartup(ctx, actor, cadence, now)` in production for both daily and weekly immediately after synthesis runtime construction. Both calls must finish before `buildAPIDeps`, `api.NewRouter`, readiness admission, scheduler registration, or scheduler start; any error aborts startup.
+4. Wire explicit daily and weekly synthesis freshness values through the fail-loud SST into every runtime consumer. Prove running API, Today, Status, strict-health, and metric behavior; retain loader/token scans only as static support.
 5. Keep liveness separate from capability readiness and preserve strict-health refusal for each non-green required cadence.
-6. Route Today, Status, API, metrics, alerts, and retry through the same cadence-scoped snapshot.
-7. Capture content-free startup, read, recovery, and retry traces and inspect them for error, latency, fan-out, and causal gaps.
-8. Exercise candidate refusal, newly verified recovery, accepted promotion, and accepted-prior-release rollback through the normal product and target boundaries.
+6. Route Today, Status, API, metrics, alerts, and retry through the same cadence-scoped snapshot. Measure only real actionable controls at 44 by 44 CSS pixels or larger, click the real Retry control through a persisted round trip, and verify observed browser page scale 2.0 without treating labels as targets or viewport reduction as zoom.
+7. Register and capture the planned `synthesis.health-recovery` workflow with `synthesis.startup.reconcile`, `synthesis.read.snapshot`, and `synthesis.health.aggregate` spans. Inspect synthesis spans for 3 AM reconstruction, errors, >=200ms latency, retry loops, fan-out, and missing attributes. The thin `core.health` trace supplies no synthesis-internal proof.
+8. Run local canaries, broad `./smackerel.sh test e2e`, and separate broad `./smackerel.sh test e2e-ui` before requesting deployment approval. Candidate refusal/recovery and accepted-prior-release rollback remain later approval-gated knb actions, followed by final certification.
 
 ### Exact Implementation And Test Files
 
@@ -390,6 +390,9 @@ Implementation owners:
 - `cmd/core/main.go`
 - `cmd/core/wiring.go`
 - `config/prometheus/alerts.yml`
+- `internal/metrics/prometheus_alerts_contract_test.go`
+- `.github/bubbles-project.yaml`
+- `scripts/observability/capture-slo.sh`
 - `smackerel.sh`
 - `deploy/contract.yaml`
 
@@ -419,12 +422,20 @@ Regression and acceptance inputs:
 
 - Validate startup order before scheduler and readiness admission.
 - Validate health-cache behavior, generated deployment config, migration restore, and prior-release rollback.
-- Run independent config, startup, strict-readiness, candidate-refusal, verified-recovery, and rollback canaries before broad suites.
+- Run independent local config, startup, alert-rule, strict-readiness, UI, security, synthesis-trace, and stress canaries before broad local API and UI suites. Candidate refusal, verified recovery, and rollback occur later under explicit target-action approval.
 
 ### Change Boundary
 
 **Allowed:** synthesis SST keys and generated projection, synthesis read/health/startup/scheduler/API/web/metrics/alerts code, synthesis and strict-readiness tests, generic product deployment contract seams, and planning-owned packet files.
 **Excluded:** weakened strict-health semantics, target-specific adapter files, unrelated readiness capabilities, unrelated digest freshness behavior, auth/session redesign, providers, graph semantics, Python ML code, and manual host operations.
+
+### Mirrored Alert, UI, Security, And Observability Contracts
+
+- Running-core API and scraped synthesis state remain non-green through request, running, committed-unverified, and failed states. They change only after production aggregate read-back verifies a persisted complete or quiet recovery.
+- A separate static Prometheus contract proves the four synthesis rules consume canonical state with `for:` windows `30m`, `1h`, `24h`, and `15m`. No test sleeps through those windows or claims unobserved Alertmanager firing.
+- Real actionable synthesis buttons, including Retry, Inspect, and disclosures, owe a 44 by 44 CSS-pixel minimum. Noninteractive badges, headings, labels, and status text do not. Retry must be clicked in the browser and its result must survive reload. Actual browser page scale 2.0 is required; a synthetic button, direct request mutation, or halved viewport is not acceptance.
+- Metrics and public/denied responses carry no principal, run, source, content, fingerprint, raw-error, SQL, credential, or high-cardinality identifiers. Traces may carry opaque `run_id` plus closed safe fields. Logs may carry only the bounded run identity required by design. Metric labels never carry run or principal identity.
+- The planned `synthesis.health-recovery` workflow, safe attributes, validate-plane OTel enablement, Jaeger queries, trace guard, SLO capture, and defect scans are authoritative in the child [Security And Observability Contract](bugs/BUG-004-004-synthesis-persistence-and-health-truth/scopes.md#security-and-observability-contract). Scope 8 uses those exact commands and requires startup-reconcile spans for both cadences, per-cadence read snapshots, and the health aggregate. The registered `core.health` contract remains the numeric p99 <= 200ms benchmark only.
 
 ### Test Plan
 
@@ -433,22 +444,29 @@ The machine-readable source is [the child corrective test plan](bugs/BUG-004-004
 | ID | Test Type | Category | Scenario | File / Expected Test Title | Command | Live System |
 |---|---|---|---|---|---|---|
 | T004-C16-QUERY | Integration | `integration` | SCN-004-004-C16 | `tests/integration/synthesis_health_test.go` - `TestSynthesisReadSnapshot_IsCausalPerActorAndCadence` | `./smackerel.sh test integration` | Yes |
-| T004-C16-CROSSPAIR-RED | Adversarial Regression E2E | `e2e-api` | SCN-004-004-C16 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_InterleavedCadencesAndPrincipalsCannotCrossPairAttemptAndOutput` | `./smackerel.sh test e2e` | Yes |
+| T004-C16-CROSSPAIR-RED | Adversarial Regression E2E | `e2e-api` | SCN-004-004-C16 | Planned in `tests/e2e/synthesis_recovery_health_e2e_test.sh` - `running core causal snapshots never cross-pair actors or cadences` | `./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
 | T004-C17-PRECEDENCE | Integration | `integration` | SCN-004-004-C17 | `tests/integration/synthesis_health_test.go` - `TestSynthesisHealth_RunningFailureAndRecoveryFollowCausalEventOrder` | `./smackerel.sh test integration` | Yes |
-| T004-C17-ALERT | E2E API regression | `e2e-api` | SCN-004-004-C17 | Planned location for Scope 8 execution: tests/e2e/synthesis_recovery_health_e2e_test.sh - `failure alert clears only after a later verified persisted recovery` | `./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
+| T004-C17-STATE-LIFECYCLE | E2E API regression | `e2e-api` | SCN-004-004-C17 | Planned in `tests/e2e/synthesis_recovery_health_e2e_test.sh` - `running core synthesis state remains non-green until verified persisted recovery` | `./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
+| T004-C17-ALERT-RULE | Prometheus rule contract | `unit` | SCN-004-004-C17 | Planned in `internal/metrics/prometheus_alerts_contract_test.go` - `TestSynthesisAlertRules_ConsumeCanonicalStateWithConfiguredForWindows` | `./smackerel.sh test unit --go` | No |
 | T004-C18-STARTUP | Integration | `integration` | SCN-004-004-C18 | `tests/integration/synthesis_coordinator_test.go` - `TestSynthesisStartupReconciliation_ExpiresRunningAndRefusesUnverifiedCommit` | `./smackerel.sh test integration` | Yes |
-| T004-C18-RESTART | Regression E2E | `e2e-api` | SCN-004-004-C18 | `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `startup reconciliation preserves failure truth across real restart` | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
+| T004-C18-RESTART | Regression E2E | `e2e-api` | SCN-004-004-C18 | Planned in `tests/e2e/synthesis_restart_durability_e2e_test.sh` - `running core reconciles both cadences before router readiness and scheduler admission after restart` | `./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh` | Yes |
 | T004-C19-CONFIG | Unit contract | `unit` | SCN-004-004-C19 | `internal/config/validate_test.go` - `TestSynthesisFreshnessPerCadenceIsRequiredPositiveAndHasNoFallback` | `./smackerel.sh test unit --go` | No |
-| T004-C19-RUNTIME | Integration | `integration` | SCN-004-004-C19 | Planned location for Scope 8 execution: tests/integration/synthesis_freshness_sst_test.go - `TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers` | `./smackerel.sh test integration` | Yes |
+| T004-C19-RUNTIME-SUPPORT | Static/runtime-loader integration support | `integration` | SCN-004-004-C19 | `tests/integration/synthesis_freshness_sst_test.go` - `TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers` | `./smackerel.sh test integration` | Yes |
+| T004-C19-RUNTIME | Runtime behavior E2E | `e2e-api` | SCN-004-004-C19 | Planned in `tests/e2e/synthesis_recovery_health_e2e_test.sh` - `running core applies distinct daily and weekly freshness to API web health and metrics` | `./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
 | T004-C19-STALE-SCAN | Contract regression | `unit` | SCN-004-004-C19 | Planned location for Scope 8 execution: internal/intelligence/synthesis_freshness_contract_test.go - `TestSynthesisFreshness_HasOneSSTAndNo48hDigestAlias` | `./smackerel.sh test unit --go` | No |
-| T004-C20-STRICT | E2E API regression | `e2e-api` | SCN-004-004-C20 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_StrictHealthRefusesEveryNonGreenRequiredCadence` | `./smackerel.sh test e2e` | Yes |
+| T004-C20-STRICT-SUPPORT | Supporting in-process HTTP integration | `integration` | SCN-004-004-C20 | `tests/e2e/synthesis_api_e2e_test.go` - `TestSynthesisAPI_StrictHealthRefusesEveryNonGreenRequiredCadence` | `./smackerel.sh test e2e` | No |
+| T004-C20-STRICT | Running-core E2E API regression | `e2e-api` | SCN-004-004-C20 | Planned in `tests/e2e/synthesis_recovery_health_e2e_test.sh` - `running core strict health refuses every non-green required cadence and recovers only after verified read-back` | `./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
 | T004-C20-DEPLOY | Deploy E2E | `e2e-api` | SCN-004-004-C20 | operator-owned target adapter verification - `candidate is refused while intelligence is down and accepted only after verified recovery` | `./smackerel.sh deploy <target>` | Yes |
 | T004-C20-ROLLBACK | Rollback E2E | `e2e-api` | SCN-004-004-C20 | operator-owned target adapter verification - `prior release pointer rollback restores service and retained event history remains queryable` | `./smackerel.sh deploy <target> --rollback` | Yes |
-| T004-C20-UI-REVALIDATE | E2E UI regression | `e2e-ui` | SCN-004-004-C16..C20 plus SCN-004-004-01..10 | `web/pwa/tests/synthesis_truth.spec.ts` - existing Today/Status state, privacy, retry, and accessibility suite against corrected snapshots | `./smackerel.sh test e2e-ui` | Yes |
-| T004-C20-STRESS | Stress | `stress` | SCN-004-004-C16..C20 | `tests/stress/synthesis_retry_stress_test.go` - `TestSynthesisHealthSnapshotConcurrentTriggersRemainCausalAndBounded` | `./smackerel.sh test stress` | Yes |
-| T004-C20-SECURITY | Security integration | `integration` | SCN-004-004-C16..C20 | `tests/integration/synthesis_telemetry_test.go` - `TestSynthesisEventsAndTracesExposeNoCorpusContentOrHighCardinalityLabels` | `./smackerel.sh test integration` | Yes |
-| T004-C20-OBS | Observability integration | `integration` | SCN-004-004-C17..C20 | validate-plane trace capture for synthesis trigger, read-back, recovery, and startup reconciliation; 3 AM reconstructibility plus error, latency, retry, fan-out, and missing-span scan | `./smackerel.sh test integration` | Yes |
-| T004-C04-BROAD | Broad Regression E2E | `e2e-api` | SCN-004-004-C16..C20 | full synthesis API, restart, state-matrix, strict-readiness, recovery, and browser suites | `./smackerel.sh test e2e` | Yes |
+| T004-C20-UI-REVALIDATE | E2E UI state/privacy regression | `e2e-ui` | SCN-004-004-10 | `web/pwa/tests/synthesis_truth.spec.ts` - `Today and Status report the same durable synthesis state` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-C20-UI-CONTROLS | E2E UI action/accessibility regression | `e2e-ui` | SCN-004-004-10 | Planned in `web/pwa/tests/synthesis_truth.spec.ts` - `real synthesis action buttons are 44 by 44 and Retry click round-trips through the running core` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-C20-UI-ZOOM | E2E UI zoom regression | `e2e-ui` | SCN-004-004-10 | Planned in `web/pwa/tests/synthesis_truth.spec.ts` - `Today and Status reflow at actual browser 200% zoom without overlap or horizontal scroll` | `./smackerel.sh test e2e-ui` | Yes |
+| T004-C20-STRESS | Stress and SLO regression | `stress` | SCN-004-004-C20 | Planned in `tests/stress/synthesis_retry_stress_test.go` - `TestSynthesisHealthSnapshotConcurrentMixedCadenceP99WithinCoreHealthSLO` | `./smackerel.sh test stress` | Yes |
+| T004-C20-SECURITY | Security integration | `integration` | SCN-004-004-C20 | Planned in `tests/integration/synthesis_telemetry_test.go` - `TestSynthesisTelemetry_BoundsMetricsResponsesTracesAndLogs` | `./smackerel.sh test integration` | Yes |
+| T004-C20-OBS | Synthesis trace evidence | `integration` | SCN-004-004-C20 | `.specify/runtime/observability/synthesis.health-recovery.trace.json` - `synthesis.health-recovery contains startup reconcile read snapshot and health aggregate spans` | `env ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true ./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh` | Yes |
+| T004-C20-SLO | Core health SLO evidence | `stress` | SCN-004-004-C20 | `.specify/runtime/observability/core.health.slo.json` - `core.health remains at p99 <= 200ms during mixed-cadence synthesis reads` | `bash scripts/observability/capture-slo.sh run --workflow core.health --url http://127.0.0.1:45001/api/health --requests 600 --concurrency 20 --source stress` | Yes |
+| T004-C04-BROAD | Broad Regression E2E API | `e2e-api` | SCN-004-004-C16..C20 | `tests/e2e/` - full synthesis API, restart, state-matrix, strict-readiness, and recovery suite; no browser claim | `./smackerel.sh test e2e` | Yes |
+| T004-C04-BROAD-UI | Broad Regression E2E UI | `e2e-ui` | SCN-004-004-10 | `web/pwa/tests/` - full synthesis Today/Status Playwright suite | `./smackerel.sh test e2e-ui` | Yes |
 
 ### Definition of Done - Corrective Rows Remain Unchecked Until New Execution
 
@@ -458,23 +476,30 @@ The machine-readable source is [the child corrective test plan](bugs/BUG-004-004
 - [ ] SCN-004-004-C19: one cadence-specific SST contract reaches every freshness consumer without a hardcoded 48-hour value or digest-threshold alias. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] SCN-004-004-C20: strict readiness and deployment verification refuse non-green synthesis and accept only newly verified recovery. Rollback preserves event history. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C16-QUERY passes with interleaved actor and cadence histories. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C16-CROSSPAIR-RED fails against the two-global-query implementation and passes against the causal snapshot query. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C16-CROSSPAIR-RED drives the running core over HTTP with interleaved principals, daily/weekly cadences, attempts, outputs, and timestamps; it fails against two global queries and passes only for one causal actor/cadence snapshot. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C17-PRECEDENCE passes for prior-success/running, prior-success/failure, and failure/new-recovery sequences. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C17-ALERT passes and proves the real alert remains active until verified recovery. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C17-STATE-LIFECYCLE proves running-core API and scraped synthesis state remain non-green through request, running, committed-unverified, and failed states, then change only after verified persisted recovery. It makes no unobserved Alertmanager-firing claim. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C17-ALERT-RULE proves the production Prometheus rules consume canonical state with `for:` windows `30m`, `1h`, `24h`, and `15m`, without sleeping through those windows. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C18-STARTUP passes without success-shaped reconciliation events. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C18-RESTART passes across a real core restart. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C18-RESTART seeds expired-running daily and committed-unverified weekly state, restarts the real core, and proves both `ReconcileStartup` calls finish before router/readiness/scheduler admission; abandoned work remains non-green until a later verified attempt. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C19-CONFIG passes for missing, zero, negative, invalid, daily, and weekly values. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C19-RUNTIME passes with different daily and weekly values at API, web, health, metric, and alert consumers. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C19-RUNTIME-SUPPORT preserves generated-config loading and static consumer coverage but is not accepted as runtime-behavior proof. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C19-RUNTIME boots the running core with distinct daily and weekly values and proves their behavior through latest API, Today, Status, strict health, and scraped metrics. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C19-STALE-SCAN passes with zero hardcoded synthesis freshness constants and zero digest freshness aliases. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C20-STRICT passes for never-run, running, stale, partial, failed, read-degraded, and recovered states. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-STRICT-SUPPORT preserves the in-process HTTP matrix as supporting integration evidence and never presents it as live running-core E2E. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-STRICT issues HTTP requests to the running core for every required-cadence non-green state and proves failed-to-verified-recovery before strict health becomes green. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C20-DEPLOY captures target refusal while intelligence is non-green and acceptance only after verified recovery. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] T004-C20-ROLLBACK proves accepted-prior-release restoration and retained append-only history through the normal pointer rollback. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C20-UI-REVALIDATE passes Today and Status privacy, accessibility, retry, and state-exclusivity checks against the causal model. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C20-STRESS passes under concurrent mixed-cadence triggers with bounded latency and no cross-pairing. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C20-SECURITY passes without synthesis text, source identity, fingerprint, principal, raw error, SQL, credential, or unbounded run identity leakage. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C20-OBS captures reconstructible validate-plane traces with zero unresolved error, latency, retry, fan-out, or missing-span findings. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] T004-C04-BROAD passes with zero required skips and no internal request interception. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
-- [ ] Independent startup, config, strict-readiness, deployment, and rollback canaries run in order before broad suites. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-UI-REVALIDATE passes Today/Status state parity, privacy clearing, and state exclusivity. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-UI-CONTROLS measures real visible actionable buttons at 44 by 44 CSS pixels or larger, clicks Retry, observes lifecycle feedback, and verifies the persisted result after reload. Noninteractive labels are excluded. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-UI-ZOOM proves both routes at observed browser page scale 2.0 without overlap, clipping, hidden actions, or horizontal scroll; viewport reduction alone is not accepted. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-STRESS executes mixed daily/weekly concurrent running-core snapshots, proves zero cross-pairing, and records p99 <= 200ms. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-SECURITY proves metrics and public/denied responses carry no principal/run/source/content/high-cardinality identifiers; traces and logs obey the narrower safe run-identity contract and expose no forbidden content. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-OBS captures `synthesis.health-recovery` with startup spans for both cadences, per-cadence snapshots, health aggregate, and complete 3 AM/error/>=200ms/retry/fan-out/missing-span review. `core.health` alone cannot satisfy it. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C20-SLO captures 600 `core.health` requests at concurrency 20 and proves p99 <= 200ms, error <= 0.1%, and availability >= 99.9%. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C04-BROAD passes broad local E2E API with no Playwright claim. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] T004-C04-BROAD-UI separately passes broad local Playwright. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
+- [ ] Local canaries run first, broad local API and UI suites run second, explicit approval gates deployment and later rollback, and final certification follows target acceptance. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] Consumer Impact Sweep finds zero stale synthesis freshness, global latest-query, production supersession, readiness, API, UI, metric, alert, config-bundle, documentation, or target-adapter references. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] Change Boundary is respected and zero excluded file families change. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)
 - [ ] Build Quality Gate passes: build, check, lint, format, unit, integration, E2E API, E2E UI, stress, security, observability, migration, rollback, deployment, artifact lint, traceability, documentation alignment, zero warnings, zero required skips, and no unresolved findings. → Evidence: [child report](bugs/BUG-004-004-synthesis-persistence-and-health-truth/report.md#corrective-scope-04a-evidence)

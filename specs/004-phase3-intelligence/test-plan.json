@@ -2,7 +2,7 @@
   "version": 1,
   "specId": "004",
   "generatedBy": "bubbles.plan",
-  "generatedAt": "2026-08-31T22:39:40Z",
+  "generatedAt": "2026-09-03T02:36:59Z",
   "purpose": "Parent execution-routing handoff for corrective Scope 7 and Scope 8. Scope 7 mirrors the child migration-067 and local prior-source compatibility contracts. Scope 8 separately owns operator pointer rollback and exceptional restore acceptance. Historical Scope 1 through Scope 6 rows remain preserved.",
   "authoritativeCorrectivePlanRef": "bugs/BUG-004-004-synthesis-persistence-and-health-truth/test-plan.json",
   "scopes": [
@@ -194,18 +194,18 @@
           "file": "tests/integration/synthesis_health_test.go",
           "testId": "TestSynthesisReadSnapshot_IsCausalPerActorAndCadence",
           "scenarioId": "SCN-004-004-C16",
-          "description": "A snapshot query selects latest attempt and output from one configured actor and cadence causal history.",
+          "description": "Supporting integration proves the snapshot query selects latest attempt and output from one configured actor/cadence causal history.",
           "command": "./smackerel.sh test integration",
           "liveSystem": true
         },
         {
           "type": "Adversarial Regression E2E",
           "category": "e2e-api",
-          "file": "tests/e2e/synthesis_api_e2e_test.go",
-          "testId": "TestSynthesisAPI_InterleavedCadencesAndPrincipalsCannotCrossPairAttemptAndOutput",
+          "file": "tests/e2e/synthesis_recovery_health_e2e_test.sh",
+          "testId": "running core causal snapshots never cross-pair actors or cadences",
           "scenarioId": "SCN-004-004-C16",
-          "description": "Interleaved newer attempts and outputs make the two-global-query implementation fail before the causal query turns green.",
-          "command": "./smackerel.sh test e2e",
+          "description": "The running core receives interleaved principals, daily/weekly cadences, attempts, outputs, and timestamps over real HTTP. The two-global-query implementation produces a forbidden cross-pair; one actor/cadence snapshot remains causal.",
+          "command": "./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh",
           "liveSystem": true
         },
         {
@@ -214,7 +214,7 @@
           "file": "tests/integration/synthesis_health_test.go",
           "testId": "TestSynthesisHealth_RunningFailureAndRecoveryFollowCausalEventOrder",
           "scenarioId": "SCN-004-004-C17",
-          "description": "Running, failed, and recovered states follow actor and cadence event order while historical failure remains queryable.",
+          "description": "Running, failed, and recovered states follow same-actor/cadence event order while historical failure remains queryable.",
           "command": "./smackerel.sh test integration",
           "liveSystem": true
         },
@@ -222,11 +222,21 @@
           "type": "Regression E2E",
           "category": "e2e-api",
           "file": "tests/e2e/synthesis_recovery_health_e2e_test.sh",
-          "testId": "failure alert clears only after a later verified persisted recovery",
+          "testId": "running core synthesis state remains non-green until verified persisted recovery",
           "scenarioId": "SCN-004-004-C17",
-          "description": "Alert and API remain non-green through request, running, and unverified states and clear only on verified recovery.",
+          "description": "The running core API and scraped synthesis state remain non-green through request, running, committed-unverified, and failed states, then change only after production aggregate read-back verifies a later persisted recovery. This does not claim Alertmanager fired.",
           "command": "./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh",
           "liveSystem": true
+        },
+        {
+          "type": "Prometheus rule contract",
+          "category": "unit",
+          "file": "internal/metrics/prometheus_alerts_contract_test.go",
+          "testId": "TestSynthesisAlertRules_ConsumeCanonicalStateWithConfiguredForWindows",
+          "scenarioId": "SCN-004-004-C17",
+          "description": "Static parsing proves the four production synthesis alerts consume canonical state with configured for-windows 30m, 1h, 24h, and 15m. No test sleeps through those windows or claims unobserved Alertmanager firing.",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false
         },
         {
           "type": "integration",
@@ -234,7 +244,7 @@
           "file": "tests/integration/synthesis_coordinator_test.go",
           "testId": "TestSynthesisStartupReconciliation_ExpiresRunningAndRefusesUnverifiedCommit",
           "scenarioId": "SCN-004-004-C18",
-          "description": "Startup appends typed non-green facts for expired-running and committed-unverified rows without fabricating success.",
+          "description": "Startup appends typed non-green facts for expired running and committed-unverified rows without fabricating success.",
           "command": "./smackerel.sh test integration",
           "liveSystem": true
         },
@@ -242,9 +252,9 @@
           "type": "Regression E2E",
           "category": "e2e-api",
           "file": "tests/e2e/synthesis_restart_durability_e2e_test.sh",
-          "testId": "startup reconciliation preserves failure truth across real restart",
+          "testId": "running core reconciles both cadences before router readiness and scheduler admission after restart",
           "scenarioId": "SCN-004-004-C18",
-          "description": "A real restart runs reconciliation before scheduling and readiness and keeps abandoned work non-green until verified success.",
+          "description": "Seed expired-running daily and committed-unverified weekly state, restart the real core, and prove both ReconcileStartup calls finish before router/readiness/scheduler admission. Abandoned work stays non-green until a later verified attempt.",
           "command": "./smackerel.sh test e2e --shell-run synthesis_restart_durability_e2e_test.sh",
           "liveSystem": true
         },
@@ -254,18 +264,28 @@
           "file": "internal/config/validate_test.go",
           "testId": "TestSynthesisFreshnessPerCadenceIsRequiredPositiveAndHasNoFallback",
           "scenarioId": "SCN-004-004-C19",
-          "description": "Missing, zero, negative, and invalid daily and weekly freshness values fail loudly, while distinct valid values parse.",
+          "description": "Missing, zero, negative, and invalid daily/weekly freshness values fail loudly; valid distinct values parse.",
           "command": "./smackerel.sh test unit --go",
           "liveSystem": false
         },
         {
-          "type": "integration",
+          "type": "static/runtime-loader integration support",
           "category": "integration",
           "file": "tests/integration/synthesis_freshness_sst_test.go",
           "testId": "TestSynthesisFreshness_DistinctDailyWeeklyValuesReachAllRuntimeConsumers",
           "scenarioId": "SCN-004-004-C19",
-          "description": "Different daily and weekly values reach API, web, health, metrics, and alerts through generated runtime configuration.",
+          "description": "Preserve generated-config loading and static consumer-token coverage as supporting evidence. This row does not prove running API, web, health, or metrics behavior.",
           "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "type": "runtime behavior E2E",
+          "category": "e2e-api",
+          "file": "tests/e2e/synthesis_recovery_health_e2e_test.sh",
+          "testId": "running core applies distinct daily and weekly freshness to API web health and metrics",
+          "scenarioId": "SCN-004-004-C19",
+          "description": "Boot the running core with deliberately distinct daily and weekly freshness values and prove their different behavior through latest API responses, Today, Status, strict health, and scraped metrics.",
+          "command": "./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh",
           "liveSystem": true
         },
         {
@@ -274,18 +294,28 @@
           "file": "internal/intelligence/synthesis_freshness_contract_test.go",
           "testId": "TestSynthesisFreshness_HasOneSSTAndNo48hDigestAlias",
           "scenarioId": "SCN-004-004-C19",
-          "description": "No hardcoded synthesis freshness constant or digest freshness alias remains in production consumers.",
+          "description": "No hardcoded synthesis freshness constant or alias to the digest freshness setting remains in production consumers.",
           "command": "./smackerel.sh test unit --go",
           "liveSystem": false
         },
         {
-          "type": "Regression E2E",
-          "category": "e2e-api",
+          "type": "supporting in-process HTTP integration",
+          "category": "integration",
           "file": "tests/e2e/synthesis_api_e2e_test.go",
           "testId": "TestSynthesisAPI_StrictHealthRefusesEveryNonGreenRequiredCadence",
           "scenarioId": "SCN-004-004-C20",
-          "description": "Strict health refuses every non-green required cadence and turns green only after verified recovery.",
+          "description": "Preserve the in-process HTTP matrix as supporting integration evidence. Because it uses httptest rather than the running core process, it cannot satisfy live E2E.",
           "command": "./smackerel.sh test e2e",
+          "liveSystem": false
+        },
+        {
+          "type": "running-core E2E API regression",
+          "category": "e2e-api",
+          "file": "tests/e2e/synthesis_recovery_health_e2e_test.sh",
+          "testId": "running core strict health refuses every non-green required cadence and recovers only after verified read-back",
+          "scenarioId": "SCN-004-004-C20",
+          "description": "Issue HTTP requests to the running core for required-cadence never-run, running, stale, partial, failed, and read-degraded states, then prove failed-to-verified-recovery before strict health becomes green.",
+          "command": "./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh",
           "liveSystem": true
         },
         {
@@ -294,7 +324,7 @@
           "file": "operator-owned target adapter verification",
           "testId": "candidate is refused while intelligence is down and accepted only after verified recovery",
           "scenarioId": "SCN-004-004-C20",
-          "description": "The normal zero-manual deployment refuses non-green intelligence and accepts the candidate only after verified recovery.",
+          "description": "The normal zero-manual deploy refuses non-green intelligence and accepts the candidate only after a new verified recovery.",
           "command": "./smackerel.sh deploy <target>",
           "liveSystem": true
         },
@@ -304,27 +334,47 @@
           "file": "operator-owned target adapter verification",
           "testId": "prior release pointer rollback restores service and retained event history remains queryable",
           "scenarioId": "SCN-004-004-C20",
-          "description": "Normal rollback restores the accepted prior release without deleting candidate event history.",
+          "description": "The normal rollback restores the accepted prior release without deleting the candidate event history.",
           "command": "./smackerel.sh deploy <target> --rollback",
           "liveSystem": true
         },
         {
-          "type": "E2E UI regression",
+          "type": "E2E UI state/privacy regression",
           "category": "e2e-ui",
           "file": "web/pwa/tests/synthesis_truth.spec.ts",
-          "testId": "existing Today/Status state privacy retry and accessibility suite against corrected snapshots",
-          "scenarioId": "SCN-004-004-C17",
-          "description": "The delivered UI suite is revalidated against the causal read model without weakening assertions.",
+          "testId": "Today and Status report the same durable synthesis state",
+          "scenarioId": "SCN-004-004-10",
+          "description": "The production Today and Status routes expose the same durable state and preserve privacy clearing and state exclusivity.",
           "command": "./smackerel.sh test e2e-ui",
           "liveSystem": true
         },
         {
-          "type": "stress",
+          "type": "E2E UI action/accessibility regression",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/synthesis_truth.spec.ts",
+          "testId": "real synthesis action buttons are 44 by 44 and Retry click round-trips through the running core",
+          "scenarioId": "SCN-004-004-10",
+          "description": "Measure real visible actionable controls at 44 by 44 CSS pixels or larger. Click the real Retry control, observe lifecycle feedback, and verify the persisted result after reload. Noninteractive labels are excluded; synthetic controls and page.request mutations do not satisfy this row.",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "type": "E2E UI zoom regression",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/synthesis_truth.spec.ts",
+          "testId": "Today and Status reflow at actual browser 200% zoom without overlap or horizontal scroll",
+          "scenarioId": "SCN-004-004-10",
+          "description": "Observe browser page scale 2.0 on both production routes and assert no overlap, clipping, hidden action, or horizontal document scroll. Reduced viewport width alone is not accepted as zoom proof.",
+          "command": "./smackerel.sh test e2e-ui",
+          "liveSystem": true
+        },
+        {
+          "type": "stress and SLO regression",
           "category": "stress",
           "file": "tests/stress/synthesis_retry_stress_test.go",
-          "testId": "TestSynthesisHealthSnapshotConcurrentTriggersRemainCausalAndBounded",
-          "scenarioId": "SCN-004-004-C16",
-          "description": "Mixed-cadence concurrency preserves causal snapshots and bounded completion under the repository stress envelope.",
+          "testId": "TestSynthesisHealthSnapshotConcurrentMixedCadenceP99WithinCoreHealthSLO",
+          "scenarioId": "SCN-004-004-C20",
+          "description": "Concurrent running-core daily and weekly snapshots preserve actor/cadence causality and record p99 latency at or below the existing core.health 200ms target.",
           "command": "./smackerel.sh test stress",
           "liveSystem": true
         },
@@ -332,30 +382,52 @@
           "type": "security integration",
           "category": "integration",
           "file": "tests/integration/synthesis_telemetry_test.go",
-          "testId": "TestSynthesisEventsAndTracesExposeNoCorpusContentOrHighCardinalityLabels",
-          "scenarioId": "SCN-004-004-C17",
-          "description": "Events, metrics, traces, logs, and denied responses contain only bounded safe identities and codes.",
+          "testId": "TestSynthesisTelemetry_BoundsMetricsResponsesTracesAndLogs",
+          "scenarioId": "SCN-004-004-C20",
+          "description": "Metrics and public/denied responses expose no principal, run, source, content, or high-cardinality identifiers. Traces may carry only opaque run_id plus safe bounded fields; logs may carry only design-required bounded run identity. No surface carries text, source IDs/titles, fingerprints, raw errors, SQL, or credentials.",
           "command": "./smackerel.sh test integration",
           "liveSystem": true
         },
         {
-          "type": "observability integration",
+          "type": "synthesis trace evidence",
           "category": "integration",
-          "file": ".specify/runtime/observability/",
-          "testId": "validate-plane synthesis trigger read-back recovery and startup reconciliation trace capture",
-          "scenarioId": "SCN-004-004-C17",
-          "description": "Captured traces satisfy 3 AM reconstructibility and are inspected for errors, latency, fan-out, retries, and missing spans.",
-          "command": "./smackerel.sh test integration",
-          "liveSystem": true
+          "file": ".specify/runtime/observability/synthesis.health-recovery.trace.json",
+          "testId": "synthesis.health-recovery contains startup reconcile read snapshot and health aggregate spans",
+          "scenarioId": "SCN-004-004-C20",
+          "description": "With validate-plane OTel enabled, capture both startup cadence spans, per-cadence read snapshots, and the health aggregate. Complete the 3 AM, error, >=200ms latency, retry, fan-out, and missing-span/attribute scan. The thin core.health trace cannot satisfy this row.",
+          "command": "env ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true ./smackerel.sh test e2e --shell-run synthesis_recovery_health_e2e_test.sh",
+          "liveSystem": true,
+          "plannedObservabilityWorkflow": "synthesis.health-recovery"
         },
         {
-          "type": "Broad Regression E2E",
+          "type": "core health SLO evidence",
+          "category": "stress",
+          "file": ".specify/runtime/observability/core.health.slo.json",
+          "testId": "core.health remains at p99 <= 200ms during mixed-cadence synthesis reads",
+          "scenarioId": "SCN-004-004-C20",
+          "description": "Capture 600 requests at concurrency 20 and require p99 <= 200ms, error <= 0.1%, and availability >= 99.9% using the registered core.health contract.",
+          "command": "bash scripts/observability/capture-slo.sh run --workflow core.health --url http://127.0.0.1:45001/api/health --requests 600 --concurrency 20 --source stress",
+          "liveSystem": true,
+          "observabilityWorkflow": "core.health"
+        },
+        {
+          "type": "Broad Regression E2E API",
           "category": "e2e-api",
           "file": "tests/e2e/",
-          "testId": "full synthesis API restart state-matrix strict-readiness recovery and browser suite",
+          "testId": "full synthesis API restart state-matrix strict-readiness and recovery suite",
           "scenarioId": "SCN-004-004-C20",
-          "description": "Corrective and historical synthesis journeys pass together with zero required skips or internal interception.",
+          "description": "The broad local API suite passes with zero required skips or internal interception. It makes no browser or Playwright claim.",
           "command": "./smackerel.sh test e2e",
+          "liveSystem": true
+        },
+        {
+          "type": "Broad Regression E2E UI",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/",
+          "testId": "full synthesis Today and Status Playwright suite",
+          "scenarioId": "SCN-004-004-10",
+          "description": "The separate broad local Playwright suite passes with zero required skips or first-party interception before deployment approval.",
+          "command": "./smackerel.sh test e2e-ui",
           "liveSystem": true
         }
       ]
