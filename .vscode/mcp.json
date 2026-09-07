@@ -1,6 +1,6 @@
 {
     "servers": {
-        "codegraph": {
+        "codegraph-smackerel": {
             "type": "stdio",
             "command": "npx",
             "args": [
