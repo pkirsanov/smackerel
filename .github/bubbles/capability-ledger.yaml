@@ -454,6 +454,56 @@ capabilities:
     - docs/issues/session-aware-runtime-coordination.md
     - docs/generated/issue-status.md
 
+  hybrid-evidence-research-runtime:
+    label: Hybrid evidence research runtime
+    state: shipped
+    summary: Provider-neutral, default-off research lifecycle validates explicit questions and produces immutable typed, content-addressed evidence through planning, run/resume, inspection, validation, publication, bridging, and cancellation; hosted providers and downstream bridge activation remain parked.
+    ownerSurface: bubbles/scripts/research-runtime.py
+    releaseIntroduced: v7.29.0
+    docsRefs:
+    - docs/recipes/research-and-admission-runtime.md
+    - docs/guides/CONTROL_PLANE_DESIGN.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    evidenceRefs:
+    - bubbles/scripts/research-runtime.py
+    - bubbles/scripts/research-run.sh
+    - bubbles/scripts/research-admission-cli-selftest.sh
+    consumers:
+    - bubbles/scripts/cli.sh # research command family
+    - bubbles/scripts/research-admission-cli-selftest.sh # focused CLI integration coverage
+    competitorTags:
+    - claude-code
+    - cursor
+    freshnessTargets:
+    - README.md
+    - docs/recipes/research-and-admission-runtime.md
+
+  measured-budget-session-epoch-runtime:
+    label: Measured budget and session epoch runtime
+    state: shipped
+    summary: Default-off execution-control runtime provides goal budgets, reservations, debits, releases, holds, one-time permits, usage reconciliation, retry identities, verified session epochs, a reference broker, and frozen-corpus evaluation; native host interception and causal savings proof remain parked.
+    ownerSurface: bubbles/scripts/measured-budget-runtime.py
+    releaseIntroduced: v7.29.0
+    docsRefs:
+    - docs/recipes/research-and-admission-runtime.md
+    - docs/guides/CONTROL_PLANE_DESIGN.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    evidenceRefs:
+    - bubbles/scripts/measured-budget-runtime.py
+    - bubbles/scripts/dispatch-admission.sh
+    - bubbles/scripts/session-epoch-authority.sh
+    - bubbles/scripts/cost-corpus-evaluate.sh
+    - bubbles/scripts/research-admission-cli-selftest.sh
+    consumers:
+    - bubbles/scripts/cli.sh # admission command family
+    - bubbles/scripts/research-admission-cli-selftest.sh # focused CLI integration coverage
+    competitorTags:
+    - claude-code
+    - cursor
+    freshnessTargets:
+    - README.md
+    - docs/recipes/research-and-admission-runtime.md
+
   dod-gherkin-fidelity-threshold:
     label: G068 DoD-Gherkin fidelity threshold tuning
     state: shipped

@@ -9,7 +9,7 @@ set -euo pipefail
 # stock macOS bash 3.2 these constructs fail; the shipped command surface must
 # fail LOUDLY and EARLY (before sourcing any helper or running any declare -A
 # selftest) instead of silently masking the breakage from installers/doctor/CI.
-if [[ -z "${BASH_VERSINFO:-}" ]] || (( ${BASH_VERSINFO[0]:-0} < 4 )); then
+if [[ -z "${BASH_VERSINFO:-}" ]] || ((${BASH_VERSINFO[0]:-0} < 4)); then
   printf 'ERROR: Bubbles requires bash 4.0+ (found %s). Install a newer bash (e.g. `brew install bash` on macOS) and re-run.\n' "${BASH_VERSION:-unknown}" >&2
   exit 1
 fi
@@ -34,11 +34,10 @@ fi
 # 8-failure measurement predates the mktemp fixes and is not evidence about the
 # state of the tree today.
 #
-# `flock` holds the lock on fd 9 and the kernel releases it when the process
-# dies, so this cannot leave a stale lock behind and needs no bypass flag. Where
-# `flock` is absent (stock macOS), the guard degrades to a no-op rather than
-# risking a lock we cannot reliably reap — matching how the optional-dependency
-# selftests degrade elsewhere in this suite.
+# Atomic `mkdir` is available on both GNU and stock macOS userlands. The owner
+# record makes a dead holder reclaimable, while a missing/malformed record fails
+# closed instead of guessing. Cleanup removes a lock only when its token still
+# matches, so a stale process cannot remove a replacement owner's lock.
 #
 # The guard MUST be re-entrant. Several selftests legitimately run a NESTED
 # framework-validate as part of their fixture (v5.3-selftest runs one against a
@@ -47,8 +46,9 @@ fi
 # so a naive guard refuses them and fails the very suite it is protecting —
 # measured: 3 red checks (v5.3 G1, tiering IMP-012, repo-drift IMP-027). The
 # exported marker below is inherited only by descendants of a holding run, so
-# nested invocations pass through while two INDEPENDENT top-level runs still
-# contend.
+# nested invocations pass through only when the recorded owner is a real process
+# ancestor and the inherited token matches. A copied environment marker alone
+# cannot bypass contention.
 #
 # IMP-049 SCOPE-3. The lock protects the SHARED SCRATCH FIXTURES that executing
 # checks build. An invocation that executes no check touches none of them, so
@@ -72,18 +72,146 @@ fi
 # Several selftests run a NESTED framework-validate as part of their fixture, and
 # a nested run that wrote a receipt would describe a synthesized fixture while
 # appearing to describe this tree. The marker is deliberately separate from the
-# lock marker, which is never set when `flock` is absent (stock macOS) and would
-# therefore report every nested run on a Mac as outermost.
+# lock marker because lock ownership and receipt ownership are different claims.
 _fv_outermost=false
 [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_DEPTH:-}" ]] && _fv_outermost=true
 export BUBBLES_FRAMEWORK_VALIDATE_DEPTH=$((${BUBBLES_FRAMEWORK_VALIDATE_DEPTH:-0} + 1))
+
+_fv_lock_dir=""
+_fv_lock_token=""
+_fv_lock_identity=""
+_bubbles_compat_dir=""
+_fv_cleanup() {
+  if [[ -n "$_fv_lock_dir" && -n "$_fv_lock_token" && -f "$_fv_lock_dir/owner" ]]; then
+    local _fv_cleanup_pid="" _fv_cleanup_token="" _fv_cleanup_identity="" _fv_cleanup_extra=""
+    read -r _fv_cleanup_pid _fv_cleanup_token _fv_cleanup_identity _fv_cleanup_extra <"$_fv_lock_dir/owner" || true
+    if [[ -z "$_fv_cleanup_extra" && "$_fv_cleanup_pid" == "$$" &&
+      "$_fv_cleanup_token" == "$_fv_lock_token" &&
+      "$_fv_cleanup_identity" == "$_fv_lock_identity" ]]; then
+      rm -rf "$_fv_lock_dir"
+    fi
+  fi
+  [[ -z "$_bubbles_compat_dir" ]] || rm -rf "$_bubbles_compat_dir"
+}
+trap _fv_cleanup EXIT
+
+_fv_process_identity() {
+  local pid="$1" stat_line="" stat_tail="" start_ticks="" started=""
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+
+  # Linux exposes a kernel-assigned start tick in field 22. Split after the
+  # final ") " because the comm field itself may contain spaces or parentheses.
+  if [[ -r "/proc/$pid/stat" ]]; then
+    stat_line="$(cat "/proc/$pid/stat" 2>/dev/null)" || return 1
+    [[ "$stat_line" == *") "* ]] || return 1
+    stat_tail="${stat_line##*) }"
+    read -r -a _fv_stat_fields <<<"$stat_tail"
+    start_ticks="${_fv_stat_fields[19]:-}"
+    [[ "$start_ticks" =~ ^[0-9]+$ ]] || return 1
+    printf 'proc:%s\n' "$start_ticks"
+    return 0
+  fi
+
+  # BSD/macOS has no /proc. `ps -o lstart=` is capability-probed instead of
+  # OS-detected. Its normalized creation timestamp distinguishes incarnations.
+  # If the capability is absent or ambiguous, fail closed rather than minting a
+  # weak identity that could make PID reuse look like the original owner.
+  started="$(ps -o lstart= -p "$pid" 2>/dev/null)" || return 1
+  started="${started#${started%%[![:space:]]*}}"
+  started="${started%${started##*[![:space:]]}}"
+  [[ -n "$started" ]] || return 1
+  started="${started//[[:space:]]/_}"
+  [[ "$started" =~ ^[A-Za-z0-9_.:+-]+$ ]] || return 1
+  printf 'ps:%s\n' "$started"
+}
+
+_fv_pid_is_ancestor() {
+  local candidate="$1" current="$$" parent=""
+  [[ "$candidate" =~ ^[1-9][0-9]*$ ]] || return 1
+  while [[ "$current" =~ ^[1-9][0-9]*$ && "$current" -gt 1 ]]; do
+    [[ "$current" == "$candidate" ]] && return 0
+    parent="$(ps -o ppid= -p "$current" 2>/dev/null)" || return 1
+    parent="${parent//[[:space:]]/}"
+    [[ "$parent" =~ ^[1-9][0-9]*$ ]] || return 1
+    current="$parent"
+  done
+  return 1
+}
+
+_fv_lock_refuse() {
+  printf 'ERROR: another framework-validate run is already in progress on this machine.\n' >&2
+  printf '       Concurrent runs corrupt each other'"'"'s shared scratch fixtures and produce\n' >&2
+  printf '       false failures. Wait for the other run to finish, then re-run.\n' >&2
+  exit 1
+}
+
+_fv_lock_acquire() {
+  _fv_lock_dir="${TMPDIR:-/tmp}/bubbles-framework-validate.lock.d"
+  _fv_lock_token="$$.$RANDOM.$SECONDS"
+  _fv_lock_identity="$(_fv_process_identity "$$")" || {
+    printf 'ERROR: framework-validate could not establish process-incarnation identity.\n' >&2
+    exit 1
+  }
+  local owner_pid="" owner_token="" owner_identity="" owner_extra="" live_identity=""
+
+  if mkdir "$_fv_lock_dir" 2>/dev/null; then
+    printf '%s %s %s\n' "$$" "$_fv_lock_token" "$_fv_lock_identity" >"$_fv_lock_dir/owner" || {
+      rm -rf "$_fv_lock_dir"
+      printf 'ERROR: framework-validate could not create its lock owner record.\n' >&2
+      exit 1
+    }
+    export BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD="$_fv_lock_token"
+    return 0
+  fi
+
+  [[ -f "$_fv_lock_dir/owner" ]] || _fv_lock_refuse
+  read -r owner_pid owner_token owner_identity owner_extra <"$_fv_lock_dir/owner" || _fv_lock_refuse
+  [[ -z "$owner_extra" && "$owner_pid" =~ ^[1-9][0-9]*$ && -n "$owner_token" &&
+    "$owner_identity" =~ ^(proc:[0-9]+|ps:[A-Za-z0-9_.:+-]+)$ ]] || _fv_lock_refuse
+
+  if kill -0 "$owner_pid" 2>/dev/null; then
+    live_identity="$(_fv_process_identity "$owner_pid")" || _fv_lock_refuse
+    if [[ "$live_identity" == "$owner_identity" &&
+      "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" == "$owner_token" ]] &&
+      _fv_pid_is_ancestor "$owner_pid"; then
+      _fv_lock_dir=""
+      _fv_lock_token=""
+      _fv_lock_identity=""
+      return 0
+    fi
+    [[ "$live_identity" != "$owner_identity" ]] || _fv_lock_refuse
+  fi
+
+  # Re-read before atomically claiming a dead owner's directory. If either field
+  # changed, another process repaired/replaced it and this invocation fails
+  # closed. The unique rename has no unlocked deletion window: exactly one
+  # contender can move this inode, then exactly one contender can mkdir the
+  # canonical path.
+  local confirm_pid="" confirm_token="" confirm_identity="" confirm_extra=""
+  read -r confirm_pid confirm_token confirm_identity confirm_extra <"$_fv_lock_dir/owner" || _fv_lock_refuse
+  [[ -z "$confirm_extra" && "$confirm_pid" == "$owner_pid" &&
+    "$confirm_token" == "$owner_token" && "$confirm_identity" == "$owner_identity" ]] || _fv_lock_refuse
+  local stale_dir="${_fv_lock_dir}.stale.${_fv_lock_token}"
+  mv "$_fv_lock_dir" "$stale_dir" 2>/dev/null || _fv_lock_refuse
+  if ! mkdir "$_fv_lock_dir" 2>/dev/null; then
+    rm -rf "$stale_dir"
+    _fv_lock_refuse
+  fi
+  printf '%s %s %s\n' "$$" "$_fv_lock_token" "$_fv_lock_identity" >"$_fv_lock_dir/owner" || {
+    rm -rf "$_fv_lock_dir"
+    printf 'ERROR: framework-validate could not replace a stale lock owner record.\n' >&2
+    exit 1
+  }
+  rm -rf "$stale_dir"
+  export BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD="$_fv_lock_token"
+}
 
 _fv_executes_checks=true
 if [[ $# -gt 0 ]]; then
   _fv_executes_checks=false
   for _fv_arg in "$@"; do
     case "$_fv_arg" in
-      --tier=core | --tier=full | --changed-only | --cache | --no-cache | --record-debt)
+      --tier=core | --tier=full | --changed-only | --no-changed-only | --cache | --no-cache | --record-debt)
         _fv_executes_checks=true
         ;;
       -h | --help | --list-tier=core | --list-tier=full) ;;
@@ -94,15 +222,159 @@ if [[ $# -gt 0 ]]; then
     esac
   done
 fi
-if [[ "$_fv_executes_checks" == "true" ]] && [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]] && command -v flock >/dev/null 2>&1; then
-  _fv_lockfile="${TMPDIR:-/tmp}/bubbles-framework-validate.lock"
-  # Probe writability on a THROWAWAY command first. `exec 9>file` with no command
-  # applies its redirections to the shell PERMANENTLY, so appending an error
-  # suppressor there (`exec 9>file 2>/dev/null`) silences stderr for the entire
-  # run — every selftest's diagnostics included. Keep the exec line bare.
-  if : >"$_fv_lockfile" 2>/dev/null; then
-    exec 9>"$_fv_lockfile"
-    if ! flock -n 9; then
+
+_fv_lockfile="${TMPDIR:-/tmp}/bubbles-framework-validate.lock"
+_fv_flock_path=""
+_fv_resolve_flock() {
+  local candidate=""
+
+  for candidate in \
+    /usr/bin/flock \
+    /bin/flock \
+    /usr/local/bin/flock \
+    /opt/homebrew/bin/flock \
+    /opt/local/bin/flock; do
+    if [[ -f "$candidate" && -x "$candidate" ]]; then
+      _fv_flock_path="$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [[ "$_fv_executes_checks" == "true" ]]; then
+  _fv_resolve_flock || true
+fi
+
+_fv_flock() {
+  local flock_status=0
+  local restore_errexit=false
+
+  [[ -n "$_fv_flock_path" ]] || return 127
+  [[ "$-" == *e* ]] && restore_errexit=true
+  builtin set +e
+  builtin command "$_fv_flock_path" "$@"
+  flock_status=$?
+  [[ "$restore_errexit" == "false" ]] || builtin set -e
+  return "$flock_status"
+}
+
+_fv_lock_identity() {
+  local path="$1" identity=""
+  [[ -f "$path" ]] || return 1
+  if identity="$(/usr/bin/stat -Lc '%d:%i' "$path" 2>/dev/null)" \
+    && [[ "$identity" =~ ^[0-9]+:[0-9]+$ ]]; then
+    printf 'device-inode:%s\n' "$identity"
+    return 0
+  fi
+  if identity="$(/usr/bin/stat -f '%d:%i' "$path" 2>/dev/null)" \
+    && [[ "$identity" =~ ^[0-9]+:[0-9]+$ ]]; then
+    printf 'device-inode:%s\n' "$identity"
+    return 0
+  fi
+  return 1
+}
+
+_fv_darwin_descriptor_identity() {
+  local lsof_path="" lsof_output="" field="" device="" inode=""
+  local device_digits="" device_decimal=""
+
+  if [[ -x /usr/sbin/lsof ]]; then
+    lsof_path=/usr/sbin/lsof
+  elif [[ -x /usr/bin/lsof ]]; then
+    lsof_path=/usr/bin/lsof
+  else
+    return 1
+  fi
+  lsof_output="$("$lsof_path" -a -p "$$" -d 9 -FDi 2>/dev/null)" || return 1
+  while IFS= read -r field; do
+    case "$field" in
+      D*) device="${field#D}" ;;
+      i*) inode="${field#i}" ;;
+    esac
+  done <<<"$lsof_output"
+  if [[ "$device" =~ ^0[xX][0-9a-fA-F]+$ ]]; then
+    device_digits="${device#0x}"
+    device_digits="${device_digits#0X}"
+    printf -v device_decimal '%u' "$((16#$device_digits))" || return 1
+  elif [[ "$device" =~ ^[0-9]+$ ]]; then
+    device_decimal="$device"
+  else
+    return 1
+  fi
+  [[ "$inode" =~ ^[0-9]+$ ]] || return 1
+  printf 'device-inode:%s:%s\n' "$device_decimal" "$inode"
+}
+
+_fv_lock_descriptor_matches_path() {
+  local descriptor_path="$1" lock_identity="" descriptor_identity=""
+  local opened_identity=""
+
+  lock_identity="$(_fv_lock_identity "$_fv_lockfile")" || return 1
+  descriptor_identity="$(_fv_lock_identity "$descriptor_path")" || return 1
+  [[ "$descriptor_identity" == "$lock_identity" ]] && return 0
+  [[ "$descriptor_path" == /dev/fd/9 ]] || return 1
+  opened_identity="$(_fv_darwin_descriptor_identity)" || return 1
+  [[ "$opened_identity" == "$lock_identity" ]]
+}
+
+_fv_open_lock_descriptor() {
+  local descriptor_path=""
+
+  [[ ! -L "$_fv_lockfile" ]] || return 1
+  if [[ ! -e "$_fv_lockfile" ]]; then
+    if ! (set -o noclobber; : >"$_fv_lockfile") 2>/dev/null; then
+      [[ -e "$_fv_lockfile" ]] || return 1
+    fi
+  fi
+  [[ -f "$_fv_lockfile" && ! -L "$_fv_lockfile" ]] || return 1
+  exec 9<"$_fv_lockfile" || return 1
+  if [[ -L "$_fv_lockfile" ]]; then
+    exec 9<&-
+    return 1
+  fi
+  if [[ -e "/proc/$$/fd/9" ]]; then
+    descriptor_path="/proc/$$/fd/9"
+  elif [[ -e /dev/fd/9 ]]; then
+    descriptor_path=/dev/fd/9
+  else
+    exec 9<&-
+    return 1
+  fi
+  if ! _fv_lock_descriptor_matches_path "$descriptor_path" \
+    || [[ -L "$_fv_lockfile" ]]; then
+    exec 9<&-
+    return 1
+  fi
+}
+
+_fv_inherited_lock_is_owned() {
+  local descriptor_path=""
+  [[ "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" == 1 ]] || return 1
+  if [[ -e "/proc/$$/fd/9" ]]; then
+    descriptor_path="/proc/$$/fd/9"
+  elif [[ -e /dev/fd/9 ]]; then
+    descriptor_path=/dev/fd/9
+  else
+    return 1
+  fi
+  _fv_lock_descriptor_matches_path "$descriptor_path" || return 1
+  [[ ! -L "$_fv_lockfile" ]] || return 1
+  _fv_flock -n 9 >/dev/null 2>&1
+}
+
+if [[ "$_fv_executes_checks" == "true" && -n "$_fv_flock_path" ]]; then
+  if [[ -n "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]]; then
+    if ! _fv_inherited_lock_is_owned; then
+      printf 'ERROR: inherited framework-validate lock marker is not backed by the owned lock descriptor.\n' >&2
+      exit 1
+    fi
+  else
+    if ! _fv_open_lock_descriptor; then
+      printf 'ERROR: framework-validate lock path is not a stable regular file; refusing unsafe acquisition.\n' >&2
+      exit 1
+    fi
+    if ! _fv_flock -n 9; then
       printf 'ERROR: another framework-validate run is already in progress on this machine.\n' >&2
       printf '       Concurrent runs corrupt each other'"'"'s shared scratch fixtures and produce\n' >&2
       printf '       false failures. Wait for the other run to finish, then re-run.\n' >&2
@@ -110,7 +382,10 @@ if [[ "$_fv_executes_checks" == "true" ]] && [[ -z "${BUBBLES_FRAMEWORK_VALIDATE
     fi
     export BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD=1
   fi
-elif [[ "$_fv_executes_checks" == "true" ]] && [[ -z "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]]; then
+elif [[ "$_fv_executes_checks" == "true" ]] && [[ -n "${BUBBLES_FRAMEWORK_VALIDATE_LOCK_HELD:-}" ]]; then
+  printf 'ERROR: inherited framework-validate lock ownership cannot be authenticated because flock is unavailable.\n' >&2
+  exit 1
+elif [[ "$_fv_executes_checks" == "true" ]]; then
   # flock absent (stock macOS ships none). The guard degrades to a no-op, so say
   # so — a silent degrade lets an operator believe concurrent-run protection is
   # active when it is not.
@@ -126,7 +401,6 @@ fi
 # / `timeout` on PATH for THIS process and every selftest subprocess it spawns,
 # so the whole validation runs unchanged on Linux + macOS. On Linux (unprefixed
 # GNU tools already present) every probe short-circuits and this is a no-op.
-_bubbles_compat_dir=""
 if ! sed --version >/dev/null 2>&1 && command -v gsed >/dev/null 2>&1; then
   _bubbles_compat_dir="$(mktemp -d)"
   ln -sf "$(command -v gsed)" "$_bubbles_compat_dir/sed"
@@ -138,7 +412,6 @@ fi
 if [[ -n "$_bubbles_compat_dir" ]]; then
   PATH="$_bubbles_compat_dir:$PATH"
   export PATH
-  trap 'rm -rf "$_bubbles_compat_dir"' EXIT
 fi
 
 # v5.3 / G1: install-mode detection. Many selftests below were authored
@@ -299,12 +572,30 @@ LIST_TIER_ONLY="false"
 #   CI        -> the full tier
 # So a regression guard that must block a push has to be in core_check_label().
 #
+# WHICH CALLER FORCES --no-changed-only (IMP-058 SCOPE-4 -- keep this accurate
+# too, for the same reason): release-check.sh and hooks/pre-push.sh's
+# full-validation branch both pass --no-changed-only explicitly, so neither
+# can silently inherit the bare-invocation default below. Anything else that
+# invokes this script with no flags gets that default.
+#
 # --changed-only  restrict to checks whose owned surface the working tree
 #                 actually touched. Ownership is DERIVED (a selftest owns the
 #                 script it tests), never a hand-maintained manifest -- that
 #                 enumeration habit is what COV-2 was.
 # --no-cache      ignore the hermetic-selftest result cache for this run.
-CHANGED_ONLY="false"
+#
+# IMP-058 SCOPE-4 / PERF-13: a bare working-tree invocation now defaults to
+# --changed-only, so the dev-loop cost tracks what actually changed instead of
+# re-running the whole suite on every call. This default must NEVER reach a
+# release path by accident, so it is a SEPARATE opt-in for release-critical
+# callers: BUBBLES_VALIDATE_CHANGED_ONLY=false (or the explicit
+# --no-changed-only flag) forces the full, unfiltered run regardless of this
+# default, and release-check.sh / hooks/pre-push.sh's full-validation branch
+# both set it explicitly rather than relying on flag absence. A caller that
+# passes neither the env var nor either flag gets the new default; an explicit
+# --changed-only or --no-changed-only always wins over both the env var and
+# this default.
+CHANGED_ONLY="${BUBBLES_VALIDATE_CHANGED_ONLY:-true}"
 # IMP-027 SCOPE-7: the result cache is OPT-IN (--cache), never on by default.
 #
 # The original CORRECTNESS objection is now closed. validate_cache_key() used to
@@ -353,15 +644,17 @@ for _arg in "$@"; do
       LIST_TIER_ONLY="true"
       ;;
     --changed-only) CHANGED_ONLY="true" ;;
+    --no-changed-only) CHANGED_ONLY="false" ;;
     --cache) CACHE_ENABLED="true" ;;
     --no-cache) CACHE_ENABLED="false" ;;
     --record-debt) RECORD_DEBT="true" ;;
     -h | --help)
-      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full] [--changed-only] [--cache] [--no-cache] [--record-debt]"
-      echo "  (no flag)        run every check (full tier — unchanged default)"
+      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full] [--changed-only|--no-changed-only] [--cache] [--no-cache] [--record-debt]"
+      echo "  (no flag)        full tier, --changed-only filtering (unless BUBBLES_VALIDATE_CHANGED_ONLY=false)"
       echo "  --tier=core      run only the fast structural/lint/generator subset"
       echo "  --list-tier=core dry-list what the core tier runs/skips, then exit 0"
-      echo "  --changed-only   run only checks whose DECLARED CLOSURE the tree touched"
+      echo "  --changed-only   run only checks whose DECLARED CLOSURE the tree touched (default for a bare working-tree invocation; set BUBBLES_VALIDATE_CHANGED_ONLY=false or pass --no-changed-only to force the full run)"
+      echo "  --no-changed-only  force the full, unfiltered run even under the new default — release-check.sh and pre-push.sh's full-validation branch both pass this explicitly"
       echo "  --cache          OPT IN to the closure-keyed result cache (off by default)"
       echo "  --no-cache       ignore the result cache"
       echo "  --record-debt    write each --changed-only deferral to the validation debt ledger"
@@ -385,8 +678,8 @@ done
 # tree whose verdict has just changed. Removing it first is what makes a receipt
 # describe only runs that reached an end.
 _fv_receipt_ready=false
-if [[ "$_fv_outermost" == "true" && "$_fv_executes_checks" == "true" && "$LIST_TIER_ONLY" == "false" ]] &&
-  [[ -f "$SCRIPT_DIR/validation-receipt.sh" ]]; then
+if [[ "$_fv_outermost" == "true" && "$_fv_executes_checks" == "true" && "$LIST_TIER_ONLY" == "false" ]] \
+  && [[ -f "$SCRIPT_DIR/validation-receipt.sh" ]]; then
   # Same defence as the validate-cache source above, and for the same reason:
   # `source` runs in THIS shell, so a sibling that merely exits would terminate
   # framework-validate mid-run — and because it exits 0, the run would look like
@@ -435,15 +728,26 @@ core_check_label() {
       *"guard-lib timeout fallback"*) # portable-ok: case pattern matching a check NAME, not a timeout invocation
       return 0
       ;;
-    # The one LIVE check in core: 14s, and the cheapest detector of a stale
-    # committed release manifest. Without it a stale manifest survives the core
-    # tier and only surfaces in a full validate, where one root cause presents
-    # as many unrelated-looking failures (interop, install provenance, trust doctor).
-    *"Release manifest freshness"*)
+    # The LIVE checks in core are cheap blockers: release-manifest freshness
+    # catches a stale generated artifact, while G128 enforces the authoritative
+    # host-session budget on every executing tier.
+    *"Release manifest freshness"* | *"Session cap guard (live, G128)"*)
       return 0
       ;;
     *) return 1 ;;
   esac
+}
+
+_fv_resolve_lsof_path() {
+  local _candidate=""
+
+  for _candidate in /usr/bin/lsof /usr/sbin/lsof; do
+    if [[ -x "$_candidate" ]]; then
+      printf '%s\n' "$_candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 run_check() {
@@ -472,6 +776,7 @@ run_check() {
   if [[ "${1:-}" == "bash" && "$#" -eq 2 ]]; then
     case "$(basename "${2:-}")" in
       *-selftest.sh) _script="$2" ;;
+      test_33_traceability_current_scope_universe.sh) _script="$2" ;;
     esac
   fi
 
@@ -513,6 +818,15 @@ run_check() {
   local _cache_key=""
   if [[ -n "$_script" && "$CACHE_ENABLED" == "true" ]] && declare -F validate_cache_key >/dev/null 2>&1; then
     _cache_key="$(validate_cache_key "$_script" "$FRAMEWORK_VERSION" 2>/dev/null || true)"
+    if [[ -z "$_cache_key" && "$(basename "$_script")" == "test_33_traceability_current_scope_universe.sh" ]] \
+      && declare -F vclosure_digest >/dev/null 2>&1; then
+      [[ -n "${VCLOSURE_LOADED:-}" ]] || vclosure_load >/dev/null 2>&1 || true
+      _cr02_check_id="$(validation_check_id_for "$_script")"
+      if [[ -n "$_cr02_check_id" ]]; then
+        _cr02_digest="$(vclosure_digest "$_cr02_check_id" "$FRAMEWORK_VERSION" 2>/dev/null || true)"
+        [[ -n "$_cr02_digest" ]] && _cache_key="$FRAMEWORK_VERSION-$_cr02_digest"
+      fi
+    fi
     if [[ -n "$_cache_key" ]] && validate_cache_get "$_cache_key"; then
       # IMP-047 S-E: REUSED is its own result, and it NEVER prints PASS. PASS
       # means this run executed the check and watched it succeed. Reuse means
@@ -520,8 +834,8 @@ run_check() {
       # weaker claim, and printing the stronger word for the weaker claim is how
       # a suite reports work it did not do.
       local _receipt="unknown"
-      declare -F validate_cache_receipt >/dev/null 2>&1 &&
-        _receipt="$(validate_cache_receipt "$_cache_key" 2>/dev/null || echo unknown)"
+      declare -F validate_cache_receipt >/dev/null 2>&1 \
+        && _receipt="$(validate_cache_receipt "$_cache_key" 2>/dev/null || echo unknown)"
       echo "==> $label"
       echo "REUSED: $label (receipt $_receipt — every declared closure input unchanged)"
       cache_hits=$((cache_hits + 1))
@@ -532,16 +846,310 @@ run_check() {
 
   echo "==> $label"
   local _started="$SECONDS"
-  local _rc=0 _cap=""
-  # Only CI captures output. Locally the invocation stays exactly as it was, so
-  # stdout/stderr separation and byte-for-byte output are preserved.
+  local _rc=0 _cap="" _ci_tree_rc=0 _ci_escape_detected=0
+  _fv_process_identity() {
+    local _identity_pid="$1" _proc_stat="" _proc_tail="" _proc_start=""
+    local _ps_path="" _ps_output="" _observed_pid="" _weekday=""
+    local _month="" _day="" _started_at="" _year="" _extra=""
+    local -a _proc_fields=()
+
+    [[ "$_identity_pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    if [[ -r "/proc/$_identity_pid/stat" ]]; then
+      IFS= builtin read -r _proc_stat <"/proc/$_identity_pid/stat" || return 1
+      _proc_tail="${_proc_stat##*) }"
+      [[ "$_proc_tail" != "$_proc_stat" ]] || return 1
+      IFS=' ' builtin read -r -a _proc_fields <<<"$_proc_tail"
+      [[ "${#_proc_fields[@]}" -gt 19 ]] || return 1
+      _proc_start="${_proc_fields[19]}"
+      [[ "$_proc_start" =~ ^[0-9]+$ ]] || return 1
+      printf 'proc-start:%s:%s\n' "$_identity_pid" "$_proc_start"
+      return 0
+    fi
+    if [[ -x /bin/ps ]]; then
+      _ps_path=/bin/ps
+    elif [[ -x /usr/bin/ps ]]; then
+      _ps_path=/usr/bin/ps
+    else
+      return 1
+    fi
+    _ps_output="$(LC_ALL=C "$_ps_path" -o pid= -o lstart= -p "$_identity_pid" 2>/dev/null)" || return 1
+    [[ -n "$_ps_output" && "$_ps_output" != *$'\n'* ]] || return 1
+    IFS=' ' builtin read -r _observed_pid _weekday _month _day _started_at _year _extra <<<"$_ps_output"
+    [[ "$_observed_pid" == "$_identity_pid" && -n "$_weekday" \
+      && -n "$_month" && -n "$_day" && -n "$_started_at" \
+      && -n "$_year" && -z "$_extra" ]] || return 1
+    printf 'ps-lstart:%s:%s:%s:%s:%s:%s\n' \
+      "$_observed_pid" "$_weekday" "$_month" "$_day" "$_started_at" "$_year"
+  }
+  _fv_observe_capture_holders() {
+    local _observer_label="$1"
+    local _observer_path="" _observer_output="" _observer_status=0 _observer_pid=""
+    shift
+
+    if ! _observer_path="$(_fv_resolve_lsof_path)"; then
+      printf 'ERROR: detached descriptor observer lsof is unavailable for %s\n' \
+        "$_observer_label" >&2
+      return 2
+    fi
+    if _observer_output="$(builtin command "$_observer_path" -t "$@" 2>&1)"; then
+      _observer_status=0
+    else
+      _observer_status=$?
+    fi
+    # lsof reports a clean no-match as status 1 with no output on BSD and GNU
+    # implementations. Any output in that state is an observation failure.
+    if [[ "$_observer_status" -eq 1 && -z "$_observer_output" ]]; then
+      return 0
+    fi
+    if [[ "$_observer_status" -ne 0 ]]; then
+      printf 'ERROR: detached descriptor observer lsof failed with status %s for %s\n' \
+        "$_observer_status" "$_observer_label" >&2
+      return 2
+    fi
+    [[ -n "$_observer_output" ]] || return 0
+    while IFS= read -r _observer_pid; do
+      if [[ ! "$_observer_pid" =~ ^[1-9][0-9]*$ ]]; then
+        printf 'ERROR: detached descriptor observer lsof returned malformed output for %s\n' \
+          "$_observer_label" >&2
+        return 2
+      fi
+    done <<<"$_observer_output"
+    printf '%s' "$_observer_output"
+  }
+  _fv_capture_holder_matches() {
+    local _holder_label="$1" _holder_pid="$2" _holder_cap="$3"
+    local _expected_identity="${4:-}" _identity_before="" _identity_after=""
+    local _holder_observation=""
+
+    _capture_holder_verified_identity=""
+    if ! _identity_before="$(_fv_process_identity "$_holder_pid")"; then
+      if builtin kill -0 "$_holder_pid" 2>/dev/null; then
+        printf 'ERROR: could not establish stable process identity for detached holder %s in %s\n' \
+          "$_holder_pid" "$_holder_label" >&2
+        return 2
+      fi
+      return 1
+    fi
+    [[ -z "$_expected_identity" || "$_identity_before" == "$_expected_identity" ]] || return 1
+    if ! _holder_observation="$(_fv_observe_capture_holders \
+      "$_holder_label" -a -p "$_holder_pid" "$_holder_cap")"; then
+      return 2
+    fi
+    [[ "$_holder_observation" == "$_holder_pid" ]] || return 1
+    if ! _identity_after="$(_fv_process_identity "$_holder_pid")"; then
+      if builtin kill -0 "$_holder_pid" 2>/dev/null; then
+        printf 'ERROR: could not revalidate stable process identity for detached holder %s in %s\n' \
+          "$_holder_pid" "$_holder_label" >&2
+        return 2
+      fi
+      return 1
+    fi
+    [[ "$_identity_after" == "$_identity_before" ]] || return 1
+    [[ -z "$_expected_identity" || "$_identity_after" == "$_expected_identity" ]] || return 1
+    _capture_holder_verified_identity="$_identity_after"
+  }
+  # Only CI captures output. A private regular file is deliberate: a pipeline
+  # reader waits for EOF from every inherited writer, so an arbitrary orphaned
+  # descendant can deadlock the validator after the direct check has returned.
+  # The regular file lets us wait for the direct command, preserve its exact
+  # status, then replay every line captured by that point without making
+  # completion depend on descendant-held descriptors. Locally the invocation
+  # stays exactly as it was, preserving stdout/stderr separation.
   if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-    _cap="$(mktemp)"
-    if "$@" 2>&1 | tee "$_cap"; then _rc=0; else _rc=$?; fi
+    if _cap="$(mktemp "${TMPDIR:-/tmp}/bubbles-framework-validate-capture.XXXXXXXX")"; then
+      # Force the direct check into its own process group. Do not depend on the
+      # caller's job-control state: enable monitor mode for the launch, then
+      # restore it immediately. With a single-command background job, $! is
+      # both the direct child PID and the owned process-group ID, so negative
+      # signals below can never target this validator's process group.
+      local _monitor_was_enabled=0 _check_pid="" _termination_waited=0
+      local _capture_holders="" _capture_holder_pid="" _capture_holder_count=0
+      local _capture_observer_failed=0 _capture_holder_match_status=0
+      local _capture_cleanup_round=0 _capture_cleanup_pending=0
+      local _capture_holder_verified_identity=""
+      local -A _capture_holder_identities=()
+      [[ "$-" == *m* ]] && _monitor_was_enabled=1
+      if set -m; then
+        "$@" >"$_cap" 2>&1 &
+        _check_pid=$!
+        if [[ "$_monitor_was_enabled" -eq 0 ]] && ! set +m; then
+          printf 'ERROR: could not restore job-control state after launching %s\n' "$label" >&2
+          _ci_tree_rc=1
+        fi
+
+        # Wait for the direct command first and retain its exact status. A
+        # completed parent can leave descendants alive in the same owned group,
+        # so close that tree before replaying the regular-file capture.
+        if wait "$_check_pid" 2>/dev/null; then _rc=0; else _rc=$?; fi
+        if [[ "$_check_pid" =~ ^[1-9][0-9]*$ ]] \
+          && [[ "$_check_pid" != "$$" ]] \
+          && kill -0 -- "-$_check_pid" 2>/dev/null; then
+          kill -TERM -- "-$_check_pid" 2>/dev/null || true
+          _termination_waited=0
+          while kill -0 -- "-$_check_pid" 2>/dev/null \
+            && [[ "$_termination_waited" -lt 3 ]]; do
+            sleep 1
+            _termination_waited=$((_termination_waited + 1))
+          done
+          if kill -0 -- "-$_check_pid" 2>/dev/null; then
+            kill -KILL -- "-$_check_pid" 2>/dev/null || true
+            _termination_waited=0
+            while kill -0 -- "-$_check_pid" 2>/dev/null \
+              && [[ "$_termination_waited" -lt 3 ]]; do
+              sleep 1
+              _termination_waited=$((_termination_waited + 1))
+            done
+          fi
+          # The direct child was already reaped above. A second wait is the
+          # only portable reap available if Bash still retained job state.
+          wait "$_check_pid" 2>/dev/null || true
+          if kill -0 -- "-$_check_pid" 2>/dev/null; then
+            printf 'ERROR: process group %s for %s survived bounded TERM/KILL cleanup\n' \
+              "$_check_pid" "$label" >&2
+            _ci_tree_rc=1
+          fi
+        fi
+
+        # A descendant can call setsid(2) and leave the owned process group
+        # while retaining both the validator lock and this check's private
+        # capture descriptor. The random capture path is a per-check ownership
+        # witness. Bind each observed PID to its process start identity, then
+        # revalidate that identity around a targeted descriptor observation
+        # immediately before bounded TERM and KILL attempts.
+        if _capture_holders="$(_fv_observe_capture_holders "$label" "$_cap")"; then
+          while IFS= read -r _capture_holder_pid; do
+            [[ "$_capture_holder_pid" =~ ^[1-9][0-9]*$ ]] || continue
+            [[ "$_capture_holder_pid" != "$$" && "$_capture_holder_pid" != "$_check_pid" ]] || continue
+            _capture_holder_match_status=0
+            if _fv_capture_holder_matches "$label" "$_capture_holder_pid" "$_cap"; then
+              _capture_holder_identities["$_capture_holder_pid"]="$_capture_holder_verified_identity"
+              _capture_holder_count=$((_capture_holder_count + 1))
+              if _fv_capture_holder_matches "$label" "$_capture_holder_pid" "$_cap" \
+                "${_capture_holder_identities[$_capture_holder_pid]}"; then
+                kill -TERM "$_capture_holder_pid" 2>/dev/null || true
+              else
+                _capture_holder_match_status=$?
+                if [[ "$_capture_holder_match_status" -eq 2 ]]; then
+                  _capture_observer_failed=1
+                  _ci_tree_rc=1
+                  break
+                fi
+              fi
+            else
+              _capture_holder_match_status=$?
+              if [[ "$_capture_holder_match_status" -eq 2 ]]; then
+                _capture_observer_failed=1
+                _ci_tree_rc=1
+                break
+              fi
+            fi
+          done <<<"$_capture_holders"
+          if [[ "$_capture_observer_failed" -eq 0 && "$_capture_holder_count" -gt 0 ]]; then
+            _ci_escape_detected=1
+            _ci_tree_rc=1
+            _capture_cleanup_round=0
+            while [[ "$_capture_cleanup_round" -lt 30 ]]; do
+              _capture_cleanup_pending=0
+              while IFS= read -r _capture_holder_pid; do
+                [[ "$_capture_holder_pid" =~ ^[1-9][0-9]*$ ]] || continue
+                [[ -n "${_capture_holder_identities[$_capture_holder_pid]:-}" ]] || continue
+                _capture_holder_match_status=0
+                if _fv_capture_holder_matches "$label" "$_capture_holder_pid" "$_cap" \
+                  "${_capture_holder_identities[$_capture_holder_pid]}"; then
+                  _capture_cleanup_pending=1
+                else
+                  _capture_holder_match_status=$?
+                  if [[ "$_capture_holder_match_status" -eq 2 ]]; then
+                    _capture_observer_failed=1
+                    _capture_cleanup_pending=1
+                    _ci_tree_rc=1
+                    break
+                  fi
+                fi
+              done <<<"$_capture_holders"
+              [[ "$_capture_observer_failed" -eq 0 ]] || break
+              [[ "$_capture_cleanup_pending" -eq 1 ]] || break
+              sleep 0.1
+              _capture_cleanup_round=$((_capture_cleanup_round + 1))
+            done
+            if [[ "$_capture_observer_failed" -eq 0 ]]; then
+              while IFS= read -r _capture_holder_pid; do
+                [[ "$_capture_holder_pid" =~ ^[1-9][0-9]*$ ]] || continue
+                [[ -n "${_capture_holder_identities[$_capture_holder_pid]:-}" ]] || continue
+                _capture_holder_match_status=0
+                if _fv_capture_holder_matches "$label" "$_capture_holder_pid" "$_cap" \
+                  "${_capture_holder_identities[$_capture_holder_pid]}"; then
+                  kill -KILL "$_capture_holder_pid" 2>/dev/null || true
+                else
+                  _capture_holder_match_status=$?
+                  if [[ "$_capture_holder_match_status" -eq 2 ]]; then
+                    _capture_observer_failed=1
+                    _ci_tree_rc=1
+                    break
+                  fi
+                fi
+              done <<<"$_capture_holders"
+            fi
+            if [[ "$_capture_observer_failed" -eq 0 ]]; then
+              _capture_cleanup_round=0
+              while [[ "$_capture_cleanup_round" -lt 30 ]]; do
+                _capture_cleanup_pending=0
+                while IFS= read -r _capture_holder_pid; do
+                  [[ "$_capture_holder_pid" =~ ^[1-9][0-9]*$ ]] || continue
+                  [[ -n "${_capture_holder_identities[$_capture_holder_pid]:-}" ]] || continue
+                  _capture_holder_match_status=0
+                  if _fv_capture_holder_matches "$label" "$_capture_holder_pid" "$_cap" \
+                    "${_capture_holder_identities[$_capture_holder_pid]}"; then
+                    _capture_cleanup_pending=1
+                  else
+                    _capture_holder_match_status=$?
+                    if [[ "$_capture_holder_match_status" -eq 2 ]]; then
+                      _capture_observer_failed=1
+                      _capture_cleanup_pending=1
+                      _ci_tree_rc=1
+                      break
+                    fi
+                  fi
+                done <<<"$_capture_holders"
+                [[ "$_capture_observer_failed" -eq 0 ]] || break
+                [[ "$_capture_cleanup_pending" -eq 1 ]] || break
+                sleep 0.1
+                _capture_cleanup_round=$((_capture_cleanup_round + 1))
+              done
+            fi
+            if [[ "$_capture_observer_failed" -eq 1 ]]; then
+              printf 'ERROR: detached descriptor observation failed during bounded cleanup for %s\n' \
+                "$label" >&2
+            elif [[ "$_capture_cleanup_pending" -eq 1 ]]; then
+              printf 'ERROR: %s detached process(es) for %s retained the private CI capture after bounded cleanup\n' \
+                "$_capture_holder_count" "$label" >&2
+            else
+              printf 'ERROR: %s detached process(es) escaped %s; bounded cleanup completed and validation is refused\n' \
+                "$_capture_holder_count" "$label" >&2
+            fi
+          fi
+        else
+          _capture_observer_failed=1
+          _ci_tree_rc=1
+        fi
+      else
+        printf 'ERROR: could not create a distinct process group for %s\n' "$label" >&2
+        _rc=1
+        _ci_tree_rc=1
+      fi
+      if ! cat "$_cap"; then
+        echo "ERROR: could not replay the captured output for $label" >&2
+        _ci_tree_rc=1
+      fi
+    else
+      echo "ERROR: could not create a private CI capture file for $label" >&2
+      _rc=1
+      _ci_tree_rc=1
+    fi
   else
     if "$@"; then _rc=0; else _rc=$?; fi
   fi
-  if [[ "$_rc" -eq 0 ]]; then
+  if [[ "$_rc" -eq 0 && "$_ci_tree_rc" -eq 0 ]]; then
     echo "PASS: $label"
     [[ -n "$_cache_key" ]] && validate_cache_put "$_cache_key" 0
   else
@@ -563,7 +1171,27 @@ run_check() {
   [[ -n "$_cap" ]] && rm -f "$_cap"
   check_durations+=("$((SECONDS - _started))|$label")
   echo
+  if [[ "$_ci_escape_detected" -eq 1 ]]; then
+    return 1
+  fi
 }
+
+# Focused, internal harness for the framework-validation wiring selftest. This
+# deliberately enters through the production run_check implementation above,
+# including its cache lookup/write behavior, but exits before the normal
+# schedule so the wiring selftest can prove fail-closed and cache semantics
+# without recursively scheduling itself or running the full framework suite.
+if [[ -n "${BUBBLES_FRAMEWORK_VALIDATE_READER_PROBE:-}" ]]; then
+  _reader_probe_script="$SCRIPT_DIR/scenario-reference-reader-"'selftest.sh'
+  run_check "Scenario reference reader selftest (IMP-040 / COV-8)" \
+    bash "$_reader_probe_script"
+  if [[ "$failures" -ne 0 ]]; then
+    printf 'framework-validate reader probe: FAILED (%s failure(s))\n' "$failures" >&2
+    exit 1
+  fi
+  printf 'framework-validate reader probe: PASSED\n'
+  exit 0
+fi
 
 # Wrapper for selftests that only make sense when run inside the framework
 # source tree (those that invoke install.sh, walk VERSION, or assert the
@@ -585,6 +1213,22 @@ run_check_self_only() {
   fi
   run_check "$label" "$@"
 }
+
+# Focused CR-02 harness. Like the reader probe above, this enters through the
+# production source-only wrapper and run_check/cache implementation, then exits
+# before the normal schedule. The wiring selftest can therefore prove blocking
+# and cache behavior without recursively invoking itself or the full suite.
+if [[ -n "${BUBBLES_FRAMEWORK_VALIDATE_CR02_PROBE:-}" ]]; then
+  _cr02_probe_script="$REPO_ROOT/tests/regression/test_33_traceability_current_scope_"'universe.sh'
+  run_check_self_only "CR-02 traceability current-scope universe regression" \
+    bash "$_cr02_probe_script"
+  if [[ "$failures" -ne 0 ]]; then
+    printf 'framework-validate CR-02 probe: FAILED (%s failure(s))\n' "$failures" >&2
+    exit 1
+  fi
+  printf 'framework-validate CR-02 probe: PASSED\n'
+  exit 0
+fi
 
 echo "Bubbles Framework Validation"
 echo "Repository: $REPO_ROOT"
@@ -613,8 +1257,8 @@ echo
 # never displaced. The import list duplicates dependency-posture.sh's declared
 # set; that is a deliberate two-line duplication rather than a second source of
 # truth, because resolving it through the helper would mean sourcing it.
-if [[ -f "$SCRIPT_DIR/python-env.sh" ]] &&
-  ! python3 -c 'import yaml, jsonschema' >/dev/null 2>&1; then
+if [[ -f "$SCRIPT_DIR/python-env.sh" ]] \
+  && ! python3 -c 'import yaml, jsonschema' >/dev/null 2>&1; then
   bubbles_managed_python="$(bash "$SCRIPT_DIR/python-env.sh" --path 2>/dev/null || true)"
   if [[ -n "$bubbles_managed_python" && -x "$bubbles_managed_python" ]]; then
     PATH="$(dirname "$bubbles_managed_python"):$PATH"
@@ -795,6 +1439,16 @@ fi
 if [[ -x "$SCRIPT_DIR/generate-gate-enforcement.sh" ]]; then
   run_check_self_only "Generated gate-enforcement block current" bash "$SCRIPT_DIR/generate-gate-enforcement.sh" --check
 fi
+# IMP-058 SCOPE-6 (REG-23): the derived block above can drift stale without
+# failing anything if a NEW gate starts disagreeing with its own declaration
+# -- this ratchet is what actually refuses that, rather than merely detecting
+# that the block needs regenerating.
+if [[ -x "$SCRIPT_DIR/gate-enforcement-agreement-ratchet-selftest.sh" ]]; then
+  run_check "Gate enforcement agreement ratchet selftest (IMP-058 SCOPE-6)" bash "$SCRIPT_DIR/gate-enforcement-agreement-ratchet-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/gate-enforcement-agreement-ratchet.sh" ]]; then
+  run_check_self_only "Gate enforcement agreement ratchet" bash "$SCRIPT_DIR/gate-enforcement-agreement-ratchet.sh"
+fi
 # IMP-027 SCOPE-11: a modelCompensation gate with no recorded retirement
 # criterion carries unbounded cost in time — nobody can say what would have to
 # be true to turn it off, so it is carried forever by default. `lint` keeps
@@ -804,6 +1458,17 @@ if [[ -x "$SCRIPT_DIR/gate-retirement-selftest.sh" ]]; then
 fi
 if [[ -x "$SCRIPT_DIR/gate-retirement.sh" ]]; then
   run_check_self_only "Gate retirement criteria recorded (IMP-027 SCOPE-11)" bash "$SCRIPT_DIR/gate-retirement.sh" lint
+fi
+# IMP-058 SCOPE-3 / COV-24: a preventionEvidence criterion is only honest if
+# the gate carrying it can actually accumulate the telemetry it depends on.
+# Refuses the exact defect class this scope found and fixed (a gate's own id
+# missing from its pass/fail message text), without requiring every
+# modelCompensation gate to be telemetry-capable today.
+if [[ -x "$SCRIPT_DIR/gate-telemetry-capability-lint-selftest.sh" ]]; then
+  run_check "Gate telemetry capability lint selftest (IMP-058 SCOPE-3)" bash "$SCRIPT_DIR/gate-telemetry-capability-lint-selftest.sh"
+fi
+if [[ -x "$SCRIPT_DIR/gate-telemetry-capability-lint.sh" ]]; then
+  run_check_self_only "Gate telemetry capability (IMP-058 SCOPE-3)" bash "$SCRIPT_DIR/gate-telemetry-capability-lint.sh"
 fi
 # IMP-027 SCOPE-4 / SEC-3: G034 was a businessInvariant gate with no enforcer
 # and no agent reference — its entire enforcement was "appears in a mode's
@@ -916,6 +1581,10 @@ run_check "Work-boundary resolver selftest (IMP-100 Phase 4 R6)" bash "$SCRIPT_D
 run_check "Goal-contract selftest (IMP-038 SCOPE-1 / GF-1)" bash "$SCRIPT_DIR/goal-contract-selftest.sh"
 run_check "Goal-fidelity guard selftest (IMP-038 SCOPE-6 / G134)" bash "$SCRIPT_DIR/goal-fidelity-guard-selftest.sh"
 run_check "Goal-boundary receipt selftest (IMP-041 SCOPE-3 / GF-7)" bash "$SCRIPT_DIR/goal-boundary-receipt-selftest.sh"
+run_check "Mutable-dispatch authorization selftest (IMP-056 SCOPE-3)" bash "$SCRIPT_DIR/mutable-dispatch-authorization-selftest.sh"
+run_check "Mutable-dispatch gateway selftest (IMP-056 SCOPE-4)" bash "$SCRIPT_DIR/mutable-dispatch-gateway-selftest.sh"
+run_check_self_only "Mutable-dispatch caller-coverage lint (live, IMP-056 SCOPE-6)" bash "$SCRIPT_DIR/mutable-dispatch-caller-coverage-lint.sh" --repo-root "$REPO_ROOT"
+run_check "Mutable-dispatch caller-coverage lint selftest (IMP-056 SCOPE-6)" bash "$SCRIPT_DIR/mutable-dispatch-caller-coverage-lint-selftest.sh"
 run_check "Expansion-approval selftest (IMP-041 SCOPE-4 / GF-10)" bash "$SCRIPT_DIR/expansion-approval-selftest.sh"
 run_check "Convergence-materiality selftest (IMP-041 SCOPE-7 / GF-13)" bash "$SCRIPT_DIR/convergence-materiality-selftest.sh"
 run_check "IMP-041 evaluation corpus (SCOPE-8 / COV-13)" bash "$SCRIPT_DIR/imp041-evaluation-corpus.sh"
@@ -992,12 +1661,33 @@ run_check "Output-policy coherence selftest (IMP-039 / EV-7)" bash "$SCRIPT_DIR/
 run_check "Usage-adapter contract selftest (IMP-039 / COST-4)" bash "$SCRIPT_DIR/usage-adapter-contract-selftest.sh"
 run_check "Test-inventory adapter contract selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/test-inventory-adapter-contract-selftest.sh"
 run_check "Scenario linked-test resolution selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/scenario-test-resolve-selftest.sh"
+run_check "Scenario reference reader selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/scenario-reference-reader-selftest.sh"
+run_check "Scenario manifest v2 schema selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/scenario-manifest-v2-schema-selftest.sh"
+run_check "Scenario manifest migration selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/scenario-manifest-migrate-selftest.sh"
+run_check "YAML schema dispatch selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/yaml-schema-validate-selftest.sh"
+run_check "Execution-control store selftest (IMP-054/055 / ECF-01)" bash "$SCRIPT_DIR/execution-control-selftest.sh"
+run_check "Measured-budget runtime selftest (IMP-055 / MBE-01)" python3 "$SCRIPT_DIR/measured-budget-runtime-selftest.py"
+run_check "Research runtime selftest (IMP-054 / RESEARCH-01)" python3 "$SCRIPT_DIR/research-runtime-selftest.py"
+run_check "Research adapter contract selftest (IMP-054 / RESEARCH-02)" python3 "$SCRIPT_DIR/research-adapter-contract-selftest.py"
+run_check "Usage adapter v2 selftest (IMP-055 / USAGE-02)" bash "$SCRIPT_DIR/usage-adapter-v2-selftest.sh"
+run_check "Admission contract selftest (IMP-055 / ADMISSION-01)" bash "$SCRIPT_DIR/admission-contract-selftest.sh"
+run_check "Research and admission CLI integration selftest (IMP-054/055)" bash "$SCRIPT_DIR/research-admission-cli-selftest.sh"
+run_check "Framework validation wiring selftest (IMP-040 / COV-8)" bash "$SCRIPT_DIR/framework-validation-wiring-selftest.sh"
 run_check "Report-section contract selftest (IMP-047 / S-B)" bash "$SCRIPT_DIR/report-sections-selftest.sh"
 # Framework-source-only: check P3 requires the repo-root BUGS.md, which the
 # release manifest classifies as neither managed nor source-only-shipped, so it
 # does not exist in an installed tree. Scheduling it as portable made every
 # downstream install fail a check about a file it can never have.
 run_check_self_only "Bug-packet contract selftest (IMP-047 / S-B)" bash "$SCRIPT_DIR/bug-packet-selftest.sh"
+# Framework-source-only for the same reason, one directory over: check P1 builds
+# every behavioural fixture from a SHIPPED bugs/BUG-*/state.json that declares
+# the compact form. The framework's own bugs/ tree is a source-repo artifact and
+# is never installed, so downstream the selftest refuses at P1 with "no
+# bugs/BUG-*/state.json declares the compact form" -- a verdict about a fixture
+# the installed tree cannot have, not about the guard behaviour under test.
+# Wiring it here also removes it from the discovered sweep, which has only
+# run_check and therefore no way to express this.
+run_check_self_only "Compact-packet obligation basis selftest (BUG-042)" bash "$SCRIPT_DIR/compact-obligation-basis-selftest.sh"
 # IMP-047 S-E. These four cover the apparatus that decides what a run may SKIP:
 # the derived closure map, its consumer, the debt ledger that records every
 # deferral, and the batch executor that settles them. Each one removes work from
@@ -1079,12 +1769,271 @@ run_check "Required-specialists registry selftest (IMP-042 SCOPE-13)" bash "$SCR
 run_check_self_only "BUG-009 planning audit contract regression" bash "$REPO_ROOT/tests/regression/test_23_planning_audit_contract.sh"
 run_check_self_only "BUG-013 sensitive client storage regression" bash "$REPO_ROOT/tests/regression/test_24_g028_sensitive_client_storage.sh"
 run_check_self_only "BUG-018 traceability Test Plan heading-depth regression" bash "$REPO_ROOT/tests/regression/test_25_traceability_test_plan_heading_depth.sh"
+run_check_self_only "CR-02 traceability current-scope universe regression" bash "$REPO_ROOT/tests/regression/test_33_traceability_current_scope_universe.sh"
 run_check_self_only "BUG-019 state-transition compound MJS test-path regression" bash "$REPO_ROOT/tests/regression/test_26_state_transition_spec_mjs_path.sh"
 run_check_self_only "BUG-021 portable framework deadline regression" bash "$REPO_ROOT/tests/regression/test_28_framework_validate_portable_timeout.sh"
 run_check_self_only "BUG-029 human acceptance terminal regression (G136)" bash "$REPO_ROOT/tests/regression/test_35_human_acceptance_terminal.sh"
+run_check_self_only "BUG-045 framework-validate tier-lock lifecycle regression" bash "$REPO_ROOT/tests/regression/test_36_framework_validate_tier_lock_lifecycle.sh"
 run_check "Convergence cap guard selftest" bash "$SCRIPT_DIR/convergence-cap-guard-selftest.sh"
 run_check "Session cap guard selftest (G128)" bash "$SCRIPT_DIR/session-cap-guard-selftest.sh"
-run_check "Session cap guard (live, G128)" env BUBBLES_REPO_ROOT="$REPO_ROOT" bash "$SCRIPT_DIR/session-cap-guard.sh" --quiet
+fv_run_stable_session_guard() {
+  local output_file="$1"
+  shift
+  local state_helper="$SCRIPT_DIR/session-state-io.py"
+  local python_bin=""
+  local source_path="$SCRIPT_DIR/session-cap-guard.sh"
+  local capture_dir=""
+  local before_path=""
+  local preflight_path=""
+  local after_path=""
+  local shim_dir=""
+  local dirname_shim=""
+  local real_dirname=""
+  local before_meta=""
+  local preflight_meta=""
+  local after_meta=""
+  local child_rc=9
+
+  python_bin="$(command -v python3 2>/dev/null || true)"
+  real_dirname="$(command -v dirname 2>/dev/null || true)"
+  [[ -n "$python_bin" && -n "$real_dirname" ]] || return 9
+  [[ -f "$state_helper" && ! -L "$state_helper" ]] || return 9
+  [[ -f "$source_path" && ! -L "$source_path" && -x "$source_path" ]] || return 9
+  [[ -f "$output_file" && ! -L "$output_file" ]] || return 9
+
+  capture_dir="$(mktemp -d "${TMPDIR:-/tmp}/bubbles-stable-guard.XXXXXX" 2>/dev/null || true)"
+  [[ -n "$capture_dir" && -d "$capture_dir" ]] || return 9
+  before_path="$capture_dir/guard.before.sh"
+  preflight_path="$capture_dir/guard.preflight.sh"
+  after_path="$capture_dir/guard.after.sh"
+  shim_dir="$capture_dir/bin"
+  dirname_shim="$shim_dir/dirname"
+  mkdir "$shim_dir" || {
+    rm -rf "$capture_dir"
+    return 9
+  }
+
+  if ! before_meta="$("$python_bin" "$state_helper" capture \
+      --root "$SCRIPT_DIR" --relative-path 'session-cap-guard.sh' \
+      --destination "$before_path" 2>/dev/null)" ||
+    [[ ! -x "$source_path" || -L "$source_path" ]] ||
+    ! preflight_meta="$("$python_bin" "$state_helper" capture \
+      --root "$SCRIPT_DIR" --relative-path 'session-cap-guard.sh' \
+      --destination "$preflight_path" 2>/dev/null)" ||
+    [[ ! -x "$source_path" || -L "$source_path" ]] ||
+    ! jq -e --argjson other "$preflight_meta" '
+      type == "object" and .status == "captured"
+      and ($other | type == "object" and .status == "captured")
+      and .revision == $other.revision
+      and .device == $other.device
+      and .inode == $other.inode
+    ' <<<"$before_meta" >/dev/null 2>&1; then
+    rm -rf "$capture_dir"
+    return 9
+  fi
+
+  cat >"$dirname_shim" <<'EOF'
+#!/bin/sh
+if [ "$#" -eq 1 ] && [ "$1" = "$BUBBLES_STABLE_SCRIPT_PATH" ]; then
+  printf '.\n'
+else
+  exec "$BUBBLES_STABLE_REAL_DIRNAME" "$@"
+fi
+EOF
+  chmod 700 "$dirname_shim" || {
+    rm -rf "$capture_dir"
+    return 9
+  }
+
+  (
+    cd "$SCRIPT_DIR" || exit 9
+    PATH="$shim_dir:$PATH" \
+      BUBBLES_STABLE_SCRIPT_PATH="$before_path" \
+      BUBBLES_STABLE_REAL_DIRNAME="$real_dirname" \
+      BUBBLES_REPO_ROOT="$REPO_ROOT" \
+      "$BASH" "$before_path" "$@"
+  ) >"$output_file" 2>&1
+  child_rc=$?
+
+  if ! after_meta="$("$python_bin" "$state_helper" capture \
+      --root "$SCRIPT_DIR" --relative-path 'session-cap-guard.sh' \
+      --destination "$after_path" 2>/dev/null)" ||
+    [[ ! -x "$source_path" || -L "$source_path" ]] ||
+    ! jq -e --argjson other "$after_meta" '
+      type == "object" and .status == "captured"
+      and ($other | type == "object" and .status == "captured")
+      and .revision == $other.revision
+      and .device == $other.device
+      and .inode == $other.inode
+    ' <<<"$before_meta" >/dev/null 2>&1; then
+    rm -rf "$capture_dir"
+    return 9
+  fi
+
+  rm -rf "$capture_dir"
+  return "$child_rc"
+}
+
+fv_parse_session_guard_result() {
+  local process_exit="$1"
+  local session_id="$2"
+  local output_file="$3"
+  local python_bin=""
+
+  python_bin="$(command -v python3 2>/dev/null || true)"
+  [[ -n "$python_bin" && -f "$output_file" && ! -L "$output_file" ]] || return 9
+  "$python_bin" -c '
+import json
+import re
+import sys
+from pathlib import Path
+
+process_exit_raw, session_id, output_path = sys.argv[1:]
+try:
+    process_exit = int(process_exit_raw)
+    raw = Path(output_path).read_bytes()
+    if b"\x00" in raw or b"\r" in raw:
+        raise ValueError
+    text = raw.decode("utf-8")
+    candidates = [line for line in text.split("\n") if line.startswith("G128 status")]
+    if len(candidates) != 1:
+        raise ValueError
+    json_string = "\"(?:[^\"\\\\]|\\\\.)*\""
+    pattern = re.compile(
+        rf"^G128 status=(?P<status>[A-Z][A-Z-]*) exit=(?P<exit>[0-9]+)"
+        rf"(?: session=(?P<session>{json_string}))?"
+        r"(?: reason=(?P<reason>[a-z0-9][a-z0-9-]*))?$"
+    )
+    matrix = {0: {"NO-ACTIVE-BUDGET", "PASS", "SOFT-BOUNDARY"}, 1: {"BREACH"}, 2: {"INPUT-ERROR"}}
+    match = pattern.fullmatch(candidates[0])
+    if match is None:
+        raise ValueError
+    status = match.group("status")
+    declared_exit = int(match.group("exit"))
+    if declared_exit != process_exit or status not in matrix.get(declared_exit, set()):
+        raise ValueError
+    session_token = match.group("session")
+    if session_token is not None:
+        if json.loads(session_token) != session_id:
+            raise ValueError
+    elif status not in {"NO-ACTIVE-BUDGET", "INPUT-ERROR"}:
+        raise ValueError
+    reason = match.group("reason")
+    if (status in {"NO-ACTIVE-BUDGET", "INPUT-ERROR"}) != (reason is not None):
+        raise ValueError
+except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError):
+    sys.exit(2)
+print(json.dumps({"exit": declared_exit, "status": status}, separators=(",", ":"), sort_keys=True))
+' "$process_exit" "$session_id" "$output_file"
+}
+
+run_live_session_cap_guard() {
+  local session_id="${BUBBLES_SESSION_ID:-}"
+  local control_file="${BUBBLES_SESSION_CONTROL_FILE:-}"
+  local packet_file="${BUBBLES_BINDING_PACKET_FILE:-}"
+  local scenario_file="${BUBBLES_BINDING_SCENARIO_FILE:-}"
+  local node_id="${BUBBLES_BINDING_NODE_ID:-}"
+  local validator="$SCRIPT_DIR/repository-binding.sh"
+  local state_helper="$SCRIPT_DIR/session-state-io.py"
+  local python_bin=""
+  local validator_output=""
+  local output_file=""
+  local parsed=""
+  local status=""
+  local reason=""
+  local rc=2
+  local validator_args=()
+
+  if [[ -z "$session_id" || -z "$control_file" || -z "$packet_file" ]]; then
+    printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=invalid-authority\n'
+    return 2
+  fi
+  if [[ -n "$scenario_file" || -n "$node_id" ]]; then
+    if [[ -z "$scenario_file" || -z "$node_id" ]]; then
+      printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=invalid-authority\n'
+      return 2
+    fi
+  fi
+  if [[ ! -f "$validator" || -L "$validator" || ! -x "$validator" ]]; then
+    printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=invalid-authority\n'
+    return 2
+  fi
+
+  validator_args=(validate-packet
+    --session-id "$session_id"
+    --session-control-file "$control_file"
+    --packet-file "$packet_file")
+  if [[ -n "$scenario_file" ]]; then
+    validator_args+=(--scenario-file "$scenario_file" --node-id "$node_id")
+  fi
+  validator_args+=(--emit-redacted-projection)
+
+  if ! validator_output="$("$BASH" "$validator" "${validator_args[@]}" 2>&1)"; then
+    printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=invalid-authority\n'
+    return 2
+  fi
+  case "$validator_output" in
+    *$'\n'*)
+      printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=invalid-authority\n'
+      return 2
+      ;;
+  esac
+  if ! jq -e --arg sessionId "$session_id" '
+      type == "object"
+      and .repositoryRoot == "<redacted-local-root>"
+      and .repositoryResolution.sessionId == $sessionId
+      and .repositoryResolution.pathVisibility == "redacted"
+      and .repositoryResolution.actionable == false
+    ' <<<"$validator_output" >/dev/null 2>&1; then
+    printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=invalid-authority\n'
+    return 2
+  fi
+
+  python_bin="$(command -v python3 2>/dev/null || true)"
+  if [[ -z "$python_bin" || ! -f "$state_helper" || -L "$state_helper" ]]; then
+    printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=guard-unavailable\n'
+    return 2
+  fi
+
+  output_file="$(mktemp "${TMPDIR:-/tmp}/bubbles-framework-g128-output.XXXXXX")"
+  chmod 600 "$output_file"
+  if fv_run_stable_session_guard "$output_file" \
+      --session-id "$session_id" --quiet; then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  if ! parsed="$(fv_parse_session_guard_result "$rc" \
+      "$session_id" "$output_file" 2>/dev/null)"; then
+    reason="invalid-child-result"
+    if [[ "$rc" -gt 2 ]]; then
+      reason="guard-unavailable"
+    fi
+    printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=caller reason=%s\n' "$reason"
+    rm -f "$output_file"
+    return 2
+  fi
+
+  cat "$output_file"
+  rm -f "$output_file"
+  status="$(jq -r '.status' <<<"$parsed")"
+  case "$status" in
+    NO-ACTIVE-BUDGET | PASS | SOFT-BOUNDARY)
+      printf 'Framework check PASS G128 status=%s exit=0 source=guard\n' "$status"
+      return 0
+      ;;
+    BREACH)
+      printf 'Framework check FAIL G128 status=BREACH exit=1 source=guard\n'
+      return 1
+      ;;
+    INPUT-ERROR)
+      printf 'Framework check FAIL G128 status=INPUT-ERROR exit=2 source=guard\n'
+      return 2
+      ;;
+  esac
+}
+run_check "Session cap guard (live, G128)" run_live_session_cap_guard
 run_check "Compaction discipline guard selftest" bash "$SCRIPT_DIR/compaction-discipline-guard-selftest.sh"
 run_check "Pre-existing deferral guard selftest" bash "$SCRIPT_DIR/pre-existing-deferral-guard-selftest.sh"
 run_check "Discovered-issue disposition guard selftest (G095)" bash "$SCRIPT_DIR/discovered-issue-disposition-guard-selftest.sh"
@@ -1759,8 +2708,8 @@ if [[ "$RECORD_DEBT" == "true" && "${#deferred_check_ids[@]}" -gt 0 ]]; then
     deferred_label="${deferred_check_labels[$debt_idx]}"
     deferred_cmd="${deferred_check_cmds[$debt_idx]}"
     debt_idx=$((debt_idx + 1))
-    if [[ -x "$debt_tool" || -f "$debt_tool" ]] &&
-      bash "$debt_tool" record \
+    if [[ -x "$debt_tool" || -f "$debt_tool" ]] \
+      && bash "$debt_tool" record \
         --check "$deferred_id" \
         --class heavy-selftest \
         --source-revision "$source_revision" \

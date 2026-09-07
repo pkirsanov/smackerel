@@ -232,6 +232,29 @@ else
   echo "  output: $minimal_out"
 fi
 
+# ---- Case 6: verified MBE epoch survives compaction -----------------------
+
+mbe_store="$TMP_ROOT/mbe-store"
+mbe_context="$TMP_ROOT/mbe-context.json"
+if python3 "$SCRIPT_DIR/measured-budget-runtime-v2-selftest.py" \
+  --emit-fixture --store-root "$mbe_store" --context "$mbe_context"; then
+  mbe_out="$("$COMPACTOR" "$short_fixture" --mbe-posture reference-enforce \
+    --mbe-store-root "$mbe_store" --mbe-epoch-context "$mbe_context")"
+  if jq -e '
+    .mbeEpoch.verified == true
+    and (.mbeEpoch.budgetId | type == "string" and length > 0)
+    and (.mbeEpoch.epochId | type == "string" and length > 0)
+    and (.mbeEpoch.epochVerificationId | type == "string" and length > 0)
+  ' <<< "$mbe_out" >/dev/null 2>&1; then
+    pass "Reference-enforced compaction carries a re-verified MBE epoch"
+  else
+    fail "Reference-enforced compaction must carry the verified epoch lineage"
+    echo "  output: $mbe_out"
+  fi
+else
+  fail "MBE integration fixture generation must succeed for compactor coverage"
+fi
+
 # ---- Sanity: --help exits 0 and prints usage ------------------------------
 
 if "$COMPACTOR" --help >/dev/null 2>&1; then

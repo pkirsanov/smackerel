@@ -150,7 +150,7 @@ MANIFEST="$MANIFEST" \
   CHANGED_JOINED="$CHANGED_JOINED" \
   ROLLBACK="$ROLLBACK" \
   "$PYTHON_BIN" - <<'PY'
-import json, os, re, sys
+import hashlib, json, os, re, stat, sys
 
 manifest_path = os.environ['MANIFEST']
 log_path = os.environ['LOG_PATH']
@@ -228,8 +228,18 @@ LIVE_TRAITS = {'user-visible-ui', 'api-contract', 'mutable-state', 'degraded-sta
 OBSERVED_TRAITS = {'sla-sensitive'}
 
 refusals = []
-def refuse(code, scenario_id, detail):
-    refusals.append({'code': code, 'scenarioId': scenario_id, 'detail': detail})
+def refuse(code, scenario_id, detail, receipt=None, disposition=None,
+           blocking=None, superseded_by=None):
+    row = {'code': code, 'scenarioId': scenario_id, 'detail': detail}
+    if receipt is not None:
+        row.update({
+            'ledgerIdentity': dict(ledger_identities[id(receipt[0])]),
+            'disposition': disposition,
+            'blocking': bool(blocking),
+            'supersededBy': superseded_by,
+        })
+    refusals.append(row)
+    return row
 
 # --- manifest --------------------------------------------------------------
 if not os.path.isfile(manifest_path):
@@ -256,21 +266,70 @@ scenarios = manifest if isinstance(manifest, list) else (manifest.get('scenarios
 
 # --- receipts --------------------------------------------------------------
 receipts = []
-if os.path.isfile(log_path):
-    for raw in open(log_path, encoding='utf-8', errors='replace'):
-        raw = raw.strip()
-        if not raw:
-            continue
+ledger_identities = {}
+
+def read_log_snapshot(path):
+    """Read one immutable regular-file prefix and retain physical row order."""
+    if not os.path.exists(path):
+        return []
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError as exc:
+        print('scenario-state-resolve: unreadable receipt log %s: %s' % (path, exc), file=sys.stderr)
+        sys.exit(2)
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
+            print('scenario-state-resolve: receipt log is not a regular file: %s' % path, file=sys.stderr)
+            sys.exit(2)
+        remaining = opened.st_size
+        chunks = []
+        while remaining:
+            chunk = os.read(fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                print('scenario-state-resolve: receipt log short read: %s' % path, file=sys.stderr)
+                sys.exit(2)
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        snapshot = b''.join(chunks)
+        after = os.fstat(fd)
         try:
-            entry = json.loads(raw)
-        except Exception:
-            continue
-        if not isinstance(entry, dict):
-            continue
-        binding = entry.get('scenarioBinding')
-        if not isinstance(binding, dict):
-            continue
-        receipts.append((entry, binding))
+            current = os.stat(path)
+        except OSError as exc:
+            print('scenario-state-resolve: receipt log replaced during read: %s' % exc, file=sys.stderr)
+            sys.exit(2)
+        if ((opened.st_dev, opened.st_ino) != (after.st_dev, after.st_ino) or
+                (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino) or
+                after.st_size < opened.st_size or current.st_size < opened.st_size):
+            print('scenario-state-resolve: receipt log changed before snapshot completion: %s' % path,
+                  file=sys.stderr)
+            sys.exit(2)
+    finally:
+        os.close(fd)
+
+    physical_rows = snapshot.split(b'\n')
+    if snapshot.endswith(b'\n'):
+        physical_rows.pop()
+    return physical_rows
+
+for physical_ordinal, raw_bytes in enumerate(read_log_snapshot(log_path), 1):
+    if not raw_bytes.strip():
+        continue
+    try:
+        entry = json.loads(raw_bytes.decode('utf-8', errors='replace'))
+    except Exception:
+        continue
+    if not isinstance(entry, dict):
+        continue
+    binding = entry.get('scenarioBinding')
+    if not isinstance(binding, dict):
+        continue
+    append_ordinal = physical_ordinal
+    ledger_identities[id(entry)] = {
+        'appendOrdinal': append_ordinal,
+        'rowSha256': 'sha256:' + hashlib.sha256(raw_bytes).hexdigest(),
+    }
+    receipts.append((entry, binding))
 
 REQUIRED_BINDING = ['scenarioId', 'phase', 'testIdentity', 'sourceRevision', 'negativeControl']
 
@@ -289,22 +348,80 @@ def binding_ok(entry, binding):
     if not ok:
         return False
     if source_revision and binding['sourceRevision'] != source_revision:
+        if binding['phase'] == 'red':
+            return True
         refuse('SCS-REVISION-DRIFT', sid,
                'receipt cites source revision %s but the resolved revision is %s'
                % (binding['sourceRevision'][:12], source_revision[:12]))
         return False
     return True
 
-by_scenario = {}
-bound_receipts = []
+candidate_receipts = []
 for entry, binding in receipts:
     if not binding_ok(entry, binding):
+        continue
+    candidate_receipts.append((entry, binding))
+
+def has_current_matching_implement(red_entry, red_binding):
+    red_ts = red_entry.get('ts') or ''
+    for entry, binding in candidate_receipts:
+        if binding.get('phase') != 'implement' or entry.get('exitCode') != 0:
+            continue
+        if source_revision and binding.get('sourceRevision') != source_revision:
+            continue
+        if binding.get('scenarioId') != red_binding.get('scenarioId'):
+            continue
+        if binding.get('testIdentity') != red_binding.get('testIdentity'):
+            continue
+        if binding.get('negativeControl') != red_binding.get('negativeControl'):
+            continue
+        if (entry.get('ts') or '') <= red_ts:
+            continue
+        return True
+    return False
+
+by_scenario = {}
+bound_receipts = []
+for entry, binding in candidate_receipts:
+    if (source_revision
+            and binding.get('phase') == 'red'
+            and binding.get('sourceRevision') != source_revision
+            and not has_current_matching_implement(entry, binding)):
+        refuse('SCS-REVISION-DRIFT', binding['scenarioId'],
+               'receipt cites source revision %s but the resolved revision is %s'
+               % (binding['sourceRevision'][:12], source_revision[:12]))
         continue
     bound_receipts.append((entry, binding))
     by_scenario.setdefault(binding['scenarioId'], []).append((entry, binding))
 
 def sort_key(pair):
-    return pair[0].get('ts') or ''
+    return ledger_identities[id(pair[0])]['appendOrdinal']
+
+def receipt_phase(pair):
+    return pair[1].get('phase')
+
+def receipt_succeeded(pair):
+    return pair[0].get('exitCode') == 0
+
+def proof_identity(pair):
+    return (pair[1]['testIdentity'], pair[1]['negativeControl'])
+
+def make_chain_id(scenario_id, red, implement, green):
+    digest = hashlib.sha256()
+    fields = [
+        scenario_id,
+        green[1]['sourceRevision'],
+        green[1]['testIdentity'],
+        green[1]['negativeControl'],
+    ]
+    for pair in (red, implement, green):
+        identity = ledger_identities[id(pair[0])]
+        fields.extend([str(identity['appendOrdinal']), identity['rowSha256']])
+    for field in fields:
+        encoded = field.encode('utf-8')
+        digest.update(len(encoded).to_bytes(8, 'big'))
+        digest.update(encoded)
+    return 'sha256:' + digest.hexdigest()
 
 # Scenario ids that anchor a proof chain of their own: they have a RED receipt
 # for a given test identity. Used to tell a LEGITIMATE parallel chain (two
@@ -346,27 +463,142 @@ for scenario in scenarios:
     for entry, binding in entries:
         by_phase.setdefault(binding.get('phase'), []).append((entry, binding))
 
+    disposition_rows = []
+    disposition_by_entry = {}
+    for pair in entries:
+        row = {
+            'ledgerIdentity': dict(ledger_identities[id(pair[0])]),
+            'phase': receipt_phase(pair),
+            'disposition': 'UNRESOLVED',
+            'diagnosticCode': None,
+            'blocking': False,
+            'supersededBy': None,
+        }
+        disposition_rows.append(row)
+        disposition_by_entry[id(pair[0])] = row
+
+    def set_disposition(pair, disposition, diagnostic_code=None, blocking=False,
+                        superseded_by=None):
+        row = disposition_by_entry[id(pair[0])]
+        row.update({
+            'disposition': disposition,
+            'diagnosticCode': diagnostic_code,
+            'blocking': blocking,
+            'supersededBy': superseded_by,
+        })
+
+    complete_candidates = []
+    for green in by_phase.get('green') or []:
+        if not receipt_succeeded(green):
+            continue
+        matching_reds = [
+            red for red in (by_phase.get('red') or [])
+            if not receipt_succeeded(red)
+            and sort_key(red) < sort_key(green)
+            and proof_identity(red) == proof_identity(green)
+        ]
+        for red in reversed(matching_reds):
+            implementations = [
+                implement for implement in (by_phase.get('implement') or [])
+                if sort_key(red) < sort_key(implement) < sort_key(green)
+            ]
+            if implementations:
+                complete_candidates.append({
+                    'red': red,
+                    'implement': implementations[-1],
+                    'green': green,
+                })
+                break
+
+    model_ordinals = [sort_key(pair) for pair in entries]
+    order_conflict = (
+        any(value <= 0 for value in model_ordinals)
+        or len(model_ordinals) != len(set(model_ordinals))
+        or any(right <= left for left, right in zip(model_ordinals, model_ordinals[1:]))
+    )
+    selected = None
+    selected_chain = None
+    selection_status = 'NO_COMPLETE_CHAIN'
+    if order_conflict and entries:
+        selection_status = 'ORDER_REFUSED'
+        conflict_receipt = entries[-1]
+        refuse(
+            'SCS-APPEND-ORDER-CONFLICT', sid,
+            'receipt append ordinals are missing, duplicated, nonpositive, or nonmonotonic',
+            conflict_receipt, 'UNRESOLVED', True, None)
+        set_disposition(conflict_receipt, 'UNRESOLVED',
+                        'SCS-APPEND-ORDER-CONFLICT', True, None)
+    elif complete_candidates:
+        selected = max(complete_candidates, key=lambda candidate: sort_key(candidate['green']))
+        selected_chain = {
+            'chainId': make_chain_id(sid, selected['red'], selected['implement'], selected['green']),
+            'scenarioId': sid,
+            'sourceRevision': selected['green'][1]['sourceRevision'],
+            'testIdentity': selected['green'][1]['testIdentity'],
+            'negativeControl': selected['green'][1]['negativeControl'],
+            'red': dict(ledger_identities[id(selected['red'][0])]),
+            'implement': dict(ledger_identities[id(selected['implement'][0])]),
+            'green': dict(ledger_identities[id(selected['green'][0])]),
+        }
+        selection_status = 'SELECTED'
+        selected_entries = {id(selected[name][0]) for name in ('red', 'implement', 'green')}
+        for pair in entries:
+            if id(pair[0]) in selected_entries:
+                set_disposition(pair, 'SELECTED')
+            elif sort_key(pair) < sort_key(selected['green']):
+                set_disposition(pair, 'SUPERSEDED', superseded_by=selected_chain['chainId'])
+
+    def receipt_refusal(code, pair, detail, supersedable=False, direct_replacement=False):
+        is_superseded = bool(
+            selected_chain and supersedable and direct_replacement
+            and sort_key(pair) < selected_chain['green']['appendOrdinal']
+        )
+        disposition = 'SUPERSEDED' if is_superseded else 'UNRESOLVED'
+        blocking = not is_superseded
+        superseded_by = selected_chain['chainId'] if is_superseded else None
+        refuse(code, sid, detail, pair, disposition, blocking, superseded_by)
+        set_disposition(pair, disposition, code, blocking, superseded_by)
+
     held = {'PLANNED'} if scenario.get('id') and scenario.get('requiredTestType') else set()
     blocked = set()
 
     red_pairs = by_phase.get('red') or []
     red_binding = None
-    for entry, binding in red_pairs:
-        if entry.get('exitCode') == 0:
-            refuse('SCS-RED-NOT-FAILING', sid,
-                   'a receipt claims the red phase but exited 0, so nothing was discriminated')
-            continue
-        red_binding = binding
-        held.add('RED_VERIFIED')
-        break
+    if not order_conflict:
+        for pair in red_pairs:
+            if receipt_succeeded(pair):
+                directly_replaced = bool(
+                    selected
+                    and proof_identity(pair) == proof_identity(selected['red'])
+                    and sort_key(pair) < sort_key(selected['red'])
+                )
+                receipt_refusal(
+                    'SCS-RED-NOT-FAILING', pair,
+                    'a receipt claims the red phase but exited 0, so nothing was discriminated',
+                    supersedable=True, direct_replacement=directly_replaced)
+
+        if selected is not None:
+            red_binding = selected['red'][1]
+            held.update({'RED_VERIFIED', 'IMPLEMENTED', 'GREEN_TARGETED'})
+        else:
+            failing_reds = [pair for pair in red_pairs if not receipt_succeeded(pair)]
+            if failing_reds:
+                active_red = failing_reds[-1]
+                red_binding = active_red[1]
+                held.add('RED_VERIFIED')
 
     # ORDERING RULE no-implementation-without-red. Without it, "the test passes"
     # is compatible with "the test always passed", and a test that always passed
     # proves nothing about the change.
-    if 'RED_VERIFIED' in held:
-        if by_phase.get('implement'):
+    if selected is None and 'RED_VERIFIED' in held:
+        eligible_implementations = [
+            pair for pair in (by_phase.get('implement') or [])
+            if sort_key(pair) > sort_key(active_red)
+        ]
+        if eligible_implementations:
             held.add('IMPLEMENTED')
-    elif by_phase.get('implement'):
+            set_disposition(eligible_implementations[-1], 'SELECTED')
+    elif selected is None and by_phase.get('implement'):
         blocked.add('IMPLEMENTED')
 
     # CROSS-SCENARIO SUBSTITUTION. A green receipt that runs THIS scenario's
@@ -393,27 +625,72 @@ for scenario in scenarios:
                    'a green receipt over this scenario\'s discriminator %r is filed under scenario %r, but the red cited %r'
                    % (red_binding['testIdentity'], binding['scenarioId'], sid))
 
-    if 'IMPLEMENTED' in held:
-        for entry, binding in (by_phase.get('green') or []):
-            if entry.get('exitCode') != 0:
+    candidate_green_entries = {id(candidate['green'][0]) for candidate in complete_candidates}
+    if not order_conflict:
+        for pair in (by_phase.get('green') or []):
+            if not receipt_succeeded(pair) or id(pair[0]) in candidate_green_entries:
                 continue
-            if binding['testIdentity'] != red_binding['testIdentity']:
-                refuse('SCS-TEST-SUBSTITUTED', sid,
-                       'green receipt cites test %r, red cited %r — replacing the test requires a planning revision and a new red'
-                       % (binding['testIdentity'], red_binding['testIdentity']))
+            prior_failing_reds = [
+                red for red in red_pairs
+                if not receipt_succeeded(red) and sort_key(red) < sort_key(pair)
+            ]
+            if not prior_failing_reds:
+                receipt_refusal(
+                    'SCS-GREEN-WITHOUT-RED', pair,
+                    'a green receipt exists with no expected-behavioral red for this scenario')
                 continue
-            if binding['negativeControl'] != red_binding['negativeControl']:
-                refuse('SCS-CONTROL-SUBSTITUTED', sid,
-                       'green receipt cites negative control %r, red cited %r'
-                       % (binding['negativeControl'], red_binding['negativeControl']))
+            anchor = prior_failing_reds[-1]
+            if pair[1]['testIdentity'] != anchor[1]['testIdentity']:
+                code = 'SCS-TEST-SUBSTITUTED'
+                detail = (
+                    'green receipt cites test %r, red cited %r — replacing the test requires a planning revision and a new red'
+                    % (pair[1]['testIdentity'], anchor[1]['testIdentity'])
+                )
+            elif pair[1]['negativeControl'] != anchor[1]['negativeControl']:
+                code = 'SCS-CONTROL-SUBSTITUTED'
+                detail = (
+                    'green receipt cites negative control %r, red cited %r'
+                    % (pair[1]['negativeControl'], anchor[1]['negativeControl'])
+                )
+            else:
                 continue
-            held.add('GREEN_TARGETED')
-            break
-    elif by_phase.get('green'):
-        if 'RED_VERIFIED' not in held:
-            refuse('SCS-GREEN-WITHOUT-RED', sid,
-                   'a green receipt exists with no expected-behavioral red for this scenario')
-        blocked.add('GREEN_TARGETED')
+            directly_replaced = bool(
+                selected
+                and proof_identity(selected['red']) == proof_identity(anchor)
+                and sort_key(pair) < sort_key(selected['green'])
+            )
+            receipt_refusal(code, pair, detail, supersedable=True,
+                            direct_replacement=directly_replaced)
+
+        if selected is None and by_phase.get('green'):
+            blocked.add('GREEN_TARGETED')
+
+    if selected is not None:
+        later_failing_reds = [
+            pair for pair in red_pairs
+            if not receipt_succeeded(pair) and sort_key(pair) > sort_key(selected['green'])
+        ]
+        if later_failing_reds:
+            campaign_red = later_failing_reds[0]
+            later_implementations = [
+                pair for pair in (by_phase.get('implement') or [])
+                if sort_key(pair) > sort_key(campaign_red)
+            ]
+            missing_phase = 'GREEN' if later_implementations else 'IMPLEMENT'
+            receipt_refusal(
+                'SCS-CHAIN-PARTIAL', campaign_red,
+                'campaign beginning at append ordinal %d is missing %s'
+                % (sort_key(campaign_red), missing_phase))
+        else:
+            later_implementations = [
+                pair for pair in (by_phase.get('implement') or [])
+                if sort_key(pair) > sort_key(selected['green'])
+            ]
+            if later_implementations:
+                receipt_refusal(
+                    'SCS-CHAIN-PARTIAL', later_implementations[0],
+                    'campaign beginning at append ordinal %d is missing RED'
+                    % sort_key(later_implementations[0]))
 
     for phase, state_id in (('live', 'GREEN_LIVE'), ('regression', 'REGRESSION_GREEN'), ('observed', 'OBSERVED')):
         if state_id not in applicable:
@@ -422,10 +699,14 @@ for scenario in scenarios:
             if by_phase.get(phase):
                 blocked.add(state_id)
             continue
-        for entry, _binding in (by_phase.get(phase) or []):
-            if entry.get('exitCode') == 0:
+        for pair in (by_phase.get(phase) or []):
+            if receipt_succeeded(pair) and (selected is None or sort_key(pair) > sort_key(selected['green'])):
                 held.add(state_id)
+                set_disposition(pair, 'SELECTED')
                 break
+
+    if selected is not None and any(row['blocking'] for row in disposition_rows):
+        selection_status = 'SELECTED_WITH_UNRESOLVED'
 
     # A CHANGED implementation ref marks the scenario AFFECTED. That is what
     # makes targeted revalidation possible instead of re-certifying everything.
@@ -449,7 +730,7 @@ for scenario in scenarios:
     highest = ordered[-1] if ordered else None
     missing = sorted(applicable - held, key=lambda s: BY_ID[s]['rank'])
 
-    results.append({
+    result = {
         'scenarioId': sid,
         'applicableStates': sorted(applicable, key=lambda s: BY_ID[s]['rank']),
         'derivedStates': ordered,
@@ -458,7 +739,14 @@ for scenario in scenarios:
         'missingStates': missing,
         'receiptCount': len(entries),
         'affectedBy': affected,
-    })
+    }
+    if entries:
+        result.update({
+            'selectionStatus': selection_status,
+            'selectedChain': selected_chain,
+            'receiptDispositions': disposition_rows,
+        })
+    results.append(result)
 
 # --- certifiability --------------------------------------------------------
 # The resolver NEVER emits CERTIFIED. Certification is validate-owned, and a
@@ -475,7 +763,10 @@ for row in results:
 # never contradict it — and a scenario left without fresh evidence already lands
 # in `unsatisfied`. Counting drift here would block every spec whose append-only
 # log outlived a commit, which is every spec eventually.
-blocking_refusals = [r for r in refusals if r['code'] != 'SCS-REVISION-DRIFT']
+blocking_refusals = [
+    r for r in refusals
+    if r.get('blocking', r['code'] != 'SCS-REVISION-DRIFT')
+]
 certifiable = (not blocking_refusals) and (not unsatisfied) if required_states or certifiable_mode else None
 
 out = {
@@ -507,8 +798,14 @@ else:
         if row['affectedBy']:
             print('      AFFECTED by: %s' % ' '.join(row['affectedBy']))
     for r in refusals:
-        print('  REFUSED %s [%s]: %s' % (r['code'], r['scenarioId'], r['detail']))
-    if refusals and not blocking_refusals:
+        if r.get('disposition') == 'SUPERSEDED':
+            print('  SUPERSEDED %s [%s] receipt=%d supersededBy=%s: %s' % (
+                r['code'], r['scenarioId'], r['ledgerIdentity']['appendOrdinal'],
+                r['supersededBy'], r['detail']))
+        else:
+            print('  REFUSED %s [%s]: %s' % (r['code'], r['scenarioId'], r['detail']))
+    if (refusals and not blocking_refusals
+            and all(r['code'] == 'SCS-REVISION-DRIFT' for r in refusals)):
         print('  (all %d refusals are SCS-REVISION-DRIFT: superseded receipts, excluded from derivation, not blocking)' % len(refusals))
     for u in unsatisfied:
         print('  UNSATISFIED %s does not hold for %s' % (u['missing'], u['scenarioId']))

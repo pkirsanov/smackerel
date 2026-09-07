@@ -95,7 +95,10 @@ if [[ -x "$SCRIPT_DIR/release-check.sh" ]]; then
   exit 0
 fi
 
-if ! bash "$SCRIPT_DIR/framework-validate.sh" >"$PREPUSH_VALIDATE_LOG" 2>&1; then
+# IMP-058 SCOPE-4: a bare framework-validate.sh invocation now defaults to
+# --changed-only; this fallback path (release-check.sh absent) must still run
+# the full suite, so that is explicit here rather than inherited by omission.
+if ! bash "$SCRIPT_DIR/framework-validate.sh" --no-changed-only >"$PREPUSH_VALIDATE_LOG" 2>&1; then
   echo "❌ framework-validate failed."
   print_bounded_log "$PREPUSH_VALIDATE_LOG"
   echo ""

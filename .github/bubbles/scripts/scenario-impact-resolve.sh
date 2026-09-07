@@ -39,6 +39,15 @@ SPEC_DIR=""
 CHANGED_FILES=()
 FORMAT="human"
 QUIET=0
+OWNED_TEMP_DIRS=()
+
+cleanup_owned_temp_dirs() {
+  local owned_dir
+  for owned_dir in "${OWNED_TEMP_DIRS[@]+"${OWNED_TEMP_DIRS[@]}"}"; do
+    [ -n "$owned_dir" ] && rm -rf -- "$owned_dir"
+  done
+}
+trap cleanup_owned_temp_dirs EXIT INT TERM
 
 usage() {
   cat <<'EOF'
@@ -101,22 +110,40 @@ if [ ! -f "$MANIFEST" ]; then
   exit 0
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REFERENCE_READER="$SCRIPT_DIR/scenario-reference-reader.py"
+[ -f "$REFERENCE_READER" ] || {
+  echo "scenario-impact-resolve: scenario-reference-reader.py is required" >&2
+  exit 2
+}
+REPO_ROOT="$(cd "$SPEC_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$REPO_ROOT" ] || REPO_ROOT="$SPEC_DIR"
+PROJECTION_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/scenario-impact-resolve.XXXXXX")" || {
+  echo "scenario-impact-resolve: could not create private projection directory" >&2
+  exit 2
+}
+OWNED_TEMP_DIRS+=("$PROJECTION_TEMP_DIR")
+chmod 700 "$PROJECTION_TEMP_DIR" || exit 2
+REFERENCE_PROJECTION_FILE="$PROJECTION_TEMP_DIR/reference-projection.json"
+if ! (umask 077 && python3 "$REFERENCE_READER" "$MANIFEST" --repo-root "$REPO_ROOT" >"$REFERENCE_PROJECTION_FILE"); then
+  exit 2
+fi
+
 CHANGED_JOINED="$(printf '%s\n' "${CHANGED_FILES[@]+"${CHANGED_FILES[@]}"}")"
 
-MANIFEST="$MANIFEST" CHANGED="$CHANGED_JOINED" FORMAT="$FORMAT" QUIET="$QUIET" \
-  python3 - <<'PY'
+CHANGED="$CHANGED_JOINED" FORMAT="$FORMAT" QUIET="$QUIET" \
+  python3 - "$REFERENCE_PROJECTION_FILE" <<'PY'
 import json, os, sys
 
-manifest_path = os.environ["MANIFEST"]
 fmt = os.environ.get("FORMAT", "human")
 quiet = os.environ.get("QUIET") == "1"
 changed = [c.strip() for c in os.environ.get("CHANGED", "").splitlines() if c.strip()]
 
 try:
-    with open(manifest_path) as fh:
-        manifest = json.load(fh)
-except (OSError, ValueError) as exc:
-    print(f"scenario-impact-resolve: cannot parse {manifest_path}: {exc}", file=sys.stderr)
+  with open(sys.argv[1], "r", encoding="utf-8") as projection_file:
+    projection = json.load(projection_file)
+except (IndexError, OSError, ValueError) as exc:
+    print(f"scenario-impact-resolve: invalid scenario-reference-reader projection: {exc}", file=sys.stderr)
     sys.exit(2)
 
 def normalise(ref):
@@ -139,30 +166,31 @@ def intersects(ref, path):
 # Both are claims that the behavior was proven at a point in time, and both are
 # what a source change can silently invalidate.
 def is_certified(scenario):
-    if scenario.get("lockdown"):
-        return True
-    refs = scenario.get("evidenceRefs")
-    return isinstance(refs, list) and len(refs) > 0
+  metadata = scenario.get("metadata")
+  if isinstance(metadata, dict) and metadata.get("lockdown"):
+    return True
+  refs = scenario.get("evidenceRefs")
+  return isinstance(refs, list) and len(refs) > 0
 
-# Two manifest envelopes exist in the wild: {"scenarios": [...]} and a BARE
-# top-level list of the same scenario objects. Reading only the object form
-# crashes on the bare list; refusing it would silently stop marking impacted
-# scenarios in those specs, which is the failure this resolver exists to remove.
-scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
+# The canonical reader owns envelopes, versions, aliases, identities,
+# references, duplicate members, and strict-v2 closed-object validation.
+scenarios = projection.get("scenarios")
 if not isinstance(scenarios, list):
-    scenarios = []
+    print("scenario-impact-resolve: invalid scenario-reference-reader projection", file=sys.stderr)
+    sys.exit(2)
 
 impacted = []
 declared = 0
 
 for scenario in scenarios:
     if not isinstance(scenario, dict):
-        continue
+        print("scenario-impact-resolve: invalid scenario-reference-reader projection", file=sys.stderr)
+        sys.exit(2)
     refs = scenario.get("implementationRefs")
     if not isinstance(refs, list) or not refs:
         continue
     declared += 1
-    sid = scenario.get("id") or scenario.get("scenarioId") or "<unidentified-scenario>"
+    sid = scenario.get("scenarioId")
     hits = sorted({
         path
         for path in changed

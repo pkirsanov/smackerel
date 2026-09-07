@@ -141,6 +141,58 @@ else
   sed -n '1,80p' "$allow_log"
 fi
 
+# --- copilot-instructions.md is an index in the downstream layout ---------
+
+# A downstream install roots at .github/, which has no README.md. The project's
+# own governance docs are indexed from copilot-instructions.md, so a lint that
+# does not consult it reports every one of them as an orphan.
+
+ci_root="$TMPDIR/repo-copilot"
+mkdir -p "$ci_root/instructions"
+
+cat > "$ci_root/copilot-instructions.md" <<'EOF'
+# Project governance root (fake downstream .github/)
+
+Terminal rules: [terminal-discipline.instructions.md](instructions/terminal-discipline.instructions.md)
+EOF
+
+cat > "$ci_root/instructions/terminal-discipline.instructions.md" <<'EOF'
+# terminal-discipline — indexed ONLY from copilot-instructions.md
+EOF
+
+set +e
+ci_log="$TMPDIR/copilot.log"
+bash "$LINT" --repo-root "$ci_root" >"$ci_log" 2>&1
+ci_rc=$?
+set -e
+
+if [[ "$ci_rc" -eq 0 ]]; then
+  pass "copilot-instructions.md indexes a doc in a README-less downstream layout"
+else
+  fail "copilot-instructions.md index expected exit 0, got $ci_rc"
+  sed -n '1,80p' "$ci_log"
+fi
+
+# The new index must be a real match, not a blanket pass: drop the reference and
+# the same fixture has to fail, otherwise adding it would have disabled the lint.
+
+cat > "$ci_root/copilot-instructions.md" <<'EOF'
+# Project governance root that references nothing
+EOF
+
+set +e
+ci_neg_log="$TMPDIR/copilot-neg.log"
+bash "$LINT" --repo-root "$ci_root" >"$ci_neg_log" 2>&1
+ci_neg_rc=$?
+set -e
+
+if [[ "$ci_neg_rc" -eq 1 ]] && grep -Fq "terminal-discipline.instructions.md" "$ci_neg_log"; then
+  pass "an unreferenced doc still FAILS once copilot-instructions.md stops naming it"
+else
+  fail "unreferenced doc expected exit 1 naming the doc, got $ci_neg_rc"
+  sed -n '1,80p' "$ci_neg_log"
+fi
+
 # --- Summary --------------------------------------------------------------
 
 echo

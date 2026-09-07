@@ -1,16 +1,45 @@
-# Recipe: Release Trains — Cut + Promote + Rollback + Retire
+# Recipe: Release Trains — Assign + Cut + Promote + Rollback + Retire
 
-Operator-facing recipe for the four release-train operations owned by `bubbles.train` (Detroit Velvet Smooth).
+Operator-facing recipe for train metadata assignment and the four release-train lifecycle operations owned by `bubbles.train` (Detroit Velvet Smooth).
 
 ## Mental Model
 
 | Operation | When to use | What happens |
 |---|---|---|
+| `ship action:assign target:train-metadata` | An existing spec state needs a declared train and optional flag metadata | Dry-runs or atomically changes only `releaseTrain` and explicitly supplied `flagsIntroduced`. NO lifecycle or deploy action. |
 | `release cut <train>` | Trunk is at a stable SHA you want to ship | CI builds signed candidate (digests + bundle). NO deploy. |
 | `release promote <train> <slot>` | Candidate has soaked successfully on lower slot | Pointer-swap knb manifest → candidate's digests+bundle |
 | `release rollback <train>` | Promoted release is bad | Pointer-swap to previous manifest commit |
 | `release retire <train>` | Train is no longer needed | Transition phase to `retired` after flag cleanup |
 | `release flag-audit` | Periodic check (monthly is automatic via upkeep) | List flags overdue for retirement |
+
+## Assign Spec Metadata
+
+Resolve the dedicated v7 tuple `ship action:assign target:train-metadata` to workflow mode `release-train-assign-metadata`. The mode validates the requested ID against `config/release-trains.yaml` and runs only as `bubbles.train` for apply.
+
+The helper contract is:
+
+```bash
+bash bubbles/scripts/release-train-metadata-assign.sh \
+	<spec-dir|state.json> \
+	--train <train-id> \
+	--session-id <session-id> \
+	--session-control-file <external-session-control-path> \
+	--binding-packet-file <local-actionable-packet.json> \
+	--workflow-mode release-train-assign-metadata \
+	--runner bubbles.train \
+	[--flags-json '<json-array>'] \
+	[--dry-run|--apply]
+```
+
+Dry-run is the default. Omitted `--flags-json` preserves `flagsIntroduced`; an explicit `[]` clears it. Apply atomically replaces a changed state file and preserves unrelated semantic values and file mode. An unknown train or non-owner apply refuses before any destination write.
+
+The session id, external control file, and local actionable packet must describe
+the same current repository-binding decision. The runtime supplies the active
+top-level runner identity. Apply requires that authenticated runner to be
+`bubbles.train`; `BUBBLES_AGENT_NAME` is not an authority source.
+
+Assignment reports `train_metadata_assigned`. It is not cut, promote, rollback, retire, build, deployment, pointer-swap, certification, or a spec or scope status transition. It never changes train configuration, feature-flag bundles, generated bundles, artifacts, manifests, pointers, or train phase.
 
 ## Cut
 

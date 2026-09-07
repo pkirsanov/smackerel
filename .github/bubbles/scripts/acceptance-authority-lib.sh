@@ -3,23 +3,31 @@
 #
 # Capability: human-acceptance-authority
 #
-# The shared reader for `uservalidation.md` (IMP-047 PD-12).
+# The shared reader for `uservalidation.md` (IMP-047 PD-12; contract inverted to
+# opt-out acceptance by BUG-037).
 #
 # WHY THIS EXISTS
 # Two surfaces read the acceptance file: `artifact-lint.sh` checks its SHAPE at
 # any time, and `guards/tail-delegated-gates.sh` Check 43 (Gate G136) decides
-# whether a TERMINAL transition may claim human acceptance. Before PD-12 each
-# carried its own copy of the section parser, with a comment in one asking the
-# next author to keep them in step. A comment is not a mechanism. This library
-# is, and both now source it.
+# whether a TERMINAL transition may proceed. Before PD-12 each carried its own
+# copy of the section parser, with a comment in one asking the next author to
+# keep them in step. A comment is not a mechanism. This library is, and both now
+# source it.
 #
 # It also draws the line the old shape could not draw. AUTOMATION READINESS and
 # HUMAN ACCEPTANCE are different facts with different writers, so they live in
-# different sections and only one of them can end a spec.
+# different sections and a fully checked readiness block grants nothing.
+#
+# WHAT THE TERMINAL VERDICT MEANS AFTER BUG-037. Acceptance is OPT-OUT: the
+# checklist ships CHECKED, and a user who objects to nothing performs no act.
+# So the terminal verdict proves exactly one thing — that no user recorded an
+# objection. It is a REJECTION CHANNEL, not a proof that a human acted. An
+# unchecked item still refuses and is still named, the library still NEVER edits
+# the file, and an authored record is still validated in full.
 #
 # Authority: bubbles/registry/acceptance-authority.yaml. Every heading, field,
-# method and refusal code below is READ from it. Nothing is restated here,
-# because a second copy is a second answer.
+# method, shipped state, terminal requirement and refusal code below is READ
+# from it. Nothing is restated here, because a second copy is a second answer.
 #
 # Sourceable:
 #   . bubbles/scripts/acceptance-authority-lib.sh
@@ -39,26 +47,70 @@ bubbles_acceptance_registry() {
 }
 
 # --- registry readers --------------------------------------------------------
-# Shallow, fixed-shape YAML, so awk is enough and yq stays an optional
-# convenience rather than a hard dependency that would make the check
-# unavailable exactly where it matters.
+# PyYAML establishes syntactic validity. The fixed-shape readers below use awk
+# for contract fields after that parse gate succeeds.
 
 bubbles_acceptance_heading() {
+  bubbles_acceptance_section_field "$1" heading
+}
+
+# Any scalar field of one `sections:` entry, by section id. `heading`,
+# `shippedState` and `requiredAtTerminal` are all read through here so a caller
+# can never acquire a private copy of a value this registry owns.
+bubbles_acceptance_section_field() {
   local reg
   reg="$(bubbles_acceptance_registry)"
   [[ -f "$reg" ]] || return 1
-  awk -v want="$1" '
+  awk -v want="$1" -v key="$2" '
     /^sections:/ {s=1; next}
     /^[a-zA-Z]/ {s=0}
     s && $0 ~ "^  - id: " want "$" {f=1; next}
     f && /^  - id: / {exit}
-    f && /^    heading: / {
-      sub(/^    heading: /, "")
+    f && $0 ~ "^    " key ": " {
+      sub("^    " key ": ", "")
       gsub(/^"|"$/, "")
       print
       exit
     }
   ' "$reg"
+}
+
+# Preserve the raw scalar for contract fields whose YAML spelling matters.
+# In particular, requiredAtTerminal accepts only unquoted lowercase booleans.
+bubbles_acceptance_section_field_raw() {
+  local reg
+  reg="$(bubbles_acceptance_registry)"
+  [[ -f "$reg" ]] || return 1
+  awk -v want="$1" -v key="$2" '
+    /^sections:/ {s=1; next}
+    /^[a-zA-Z]/ {s=0}
+    s && $0 ~ "^  - id: " want "$" {f=1; next}
+    f && /^  - id: / {exit}
+    f && $0 ~ "^    " key ":" {
+      sub("^    " key ":[ ]*", "")
+      print
+      exit
+    }
+  ' "$reg"
+}
+
+# The state a freshly authored checklist ships in. BUG-037: `checked`. This is
+# the CONTRACT the template must agree with, and the only mechanical detector of
+# a template authored in the wrong state now that `artifact-lint.sh` deliberately
+# carries no checked-entry rule (BUG-037 D-2).
+bubbles_acceptance_checklist_shipped_state() {
+  bubbles_acceptance_section_field acceptance-checklist shippedState
+}
+
+# Whether a terminal transition additionally demands an authored acceptance
+# record. BUG-037 ships `false`: unchecking nothing IS the acceptance, so a
+# satisfied user performs no act. READ, never assumed — a downstream repository
+# that genuinely wants a named acceptor at terminal flips this key in its own
+# registry rather than editing this library.
+bubbles_acceptance_record_required_at_terminal() {
+  local value
+  value="$(bubbles_acceptance_section_field acceptance-record requiredAtTerminal)"
+  [[ "$value" == "true" ]]
 }
 
 bubbles_acceptance_required_fields() {
@@ -102,6 +154,30 @@ bubbles_acceptance_method_requires_field() {
   ' "$reg"
 }
 
+bubbles_acceptance_method_required_fields() {
+  local reg
+  reg="$(bubbles_acceptance_registry)"
+  [[ -f "$reg" ]] || return 1
+  awk '
+    /^acceptanceRecord:/ {a=1; next}
+    /^[a-zA-Z]/ {a=0}
+    a && /^  methods:/ {m=1; next}
+    a && /^  [a-zA-Z]/ {m=0}
+    m && /^      requiresField: / {sub(/^      requiresField: /, ""); print}
+  ' "$reg"
+}
+
+bubbles_acceptance_failure_codes() {
+  local reg
+  reg="$(bubbles_acceptance_registry)"
+  [[ -f "$reg" ]] || return 1
+  awk '
+    /^failureCodes:/ {f=1; next}
+    f && /^[a-zA-Z]/ {exit}
+    f && /^  - id: / {sub(/^  - id: /, ""); print}
+  ' "$reg"
+}
+
 bubbles_acceptance_forbidden_acceptor_pattern() {
   local reg
   reg="$(bubbles_acceptance_registry)"
@@ -116,6 +192,123 @@ bubbles_acceptance_forbidden_acceptor_pattern() {
       exit
     }
   ' "$reg"
+}
+
+bubbles_acceptance_yaml_syntax_valid() {
+  local reg="$1" python_env="$BUBBLES_ACCEPTANCE_LIB_DIR/python-env.sh" python
+  [[ -f "$python_env" ]] || return 1
+  # shellcheck source=python-env.sh
+  source "$python_env"
+  python="$(bubbles_python_resolve)" || return 1
+  "$python" -c '
+import pathlib
+import sys
+
+import yaml
+
+yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+' "$reg" >/dev/null 2>&1
+}
+
+# Validate the authority before either public verdict reads an artifact. The
+# failure code is bootstrap-active, so this path never depends on parsing the
+# unavailable registry and never includes its path or contents in diagnostics.
+bubbles_acceptance_authority_preflight() {
+  local reg section heading shipped required fields methods requires pattern
+  local declared_codes expected_codes failure_id_count failure_meaning_count
+
+  reg="$(bubbles_acceptance_registry)"
+  if [[ -z "$reg" || ! -f "$reg" || ! -r "$reg" ]]; then
+    printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance authority is missing or unreadable\n'
+    return 1
+  fi
+
+  if ! bubbles_acceptance_yaml_syntax_valid "$reg"; then
+    printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance authority schema is malformed\n'
+    return 1
+  fi
+
+  if [[ "$({ grep -c '^schemaVersion: acceptance-authority/v1$' "$reg" 2>/dev/null; } || true)" -ne 1 ]]; then
+    printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance authority schema is malformed\n'
+    return 1
+  fi
+
+  for section in automation-readiness acceptance-checklist acceptance-record; do
+    if [[ "$({ grep -c "^  - id: $section$" "$reg" 2>/dev/null; } || true)" -ne 1 ]]; then
+      printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance section contract is incomplete\n'
+      return 1
+    fi
+    heading="$(bubbles_acceptance_section_field "$section" heading 2>/dev/null)"
+    if [[ -z "$heading" ]]; then
+      printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance section contract is incomplete\n'
+      return 1
+    fi
+  done
+
+  shipped="$(bubbles_acceptance_section_field_raw acceptance-checklist shippedState 2>/dev/null)"
+  case "$shipped" in
+    checked | unchecked) ;;
+    *)
+      printf 'PD12-AUTHORITY-UNAVAILABLE: checklist shipped state is invalid\n'
+      return 1
+      ;;
+  esac
+
+  required="$(bubbles_acceptance_section_field_raw acceptance-record requiredAtTerminal 2>/dev/null)"
+  case "$required" in
+    true | false) ;;
+    *)
+      printf 'PD12-AUTHORITY-UNAVAILABLE: terminal record requirement is invalid\n'
+      return 1
+      ;;
+  esac
+
+  fields="$(bubbles_acceptance_required_fields 2>/dev/null)"
+  for section in acceptedBy acceptedAt method; do
+    if [[ "$({ printf '%s\n' "$fields" | grep -cxF "$section"; } || true)" -ne 1 ]]; then
+      printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance record field contract is incomplete\n'
+      return 1
+    fi
+  done
+
+  methods="$(bubbles_acceptance_methods 2>/dev/null)"
+  for section in human-interactive external-record; do
+    if [[ "$({ printf '%s\n' "$methods" | grep -cxF "$section"; } || true)" -ne 1 ]]; then
+      printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance method contract is incomplete\n'
+      return 1
+    fi
+  done
+  requires="$(bubbles_acceptance_method_requires_field external-record 2>/dev/null)"
+  if [[ "$requires" != "record" || -n "$(bubbles_acceptance_method_requires_field human-interactive 2>/dev/null)" ]]; then
+    printf 'PD12-AUTHORITY-UNAVAILABLE: acceptance method contract is incomplete\n'
+    return 1
+  fi
+
+  pattern="$(bubbles_acceptance_forbidden_acceptor_pattern 2>/dev/null)"
+  if [[ -z "$pattern" ]]; then
+    printf 'PD12-AUTHORITY-UNAVAILABLE: acceptedBy policy is incomplete\n'
+    return 1
+  fi
+
+  declared_codes="$(bubbles_acceptance_failure_codes 2>/dev/null | LC_ALL=C sort -u)"
+  expected_codes="$(printf '%s\n' \
+    'PD12-AUTHORITY-UNAVAILABLE' \
+    'PD12-AUTOMATION-ACCEPTOR' \
+    'PD12-METHOD-FIELD-MISSING' \
+    'PD12-METHOD-UNKNOWN' \
+    'PD12-NO-RECORD' \
+    'PD12-READINESS-NOT-CHECKBOX' \
+    'PD12-RECORD-INCOMPLETE' \
+    'PD12-UNCHECKED-ITEM' | LC_ALL=C sort -u)"
+  failure_id_count="$({ grep -c '^  - id: PD12-[A-Z-][A-Z-]*$' "$reg" 2>/dev/null; } || true)"
+  failure_meaning_count="$({ grep -c '^    meaning: [^[:space:]].*$' "$reg" 2>/dev/null; } || true)"
+  if [[ "$declared_codes" != "$expected_codes" ||
+    "$failure_id_count" -ne 8 || "$failure_meaning_count" -ne 8 ]]; then
+    printf 'PD12-AUTHORITY-UNAVAILABLE: failure-code contract is incomplete\n'
+    return 1
+  fi
+
+  return 0
 }
 
 # --- file readers ------------------------------------------------------------
@@ -135,7 +328,9 @@ bubbles_acceptance_section_body() {
 
 # Unchecked acceptance items. Only the acceptance checklist is parsed, so a
 # `[ ]` under `## Notes` or under `## Automation Readiness` is ignored on
-# purpose — an unrelated bullet is not a withheld acceptance.
+# purpose — an unrelated bullet is not a withheld acceptance. Under opt-out an
+# entry here is a user's deliberate UNCHECK, which is why nothing in this
+# library ever writes one back.
 bubbles_acceptance_unchecked_items() {
   local file="$1" heading
   heading="$(bubbles_acceptance_heading acceptance-checklist)"
@@ -186,8 +381,27 @@ bubbles_acceptance_has_record_section() {
 # it as one is what let a shipped template read as a completed record — the same
 # class of defect as a checked-by-default box, one level up.
 bubbles_acceptance_value_is_real() {
-  local value="$1"
-  [[ -n "$value" && "$value" != "["* ]]
+  local value="$1" inner
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  [[ -n "$value" ]] || return 1
+  case "$value" in
+    \[*\])
+      inner="${value#\[}"
+      inner="${inner%\]}"
+      if [[ "$inner" != *"["* && "$inner" != *"]"* ]]; then
+        return 1
+      fi
+      ;;
+  esac
+  return 0
+}
+
+bubbles_acceptance_record_authorship_fields() {
+  {
+    bubbles_acceptance_required_fields
+    bubbles_acceptance_method_required_fields
+  } | awk 'NF && !seen[$0]++'
 }
 
 # TRUE only when a human has begun filling the record in. An untouched template
@@ -200,7 +414,7 @@ bubbles_acceptance_record_authored() {
     [[ -n "$field" ]] || continue
     value="$(bubbles_acceptance_record_field "$file" "$field")"
     bubbles_acceptance_value_is_real "$value" && return 0
-  done <<<"$(bubbles_acceptance_required_fields)"
+  done <<<"$(bubbles_acceptance_record_authorship_fields)"
   return 1
 }
 
@@ -209,12 +423,13 @@ bubbles_acceptance_record_authored() {
 # Each verdict prints zero or more `CODE: message` lines and returns non-zero
 # when it printed any. Callers decide whether a finding is a lint failure or a
 # transition refusal; the library never decides that for them, and it NEVER
-# edits the file. Checking a box on the author's behalf would fabricate the one
-# fact this whole surface exists to require.
+# edits the file. Checking a box on the author's behalf would erase the only
+# signal a user has for rejecting delivered behavior.
 
-# Shape only. Safe during planning, where acceptance has legitimately not
-# happened yet: an absent record is NOT a finding here.
-bubbles_acceptance_shape_verdict() {
+# Shape only. Safe during planning, and safe at any point in a review: an absent
+# record is NOT a finding here, and neither is an all-unchecked checklist — a
+# user is entitled to reject every behavior.
+bubbles_acceptance_shape_verdict_after_preflight() {
   local file="$1"
   local findings=0 line field value method requires pattern
 
@@ -264,28 +479,43 @@ bubbles_acceptance_shape_verdict() {
   [[ "$findings" -eq 0 ]]
 }
 
-# Terminal only. Adds the two facts a `done` transition asserts and planning
-# does not: every acceptance item is checked, AND a human-owned record exists.
-# The second half is what PD-12 adds. Without it a shipped template — which used
-# to arrive fully checked — satisfied terminal acceptance on its own.
+bubbles_acceptance_shape_verdict() {
+  local file="$1"
+
+  bubbles_acceptance_authority_preflight || return 1
+  bubbles_acceptance_shape_verdict_after_preflight "$file"
+}
+
+# Terminal only. Adds the one fact a `done` transition asserts and planning does
+# not: no user has recorded an objection. BUG-037 made acceptance OPT-OUT, so an
+# authored record is no longer demanded here — unchecking nothing IS the
+# acceptance. What remains is the half that costs a satisfied user nothing: an
+# unchecked item is a user-reported regression, it refuses the transition, and
+# it is NAMED. That is the BUG-029 closure and it is unchanged.
+#
+# The record demand survives only as registry DATA (`requiredAtTerminal`), which
+# this framework ships as `false`. It is read rather than assumed so a
+# downstream repository with a compliance obligation can turn it on without
+# forking this library.
 bubbles_acceptance_terminal_verdict() {
   local file="$1"
   local findings=0 line
 
-  if ! bubbles_acceptance_shape_verdict "$file"; then
+  bubbles_acceptance_authority_preflight || return 1
+
+  if ! bubbles_acceptance_shape_verdict_after_preflight "$file"; then
     findings=$((findings + 1))
   fi
 
-  if [[ -n "$(bubbles_acceptance_checklist_items "$file")" ]]; then
-    while IFS= read -r line; do
-      [[ -n "$line" ]] || continue
-      printf 'PD12-UNCHECKED-ITEM: %s\n' "$line"
-      findings=$((findings + 1))
-    done <<<"$(bubbles_acceptance_unchecked_items "$file")"
-  fi
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    printf 'PD12-UNCHECKED-ITEM: %s\n' "$line"
+    findings=$((findings + 1))
+  done <<<"$(bubbles_acceptance_unchecked_items "$file")"
 
-  if ! bubbles_acceptance_record_authored "$file"; then
-    printf 'PD12-NO-RECORD: no authored "%s"; checked boxes alone are not human acceptance, because a template used to ship them checked\n' \
+  if bubbles_acceptance_record_required_at_terminal &&
+    ! bubbles_acceptance_record_authored "$file"; then
+    printf 'PD12-NO-RECORD: no authored "%s"; this registry sets acceptance-record.requiredAtTerminal to true\n' \
       "$(bubbles_acceptance_heading acceptance-record)"
     findings=$((findings + 1))
   fi

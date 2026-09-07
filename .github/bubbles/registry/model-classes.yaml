@@ -1,0 +1,11 @@
+{
+  "contractType": "model-class-registry",
+  "schemaVersion": 1,
+  "classes": [
+    {"name": "none", "capabilities": ["deterministic-execution"]},
+    {"name": "economy-reasoning", "capabilities": ["bounded-context", "basic-tool-planning", "structured-output"]},
+    {"name": "standard-reasoning", "capabilities": ["cross-file-reasoning", "reliable-structured-output", "tool-use"]},
+    {"name": "high-assurance-reasoning", "capabilities": ["adversarial-reasoning", "long-context-synthesis", "strict-contract-following"]}
+  ],
+  "unknownIdentity": "unverified"
+}

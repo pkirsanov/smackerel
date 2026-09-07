@@ -523,5 +523,145 @@ out="$(run_lint "$d")"
 expect_in "T17 prose naming no file is still refused (1/2 signals)" \
   "$out" "lacks terminal output signals"
 
+# ── BUG-041: packet-form-aware required-artifact resolution (T18-T22) ─────────
+#
+# A BUG packet's required-artifact set is a FUNCTION of its declared packet form,
+# and that function is owned by bubbles/registry/bug-packet.yaml. Before BUG-041
+# artifact-lint.sh applied one hard-coded FEATURE list to every bug packet, so a
+# packet taking the compact route the framework recommends could not pass.
+#
+# Nothing in this file observed the artifact-presence check at all — T1-T17 are
+# entirely about the Check-3 certifying window — which is why that defect was
+# silent. The cases below pin the resolved behaviour. They are purely additive:
+# no assertion above is modified, relaxed, renumbered or deleted.
+#
+# These assertions target the artifact-presence stdout lines, NOT the exit code,
+# for the same reason T1-T17 do: the fixtures are minimal and the overall lint
+# verdict is non-zero for unrelated reasons.
+
+# make_bug_fixture <name> [packet-word] — create bugs/<name>/ carrying the three
+# compact artifacts. bug.md answers every micro-fix admission condition
+# admissibly and report.md satisfies the assurance floor, so a declared compact
+# packet resolves `form=compact` through micro-fix-admission.sh. Omitting the
+# packet word leaves state.json undeclared. Echoes the absolute directory.
+make_bug_fixture() {
+  local name="$1" packet_word="${2:-}"
+  local dir="$TMP/bugs/$name"
+  local packet_line=""
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  [[ -n "$packet_word" ]] && packet_line=",
+  \"packet\": \"$packet_word\""
+  cat > "$dir/state.json" <<STATE
+{
+  "status": "in_progress",
+  "schemaVersion": 3,
+  "bugId": "$name"$packet_line
+}
+STATE
+  cat > "$dir/bug.md" <<'BUGMD'
+# Bug
+
+Root cause: a hard-coded artifact list stood in for a resolved contract.
+
+micro-fix-admission: no-new-behavior = no
+micro-fix-admission: no-schema-change = no
+micro-fix-admission: no-auth-surface = no
+micro-fix-admission: no-payment-surface = no
+micro-fix-admission: no-secret-surface = no
+micro-fix-admission: no-deployment-surface = no
+micro-fix-admission: no-cross-product-effect = no
+micro-fix-admission: contract-preserving = yes
+BUGMD
+  cat > "$dir/report.md" <<'RPTMD'
+# Report
+
+Reproduced before the fix. The regression test fails without the fix and
+passes with the fix, and every run records its exit code.
+RPTMD
+  printf '%s\n' "$dir"
+}
+
+# ── T18: an ADMITTED compact packet carrying only bug.md/report.md/state.json
+# produces ZERO missing-artifact failures. This is the filed defect: before the
+# fix this fixture was rejected for spec.md, design.md, scopes.md and
+# uservalidation.md, none of which the compact contract requires.
+d="$(make_bug_fixture BUG-901-compact-admitted micro)"
+out="$(run_lint "$d")"
+expect_in "T18 a declared compact packet resolves to the compact form" \
+  "$out" 'Bug packet form: compact (state.json .packet="micro")'
+expect_in "T18 the compact form is confirmed by micro-fix admission" \
+  "$out" "Packet form 'compact' confirmed by micro-fix admission"
+expect_in "T18 bug.md is a required artifact of the compact form" \
+  "$out" "Required artifact exists: bug.md"
+expect_not_in "T18 an admitted compact packet has NO missing-artifact failure" \
+  "$out" "Missing required artifact"
+
+# ── T19: ANTI-OVER-REACH CONTROL for T18. The fix must reduce the required set
+# for the compact form only. A declared FULL packet missing design.md still
+# fails, proving T18 passes because the form was resolved and not because the
+# artifact-presence check was disabled for bug packets.
+d="$(make_bug_fixture BUG-902-full-missing-design full)"
+printf '# Scopes\n' > "$d/scopes.md"
+printf '# User Validation\n' > "$d/uservalidation.md"
+out="$(run_lint "$d")"
+expect_in "T19 a declared full packet resolves to the full form" \
+  "$out" 'Bug packet form: full (state.json .packet="full")'
+expect_in "T19 a full packet missing design.md still FAILS" \
+  "$out" "Missing required artifact: $d/design.md"
+
+# ── T20: an UNDECLARED packet resolves to the registry absent-default and is
+# linted as full. Silence can never reduce a requirement, so a genuinely missing
+# artifact still fails.
+d="$(make_bug_fixture BUG-903-undeclared)"
+printf '# Scopes\n' > "$d/scopes.md"
+printf '# User Validation\n' > "$d/uservalidation.md"
+out="$(run_lint "$d")"
+expect_in "T20 an undeclared packet falls back to the registry absent-default" \
+  "$out" "Bug packet form: full (no state.json .packet declaration; registry absent-default)"
+expect_in "T20 the absent-default full set still fails a missing artifact" \
+  "$out" "Missing required artifact: $d/design.md"
+
+# ── T21: declaring the reduced form is a REQUEST, never a grant. A packet that
+# declares compact but answers an admission condition inadmissibly is escalated
+# by micro-fix-admission.sh and linted as full, so the declaration cannot become
+# the override flag micro-fix-packet.yaml sets to `overrideFlag: none`.
+d="$(make_bug_fixture BUG-904-forged-compact micro)"
+cat > "$d/bug.md" <<'BUGMD'
+# Bug
+
+Root cause: a hard-coded artifact list stood in for a resolved contract.
+
+micro-fix-admission: no-new-behavior = no
+micro-fix-admission: no-schema-change = no
+micro-fix-admission: no-auth-surface = no
+micro-fix-admission: no-payment-surface = yes
+micro-fix-admission: no-secret-surface = no
+micro-fix-admission: no-deployment-surface = no
+micro-fix-admission: no-cross-product-effect = no
+micro-fix-admission: contract-preserving = yes
+BUGMD
+out="$(run_lint "$d")"
+expect_in "T21 a compact declaration that fails admission is refused" \
+  "$out" "micro-fix admission resolves 'full'"
+expect_in "T21 the refused packet is then linted as the full artifact set" \
+  "$out" "Missing required artifact: $d/design.md"
+
+# ── T22: the required set is SOURCED from bug-packet.yaml, not from the historic
+# hard-coded feature list. The two sets disagree on exactly two members, and both
+# are asserted here: bug.md is required of every bug form (the old list never
+# named it) and spec.md is required of none (the old list demanded it). This is
+# the F-041-01 adjudication in design.md §5.1.
+d="$(make_bug_fixture BUG-905-registry-sourced-set full)"
+printf '# Design\n' > "$d/design.md"
+printf '# Scopes\n' > "$d/scopes.md"
+printf '# User Validation\n' > "$d/uservalidation.md"
+rm -f "$d/bug.md"
+out="$(run_lint "$d")"
+expect_in "T22 bug.md is required because bug-packet.yaml declares it" \
+  "$out" "Missing required artifact: $d/bug.md"
+expect_not_in "T22 spec.md is required of no bug packet form" \
+  "$out" "Missing required artifact: $d/spec.md"
+
 echo
 echo "artifact-lint selftest: $passes/$assertions assertions passed"

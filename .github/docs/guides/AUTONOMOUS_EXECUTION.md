@@ -211,6 +211,12 @@ sprint_report:
 - every active top-level runner invokes specialist phase owners directly
 - All existing gates, policies, and anti-fabrication rules apply at every level
 
+### Measured Dispatch Is Below Orchestration
+
+IMP-055 admission can evaluate and account for one resource-consuming model, subagent, web, browser, or tool dispatch under an exact goal budget. The active top-level runner still owns orchestration and specialist dispatch authority. Admission does not select goals or modes, and a permit does not authorize consequential side effects.
+
+IMP-054 research can supply immutable evidence artifacts to an authorized workflow or direct operator. It does not become another orchestrator and does not certify completion. Both capabilities are opt-in; missing usage remains `unmeasured`. See [Research And Admission Runtime](../recipes/research-and-admission-runtime.md).
+
 ### Outcome-First Dispatch
 
 Autonomous agents optimize for the user's requested outcome. If an authorized runner needs another granted mode, it resolves and executes that mode directly in the same top-level runtime; specialist phases still use `runSubagent`.

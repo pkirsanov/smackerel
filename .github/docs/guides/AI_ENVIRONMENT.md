@@ -84,6 +84,12 @@ Bubbles manages exactly ONE entry in `.vscode/mcp.json`: its own MCP server, reg
 
 Bubbles provides the agent definitions, skills, and governance; MCP provides external tool access that complements them.
 
+### Research And Measured Execution Controls
+
+The source CLI exposes provider-neutral `research` and `admission` command families. Research creates typed, content-addressed evidence through explicit lifecycle stages. Admission evaluates measured dispatches against goal budgets, reservations, retry identities, and verified session epochs.
+
+These are runtime capabilities, not MCP servers, workflow modes, or action-authority substitutes. Both default off when no adapter is configured. Missing usage is reported as `unmeasured`; it is never interpreted as free or within budget. See [Research And Admission Runtime](../recipes/research-and-admission-runtime.md) for commands and activation boundaries.
+
 **Example workflow:**
 1. Agent loads `copilot-instructions.md` (project rules) + `AGENTS.md` (guardrails)
 2. Agent loads relevant skill from `.github/skills/` (domain knowledge)

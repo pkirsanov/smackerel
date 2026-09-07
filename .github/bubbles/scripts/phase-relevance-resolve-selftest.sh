@@ -335,7 +335,7 @@ unset BUBBLES_MODES_FILE
 # ── T11 usage contract ──────────────────────────────────────────────────────
 expect_rc "T11 missing --phase is a usage error" 2 bash "$RESOLVER"
 expect_rc "T11b an unreadable registry is a usage error" 2 \
-  env BUBBLES_MODES_FILE="$TMP_ROOT/absent.yaml" bash "$RESOLVER" --phase simplify
+  /usr/bin/env BUBBLES_MODES_FILE="$TMP_ROOT/absent.yaml" bash "$RESOLVER" --phase simplify
 expect_rc "T11c --help exits 0" 0 bash "$RESOLVER" --help
 for bypass in --force --skip --ignore --no-verify --skip-phase; do
   expect_rc "T11d '$bypass' is not accepted (no bypass exists)" 2 \

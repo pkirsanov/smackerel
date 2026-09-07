@@ -25,9 +25,13 @@ Usage: bash bubbles/scripts/state-snapshot.sh \
          --phase <name> [--scope-id <id>] [--note <string>] [--mode <start|end>] \
          [--posture <autonomy>] \
          [--context-boundary <kind>[:<checkpointId>]] \
+         [--mbe-posture <off|shadow|advisory|reference-enforce> \
+          --mbe-store-root <path> --mbe-epoch-context <path>] \
          [--decision <text> [--decision-principle <name>] [--decision-chose <option>] \
           [--decision-considered <csv>]] \
          [--convergence-iteration <N> --spec-dir <path>] \
+         [--session-budget-json <object> \
+          --expected-session-budget-revision <N>] \
          [--scenario-file <compiled-scenario.json> --node-id <node-id>] \
          --session-id <id> --session-control-file <path> --binding-packet-file <path>
 
@@ -62,7 +66,8 @@ Optional:
   --mode <start|end>   Records turn-start (default) or turn-end.
   --convergence-iteration <N>
                        Integer ≥ 0. When supplied alongside --spec-dir,
-                       additively writes/updates the (specDir, agent)
+                       additively writes/updates the
+                       (hostSessionId, specDir, agent)
                        entry in `convergenceLoops[]`. Enforced by Gate G082
                        via `bubbles/scripts/convergence-cap-guard.sh`. Both
                        --convergence-iteration and --spec-dir MUST be
@@ -70,6 +75,13 @@ Optional:
   --spec-dir <path>    Spec directory (repo-relative) that the
                        convergence iteration refers to. Paired with
                        --convergence-iteration.
+  --session-budget-json <object>
+                       Exact seven-cap session policy to append. Paired with
+                       --expected-session-budget-revision. The first write
+                       expects 0. A correction expects the unique current head.
+  --expected-session-budget-revision <N>
+                       Non-negative compare-and-append revision. Paired with
+                       --session-budget-json.
   -h, --help           Print this usage and exit.
 
 Behavior:
@@ -126,6 +138,14 @@ SESSION_CONTROL_FILE=""
 BINDING_PACKET_FILE=""
 SCENARIO_FILE=""
 NODE_ID=""
+MBE_POSTURE="off"
+MBE_STORE_ROOT=""
+MBE_EPOCH_CONTEXT=""
+MBE_EPOCH_JSON=""
+SESSION_BUDGET_JSON=""
+EXPECTED_SESSION_BUDGET_REVISION=""
+SESSION_BUDGET_FLAG_SEEN=0
+EXPECTED_SESSION_BUDGET_REVISION_FLAG_SEEN=0
 
 if [[ $# -eq 0 ]]; then
   usage >&2
@@ -190,6 +210,21 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --mbe-posture)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --mbe-posture requires a value" >&2; exit 2; }
+      MBE_POSTURE="$2"
+      shift 2
+      ;;
+    --mbe-store-root)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --mbe-store-root requires a value" >&2; exit 2; }
+      MBE_STORE_ROOT="$2"
+      shift 2
+      ;;
+    --mbe-epoch-context)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --mbe-epoch-context requires a value" >&2; exit 2; }
+      MBE_EPOCH_CONTEXT="$2"
+      shift 2
+      ;;
     --decision)
       [[ $# -ge 2 ]] || { echo "state-snapshot: --decision requires a value" >&2; exit 2; }
       DECISION="$2"
@@ -218,6 +253,26 @@ while [[ $# -gt 0 ]]; do
     --spec-dir)
       [[ $# -ge 2 ]] || { echo "state-snapshot: --spec-dir requires a value" >&2; exit 2; }
       SPEC_DIR="$2"
+      shift 2
+      ;;
+    --session-budget-json)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --session-budget-json requires a value" >&2; exit 2; }
+      [[ "$SESSION_BUDGET_FLAG_SEEN" -eq 0 ]] || {
+        echo "state-snapshot: duplicate --session-budget-json is ambiguous" >&2
+        exit 2
+      }
+      SESSION_BUDGET_FLAG_SEEN=1
+      SESSION_BUDGET_JSON="$2"
+      shift 2
+      ;;
+    --expected-session-budget-revision)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --expected-session-budget-revision requires a value" >&2; exit 2; }
+      [[ "$EXPECTED_SESSION_BUDGET_REVISION_FLAG_SEEN" -eq 0 ]] || {
+        echo "state-snapshot: duplicate --expected-session-budget-revision is ambiguous" >&2
+        exit 2
+      }
+      EXPECTED_SESSION_BUDGET_REVISION_FLAG_SEEN=1
+      EXPECTED_SESSION_BUDGET_REVISION="$2"
       shift 2
       ;;
     --session-id)
@@ -272,6 +327,20 @@ if [[ -n "$SPEC_DIR" && -z "$CONV_ITER" ]]; then
   exit 2
 fi
 
+if [[ -n "$SESSION_BUDGET_JSON" && -z "$EXPECTED_SESSION_BUDGET_REVISION" ]]; then
+  echo "state-snapshot: --session-budget-json requires --expected-session-budget-revision" >&2
+  exit 2
+fi
+if [[ -n "$EXPECTED_SESSION_BUDGET_REVISION" && -z "$SESSION_BUDGET_JSON" ]]; then
+  echo "state-snapshot: --expected-session-budget-revision requires --session-budget-json" >&2
+  exit 2
+fi
+if [[ -n "$EXPECTED_SESSION_BUDGET_REVISION" ]] &&
+  ! [[ "$EXPECTED_SESSION_BUDGET_REVISION" =~ ^[0-9]+$ ]]; then
+  echo "state-snapshot: --expected-session-budget-revision must be a non-negative integer" >&2
+  exit 2
+fi
+
 # Validate --convergence-iteration is a non-negative integer.
 if [[ -n "$CONV_ITER" ]]; then
   if ! [[ "$CONV_ITER" =~ ^[0-9]+$ ]]; then
@@ -293,6 +362,21 @@ case "$MODE" in
     exit 2
     ;;
 esac
+
+case "$MBE_POSTURE" in
+  off | shadow | advisory | reference-enforce) ;;
+  *) echo "state-snapshot: --mbe-posture must be off, shadow, advisory, or reference-enforce (got: $MBE_POSTURE)" >&2; exit 2 ;;
+esac
+if [[ "$MBE_POSTURE" != "off" && -n "$MBE_STORE_ROOT" && -n "$MBE_EPOCH_CONTEXT" ]]; then
+  MBE_EPOCH_JSON="$(python3 "$SCRIPT_DIR/mbe-reference-verify.py" \
+    --store-root "$MBE_STORE_ROOT" --context "$MBE_EPOCH_CONTEXT" --purpose epoch 2>/dev/null || true)"
+fi
+if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+  [[ -n "$CONTEXT_BOUNDARY_KIND" ]] || { echo "state-snapshot: reference-enforce requires --context-boundary" >&2; exit 3; }
+  [[ -n "$MBE_STORE_ROOT" && -d "$MBE_STORE_ROOT" ]] || { echo "state-snapshot: reference-enforce requires an existing --mbe-store-root" >&2; exit 3; }
+  [[ -n "$MBE_EPOCH_CONTEXT" && -f "$MBE_EPOCH_CONTEXT" ]] || { echo "state-snapshot: reference-enforce requires an existing --mbe-epoch-context" >&2; exit 3; }
+  [[ -n "$MBE_EPOCH_JSON" ]] || { echo "state-snapshot: reference-enforce requires a verified MBE epoch" >&2; exit 3; }
+fi
 
 # Record the posture that produced this turn, so an audit never has to
 # reconstruct the operator's shell environment. A resolver failure (e.g. an
@@ -328,289 +412,33 @@ fi
 NORMALIZED_PACKET_FILE=""
 TMP_FILE=""
 CONV_TMP=""
+POLICY_TMP=""
+PRE_TRANSACTION_STATE=""
 
-# --- Exclusive session-file lock (concurrency safety) ----------------------
+# --- Exclusive descriptor-safe transaction --------------------------------
 #
-# One state-snapshot run performs a read-modify-`mv` on bubbles.session.json in
-# up to three places: the mirror-session subprocess (which sets
-# `.repositoryBindingMirror`), the turnSnapshots append, and the convergenceLoops
-# update. Without a lock, two concurrent state-snapshot runs both read the same
-# session file and both `mv` their result, silently discarding one update. A lost
-# convergenceLoops update under-counts iterations and weakens Gate G082/G128
-# convergence-cap enforcement. A single exclusive lock, held from before
-# mirror-session through the final update, serializes the whole interaction so no
-# update is lost.
-#
-# Lock strategy is flock-first. `flock` (util-linux) is a kernel-managed,
-# race-free advisory lock: the kernel serializes concurrent acquirers, so there
-# is NO stale-detect/break window in which two runs could both enter the critical
-# section. It is the PRIMARY path (Linux/CI/selftest). `flock` is absent only on
-# stock macOS; there we fall back to a mkdir mutex that still uses the holder pid
-# + lock-dir mtime to DECIDE staleness and recover a lock left behind by a
-# SIGKILLed holder instead of spinning forever.
-#
-# The mkdir fallback breaks a stale lock in two separate steps — DECIDE
-# (session_lock_is_stale) then ACT (rename-claim) — and the pair is NOT atomic.
-# The rename is atomic only in the sense that exactly one concurrent breaker wins
-# it; on its own it does not prove the directory being renamed is still the
-# instance that was judged stale. Two guards close that window:
-#   1. An ABSENT lock dir is never reported as stale. There is nothing to break,
-#      so the waiter just races for mkdir again. Reporting absent as stale is what
-#      let a waiter run the destructive break after the lock had merely been
-#      released — by then a third process had legitimately won a FRESH lock, and
-#      the rename destroyed that live lock, putting two runs in the critical
-#      section and losing an update.
-#   2. The judged instance's identity (lock-dir inode + recorded holder pid) is
-#      re-verified immediately before the rename, so a lock released and re-taken
-#      between decide and act is left alone.
-SESSION_LOCK_DIR=""
-SESSION_LOCK_PID_FILE=""
-SESSION_LOCK_FILE=""
-SESSION_LOCK_MODE=""
-SESSION_LOCK_HELD=false
-# Identity of the lock instance the most recent session_lock_is_stale call judged.
-SESSION_LOCK_JUDGED_IDENTITY=""
+# The outer process validates packet authority before deriving any repository
+# path. It then delegates one complete state transaction to session-state-io.py.
+# The helper creates missing parent directories without following symlinks.
+# Its flock strategy opens without truncation and rechecks descriptor identity.
+# Its mkdir strategy rechecks both directory and holder identity before cleanup.
+# The child holds that lock across mirror, policy, turn, and convergence writes.
+SESSION_LOCK_STRATEGY=""
+LOCK_TRANSACTION_MODE="${BUBBLES_STATE_SNAPSHOT_LOCK_TRANSACTION:-}"
 
-# Detect flock once at acquire time; release routes on SESSION_LOCK_MODE (the
-# strategy actually used), never on a re-probe.
+# Detect flock once before dispatching the helper-owned transaction.
 session_lock_have_flock() {
   command -v flock >/dev/null 2>&1
 }
 
-_lock_trace() { [[ -z "${BUBBLES_LOCK_TRACE:-}" ]] || printf '%s %s %s %s\n' "$(date +%s.%N)" "$1" "$$" "$SESSION_LOCK_MODE" >> "$BUBBLES_LOCK_TRACE" 2>/dev/null || true; } # LOCKTRACE-DEBUG
-
-session_lock_mtime_epoch() {
-  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || printf '%s' '0'
-}
-
-# Identity token for the lock-dir instance that exists right now: inode plus the
-# recorded holder pid. A release followed by a re-acquire yields a different
-# token, which is what lets a breaker distinguish "the instance I judged" from
-# "an instance created since I judged". `ls -di` is used because it is POSIX on
-# both userlands (field 1 is the inode); `stat` needs different flags per
-# userland, which is why session_lock_mtime_epoch has to try -c then -f. Prints
-# nothing when the lock dir is absent.
-session_lock_identity() {
-  local ino='' pid=''
-  [[ -d "$SESSION_LOCK_DIR" ]] || return 0
-  # shellcheck disable=SC2012  # one known path in, only field 1 (the inode number) out — no filename is parsed
-  ino="$(ls -di "$SESSION_LOCK_DIR" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
-  if [[ -f "$SESSION_LOCK_PID_FILE" ]]; then
-    pid="$(cat "$SESSION_LOCK_PID_FILE" 2>/dev/null || true)"
-  fi
-  pid="${pid//[[:space:]]/}"
-  printf '%s:%s' "${ino:-?}" "${pid:-?}"
-}
-
-# True only while the lock dir is still the instance session_lock_is_stale
-# judged. Re-read immediately before the destructive rename, because decide and
-# act are separate steps and the judged lock can be released and legitimately
-# re-created between them.
-session_lock_identity_unchanged() {
-  [[ -n "$SESSION_LOCK_JUDGED_IDENTITY" ]] || return 1
-  [[ "$(session_lock_identity)" == "$SESSION_LOCK_JUDGED_IDENTITY" ]]
-}
-
-# Tri-state contract, read by the caller from the explicit exit code:
-#   0 = a lock instance EXISTS and is stale (safe to break)
-#   1 = a lock instance EXISTS and is held by a live, non-stale holder
-#   2 = NO lock instance exists — nothing to judge, and nothing to break
-# 2 is deliberately NOT folded into 0: an absent directory is not a stale lock.
-# On 0 and 1 the judged instance's identity is published in
-# SESSION_LOCK_JUDGED_IDENTITY for the caller to re-verify before acting on it.
-session_lock_is_stale() {
-  local pid='' mtime now age max
-  SESSION_LOCK_JUDGED_IDENTITY=''
-  [[ -d "$SESSION_LOCK_DIR" ]] || return 2
-  SESSION_LOCK_JUDGED_IDENTITY="$(session_lock_identity)"
-  # The dir can be released between the test above and this line. An instance
-  # that no longer exists is absent, not stale. Without this check the mtime
-  # lookup below falls back to epoch 0, the lock reads as ~infinitely old, and it
-  # is judged "stale by age" — absent-is-not-stale leaking in a second disguise.
-  [[ -n "$SESSION_LOCK_JUDGED_IDENTITY" ]] || return 2
-
-  if [[ -f "$SESSION_LOCK_PID_FILE" ]]; then
-    pid="$(cat "$SESSION_LOCK_PID_FILE" 2>/dev/null || true)"
-  fi
-  pid="${pid//[[:space:]]/}"
-
-  max=600
-  mtime="$(session_lock_mtime_epoch "$SESSION_LOCK_DIR")"
-  # '0' is that helper's failure sentinel: both stat forms failed because the dir
-  # was released while we were judging it. Unknown mtime must read as ABSENT, not
-  # as "aged past the cap" — a 1970 mtime makes every vanished lock look stale,
-  # which is absent-is-not-stale leaking in through the age test.
-  [[ "$mtime" != "0" ]] || return 2
-  now="$(date -u +%s 2>/dev/null || printf '%s' '0')"
-  age=-1
-  if [[ "$mtime" =~ ^[0-9]+$ && "$now" =~ ^[0-9]+$ ]]; then
-    age=$(( now - mtime ))
-  fi
-
-  if [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]]; then
-    # A holder pid is recorded: a dead holder is stale immediately; a live holder
-    # is stale only if the lock has outlived the age cap (defensive).
-    if ! kill -0 "$pid" 2>/dev/null; then
-      return 0
-    fi
-    if (( age > max )); then
-      return 0
-    fi
-    return 1
-  fi
-
-  # No holder pid recorded yet. mkdir wins the lock, THEN the holder records its
-  # pid, so there is a brief window where the dir exists with no pid file. Do NOT
-  # break a freshly created lock (that window is an in-flight acquirer, not a
-  # crash) — only a lock dir aged past the stale threshold with no live holder is
-  # genuinely stale. This closes the acquire/pid-write TOCTOU that would
-  # otherwise let two waiters both break each other's fresh lock and lose an
-  # update. A truly wedged pid-less lock is still recovered by acquire's bounded
-  # max-wait defensive break.
-  if (( age > max )); then
-    return 0
-  fi
-  return 1
-}
-
-# Take the exclusive session lock. flock-first (race-free); mkdir mutex only
-# where flock is unavailable.
-acquire_session_lock() {
-  if session_lock_have_flock; then
-    acquire_session_lock_flock
-  else
-    acquire_session_lock_mkdir
-  fi
-}
-
-# PRIMARY path: kernel-managed flock on a dedicated lock file next to the session
-# file. flock is race-free — the kernel blocks concurrent acquirers until the
-# holder releases, so there is no stale-detect/break step and therefore no window
-# in which two runs could both hold the lock (the exact residual race the mkdir
-# mutex had). A BOUNDED `-w` timeout stops a genuinely wedged holder from
-# deadlocking THIS run forever; on timeout we fail loudly and non-zero rather
-# than silently proceeding unlocked. A fixed FD (9) is used so the `exec 9>`
-# redirection works on every bash (the dynamic `exec {fd}>` form needs bash
-# >=4.1; the flock path only runs where flock exists, but a fixed FD keeps it
-# version-independent). The lock FILE is created once and never unlinked (see
-# release_session_lock).
-acquire_session_lock_flock() {
-  local flock_wait=120
-  exec 9>"$SESSION_LOCK_FILE" || {
-    echo "state-snapshot: unable to open session lock file: $SESSION_LOCK_FILE" >&2
-    exit 3
-  }
-  if ! flock -x -w "$flock_wait" 9; then
-    echo "state-snapshot: timed out after ${flock_wait}s acquiring the exclusive session lock." >&2
-    echo "  Lock file: $SESSION_LOCK_FILE" >&2
-    echo "  Another state-snapshot run appears wedged holding it; refusing to proceed unlocked." >&2
-    exec 9>&- || true
-    exit 3
-  fi
-  SESSION_LOCK_MODE="flock"
-  SESSION_LOCK_HELD=true
-  _lock_trace ACQUIRE # LOCKTRACE-DEBUG
-}
-
-# Destroy the lock instance session_lock_is_stale just judged, via an ATOMIC
-# rename-claim: renaming a directory is atomic, so exactly ONE concurrent breaker
-# wins the `mv` and only that winner removes the claimed (renamed) dir. The
-# rename alone does not establish that the dir is still the judged instance, so
-# the identity is re-verified first. Returns 1 (break refused) when the instance
-# changed under us, so the caller re-races mkdir instead of destroying a lock
-# that now belongs to somebody else.
-session_lock_break_judged_instance() {
-  local reason="$1" claim
-  if ! session_lock_identity_unchanged; then
-    _lock_trace RETRY-IDENTITY # LOCKTRACE-DEBUG
-    return 1
-  fi
-  _lock_trace "$reason" # LOCKTRACE-DEBUG
-  claim="$SESSION_LOCK_DIR.stale.$$.${RANDOM}"
-  if mv "$SESSION_LOCK_DIR" "$claim" 2>/dev/null; then
-    rm -rf "$claim" 2>/dev/null || true
-  fi
-  return 0
-}
-
-# FALLBACK path (stock macOS, no flock): mkdir mutex. Staleness is DECIDED by
-# session_lock_is_stale (holder pid liveness + lock-dir mtime); breaking is done
-# by session_lock_break_judged_instance, which acts only on the instance that was
-# judged. The absent case (exit 2) never reaches a break at all: a lock dir that
-# is gone is not a stale lock, it is an uncontended one, and the only correct
-# response is to race for mkdir again.
-acquire_session_lock_mkdir() {
-  local waited=0
-  local max_wait=600
-  local absent_spins=0
-  local absent_max=2000
-  local stale_rc
-  while true; do
-    if mkdir "$SESSION_LOCK_DIR" 2>/dev/null; then
-      printf '%s\n' "$$" > "$SESSION_LOCK_PID_FILE" 2>/dev/null || true
-      SESSION_LOCK_MODE="mkdir"
-      SESSION_LOCK_HELD=true
-      _lock_trace ACQUIRE # LOCKTRACE-DEBUG
-      return 0
-    fi
-
-    stale_rc=0
-    session_lock_is_stale || stale_rc=$?
-
-    if (( stale_rc == 2 )); then
-      # Our mkdir lost to a holder that has since released. Nothing to break.
-      _lock_trace RETRY-ABSENT # LOCKTRACE-DEBUG
-      absent_spins=$(( absent_spins + 1 ))
-      if (( absent_spins > absent_max )); then
-        # mkdir kept failing while the dir kept reading as absent, so the failure
-        # is structural (permissions, full filesystem) rather than contention.
-        # Bail loudly instead of spinning, and never proceed unlocked.
-        echo "state-snapshot: unable to create the session lock directory after ${absent_max} consecutive attempts." >&2
-        echo "  Lock dir: $SESSION_LOCK_DIR" >&2
-        echo "  mkdir kept failing while the directory read as ABSENT, which is a filesystem or permission" >&2
-        echo "  failure rather than lock contention; refusing to proceed unlocked." >&2
-        exit 3
-      fi
-      continue
-    fi
-    absent_spins=0
-
-    if (( stale_rc == 0 )); then
-      session_lock_break_judged_instance BREAK-STALE || sleep 0.1
-      continue
-    fi
-
-    waited=$(( waited + 1 ))
-    if (( waited > max_wait )); then
-      # A live holder has exceeded the wait budget; break it defensively.
-      session_lock_break_judged_instance BREAK-DEFENSIVE || sleep 0.1
-      continue
-    fi
-    sleep 0.1
-  done
-}
-
-release_session_lock() {
-  [[ "$SESSION_LOCK_HELD" == true ]] || return 0
-  _lock_trace RELEASE # LOCKTRACE-DEBUG
-  if [[ "$SESSION_LOCK_MODE" == "flock" ]]; then
-    # Release by closing the FD (drops the kernel lock). The lock FILE is
-    # deliberately LEFT in place: unlinking it would let a new acquirer create
-    # and lock a fresh inode while an old holder still holds the previous one —
-    # reintroducing a race. flock keys on the open file description, not the path.
-    exec 9>&- || true
-  else
-    rm -f "$SESSION_LOCK_PID_FILE" 2>/dev/null || true
-    rmdir "$SESSION_LOCK_DIR" 2>/dev/null || rm -rf "$SESSION_LOCK_DIR" 2>/dev/null || true
-  fi
-  SESSION_LOCK_HELD=false
-}
+_lock_trace() { [[ -z "${BUBBLES_LOCK_TRACE:-}" ]] || printf '%s %s %s %s\n' "$(date +%s.%N)" "$1" "$$" "$SESSION_LOCK_STRATEGY" >> "$BUBBLES_LOCK_TRACE" 2>/dev/null || true; } # LOCKTRACE-DEBUG
 
 cleanup_temp_files() {
-  release_session_lock
   [[ -z "$NORMALIZED_PACKET_FILE" ]] || rm -f "$NORMALIZED_PACKET_FILE"
   [[ -z "$TMP_FILE" ]] || rm -f "$TMP_FILE"
   [[ -z "$CONV_TMP" ]] || rm -f "$CONV_TMP"
+  [[ -z "$POLICY_TMP" ]] || rm -f "$POLICY_TMP"
+  [[ -z "$PRE_TRANSACTION_STATE" ]] || rm -f "$PRE_TRANSACTION_STATE"
 }
 
 trap cleanup_temp_files EXIT
@@ -624,37 +452,17 @@ cp -- "$BINDING_PACKET_FILE" "$NORMALIZED_PACKET_FILE" || {
 }
 chmod 600 "$NORMALIZED_PACKET_FILE"
 
-# Resolve the repository-local session file from the caller-normalized packet and
-# take the exclusive session lock BEFORE mirror-session runs. mirror-session
-# (repository-binding.sh) performs its own read-modify-`mv` on this same session
-# file, so the lock must span from here through the turnSnapshots +
-# convergenceLoops updates below for concurrent runs to be lose-update-free.
-# The authoritative repository root is still the packet's `.repositoryRoot`
-# (the same value mirror-session validates and uses); locking only proceeds for a
-# well-formed absolute root, so a malformed packet falls through to the existing
-# mirror-session refusal below without creating a spurious lock.
-REPO_ROOT="$(jq -r '.repositoryRoot' "$NORMALIZED_PACKET_FILE")"
-SESSION_DIR="$REPO_ROOT/.specify/memory"
-SESSION_FILE="$SESSION_DIR/bubbles.session.json"
-SESSION_LOCK_DIR="$SESSION_FILE.lock"
-SESSION_LOCK_PID_FILE="$SESSION_LOCK_DIR/holder.pid"
-SESSION_LOCK_FILE="$SESSION_FILE.flock"
-if [[ -n "$REPO_ROOT" && "$REPO_ROOT" == /* ]]; then
-  mkdir -p "$SESSION_DIR"
-  acquire_session_lock
-fi
-
 MIRROR_GOAL_NODE_ARGS=()
 if [[ -n "$SCENARIO_FILE" ]]; then
   MIRROR_GOAL_NODE_ARGS=(--scenario-file "$SCENARIO_FILE" --node-id "$NODE_ID")
 fi
 
 set +e
-BINDING_OUTPUT="$(bash "$REPOSITORY_BINDING" mirror-session \
+BINDING_OUTPUT="$(bash "$REPOSITORY_BINDING" validate-packet \
   --session-id "$SESSION_ID" \
   --session-control-file "$SESSION_CONTROL_FILE" \
   --packet-file "$NORMALIZED_PACKET_FILE" \
-  "${MIRROR_GOAL_NODE_ARGS[@]}" 2>&1)"
+  ${MIRROR_GOAL_NODE_ARGS[@]+"${MIRROR_GOAL_NODE_ARGS[@]}"} 2>&1)"
 BINDING_RC=$?
 set -e
 if [[ "$BINDING_RC" -ne 0 ]]; then
@@ -662,16 +470,274 @@ if [[ "$BINDING_RC" -ne 0 ]]; then
   exit "$BINDING_RC"
 fi
 
-mkdir -p "$SESSION_DIR"
+REPO_ROOT="$(jq -r '.repositoryRoot' "$NORMALIZED_PACKET_FILE")"
+PACKET_SESSION_ID="$(jq -r '.repositoryResolution.sessionId' "$NORMALIZED_PACKET_FILE")"
+if [[ "$PACKET_SESSION_ID" != "$SESSION_ID" ]]; then
+  echo "state-snapshot: validated packet session does not match --session-id" >&2
+  exit 2
+fi
+SESSION_STATE_IO="$SCRIPT_DIR/session-state-io.py"
+[[ -f "$SESSION_STATE_IO" ]] || {
+  echo "state-snapshot: session state I/O helper is unavailable" >&2
+  exit 3
+}
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "state-snapshot: python3 is required for descriptor-safe session state I/O." >&2
+  exit 3
+fi
+SESSION_DIR="$REPO_ROOT/.specify/memory"
+SESSION_FILE="$SESSION_DIR/bubbles.session.json"
+
+# Resolve posture only after packet authority establishes the repository and
+# exact host session. A first policy write supplies its requested boundedness.
+# Every later unattended lookup reads only the validated session policy head.
+if [[ -z "$POSTURE" && -x "$SCRIPT_DIR/autonomy-resolve.sh" ]]; then
+  AUTONOMY_ARGS=(--format json --repo-root "$REPO_ROOT")
+  if [[ -n "$SESSION_BUDGET_JSON" ]]; then
+    REQUESTED_BUDGET_STATE="$(jq -r '
+      [
+        .maxTotalConvergenceIterations,
+        .maxWallClockMinutes,
+        .maxToolCalls,
+        .maxSingleToolResultBytes,
+        .maxCumulativeToolResultBytes,
+        .maxPromptTokensPerRequest,
+        .maxCumulativePromptTokens
+      ]
+      | if any(.[]; . != null) then "bounded" else "unbounded" end
+    ' <<< "$SESSION_BUDGET_JSON")"
+    AUTONOMY_ARGS+=(--session-budget "$REQUESTED_BUDGET_STATE")
+  else
+    AUTONOMY_ARGS+=(
+      --session-id "$SESSION_ID"
+      --session-control-file "$SESSION_CONTROL_FILE"
+      --binding-packet-file "$NORMALIZED_PACKET_FILE"
+    )
+    if [[ -n "$SCENARIO_FILE" ]]; then
+      AUTONOMY_ARGS+=(--scenario-file "$SCENARIO_FILE" --node-id "$NODE_ID")
+    fi
+  fi
+  POSTURE="$(bash "$SCRIPT_DIR/autonomy-resolve.sh" \
+    ${AUTONOMY_ARGS[@]+"${AUTONOMY_ARGS[@]}"} 2>/dev/null |
+    sed -n 's/.*"autonomy":"\([^"]*\)".*/\1/p')"
+fi
+
+PRE_TRANSACTION_STATE=""
+if [[ -n "${BUBBLES_STATE_SNAPSHOT_TRANSACTION_ACTIVE:-}" && -n "$SESSION_BUDGET_JSON" ]]; then
+  PRE_TRANSACTION_STATE="$(mktemp)"
+  chmod 600 "$PRE_TRANSACTION_STATE"
+  if [[ -f "$SESSION_FILE" ]]; then
+    cp -- "$SESSION_FILE" "$PRE_TRANSACTION_STATE"
+  else
+    printf '{}\n' > "$PRE_TRANSACTION_STATE"
+  fi
+fi
+
+case "$LOCK_TRANSACTION_MODE" in
+  "")
+    if session_lock_have_flock; then
+      SESSION_LOCK_STRATEGY="flock-run"
+    else
+      SESSION_LOCK_STRATEGY="mkdir-run"
+    fi
+    ;;
+  flock|flock-run) SESSION_LOCK_STRATEGY="flock-run" ;;
+  mkdir|mkdir-run) SESSION_LOCK_STRATEGY="mkdir-run" ;;
+  *)
+    echo "state-snapshot: invalid BUBBLES_STATE_SNAPSHOT_LOCK_TRANSACTION" >&2
+    exit 2
+    ;;
+esac
+
+TRANSACTION_ARGS=(
+  --phase "$PHASE"
+  --mode "$MODE"
+  --session-id "$SESSION_ID"
+  --session-control-file "$SESSION_CONTROL_FILE"
+  --binding-packet-file "$NORMALIZED_PACKET_FILE"
+)
+[[ -z "$SCOPE_ID" ]] || TRANSACTION_ARGS+=(--scope-id "$SCOPE_ID")
+[[ -z "$OCCURRENCE_ID" ]] || TRANSACTION_ARGS+=(--occurrence-id "$OCCURRENCE_ID")
+[[ -z "$NOTE" ]] || TRANSACTION_ARGS+=(--note "$NOTE")
+[[ -z "$POSTURE" ]] || TRANSACTION_ARGS+=(--posture "$POSTURE")
+if [[ -n "$CONTEXT_BOUNDARY_KIND" ]]; then
+  if [[ -n "$CONTEXT_BOUNDARY_ID" ]]; then
+    TRANSACTION_ARGS+=(--context-boundary "$CONTEXT_BOUNDARY_KIND:$CONTEXT_BOUNDARY_ID")
+  else
+    TRANSACTION_ARGS+=(--context-boundary "$CONTEXT_BOUNDARY_KIND")
+  fi
+fi
+[[ -z "$DECISION" ]] || TRANSACTION_ARGS+=(--decision "$DECISION")
+[[ -z "$DECISION_PRINCIPLE" ]] || TRANSACTION_ARGS+=(--decision-principle "$DECISION_PRINCIPLE")
+[[ -z "$DECISION_CHOSE" ]] || TRANSACTION_ARGS+=(--decision-chose "$DECISION_CHOSE")
+[[ -z "$DECISION_CONSIDERED" ]] || TRANSACTION_ARGS+=(--decision-considered "$DECISION_CONSIDERED")
+if [[ -n "$CONV_ITER" ]]; then
+  TRANSACTION_ARGS+=(--convergence-iteration "$CONV_ITER" --spec-dir "$SPEC_DIR")
+fi
+if [[ -n "$SESSION_BUDGET_JSON" ]]; then
+  TRANSACTION_ARGS+=(
+    --session-budget-json "$SESSION_BUDGET_JSON"
+    --expected-session-budget-revision "$EXPECTED_SESSION_BUDGET_REVISION"
+  )
+fi
+if [[ -n "$SCENARIO_FILE" ]]; then
+  TRANSACTION_ARGS+=(--scenario-file "$SCENARIO_FILE" --node-id "$NODE_ID")
+fi
+
+if [[ -z "${BUBBLES_STATE_SNAPSHOT_TRANSACTION_ACTIVE:-}" ]]; then
+  if [[ "$SESSION_LOCK_STRATEGY" == "flock-run" ]]; then
+    LOCK_RELATIVE_PATH=".specify/runtime/session-state/bubbles.session.json.flock"
+  else
+    LOCK_RELATIVE_PATH=".specify/runtime/session-state/bubbles.session.json.lock"
+  fi
+  _lock_trace REQUEST
+  BUBBLES_STATE_SNAPSHOT_TRANSACTION_ACTIVE=1 \
+    BUBBLES_STATE_SNAPSHOT_LOCK_TRANSACTION="$SESSION_LOCK_STRATEGY" \
+    BUBBLES_AGENT_NAME="${BUBBLES_AGENT_NAME:-}" \
+    python3 "$SESSION_STATE_IO" "$SESSION_LOCK_STRATEGY" \
+      --root "$REPO_ROOT" \
+      --relative-lock "$LOCK_RELATIVE_PATH" \
+      --timeout-seconds 120 -- \
+      "$BASH" "${BASH_SOURCE[0]}" ${TRANSACTION_ARGS[@]+"${TRANSACTION_ARGS[@]}"}
+  exit $?
+fi
+
+AGENT_NAME="${BUBBLES_AGENT_NAME:-unknown}"
+TIMESTAMP="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+# --- Exact-session policy compare-and-append -------------------------------
+
+if [[ -n "$SESSION_BUDGET_JSON" ]]; then
+  if [[ -n "$PRE_TRANSACTION_STATE" ]]; then
+    POLICY_SOURCE_FILE="$PRE_TRANSACTION_STATE"
+  else
+    POLICY_SOURCE_FILE="$SESSION_FILE"
+  fi
+  POLICY_TMP="$(mktemp)"
+  chmod 600 "$POLICY_TMP"
+  set +e
+  jq \
+    --arg hostSessionId "$SESSION_ID" \
+    --arg recordedAt "$TIMESTAMP" \
+    --argjson expectedRevision "$EXPECTED_SESSION_BUDGET_REVISION" \
+    --argjson requestedBudget "$SESSION_BUDGET_JSON" '
+    def cap_keys:
+      ["schemaVersion", "maxTotalConvergenceIterations", "maxWallClockMinutes",
+       "maxToolCalls", "maxSingleToolResultBytes", "maxCumulativeToolResultBytes",
+       "maxPromptTokensPerRequest", "maxCumulativePromptTokens"];
+    def outer_keys:
+      ["recordSchemaVersion", "hostSessionId", "revision", "supersedesRevision",
+       "recordedAt", "budget"];
+    def valid_timestamp:
+      type == "string"
+      and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+      and (try (fromdateiso8601 | type == "number") catch false);
+    def valid_budget:
+      type == "object"
+      and ((keys - cap_keys) | length) == 0
+      and .schemaVersion == 1
+      and ([cap_keys[1:][] as $key
+        | ((has($key) | not) or .[$key] == null
+           or ((.[$key] | type) == "number" and (.[$key] | floor) == .[$key] and .[$key] >= 0))]
+        | all);
+    def valid_record:
+      type == "object"
+      and ((keys | sort) == (outer_keys | sort))
+      and .recordSchemaVersion == 1
+      and (.hostSessionId | type) == "string" and (.hostSessionId | length) > 0
+      and (.revision | type) == "number" and (.revision | floor) == .revision and .revision > 0
+      and (.supersedesRevision == null
+           or ((.supersedesRevision | type) == "number"
+               and (.supersedesRevision | floor) == .supersedesRevision
+               and .supersedesRevision > 0
+               and .supersedesRevision < .revision))
+      and (.recordedAt | valid_timestamp)
+      and (.budget | valid_budget);
+    def normalized_budget:
+      {
+        schemaVersion: 1,
+        maxTotalConvergenceIterations: (.maxTotalConvergenceIterations // null),
+        maxWallClockMinutes: (.maxWallClockMinutes // null),
+        maxToolCalls: (.maxToolCalls // null),
+        maxSingleToolResultBytes: (.maxSingleToolResultBytes // null),
+        maxCumulativeToolResultBytes: (.maxCumulativeToolResultBytes // null),
+        maxPromptTokensPerRequest: (.maxPromptTokensPerRequest // null),
+        maxCumulativePromptTokens: (.maxCumulativePromptTokens // null)
+      };
+    def select_head($records):
+      if ($records | length) == 0 then {revision: 0, budget: null}
+      elif (all($records[]; valid_record) | not) then error("invalid-policy-record")
+      elif (($records | map(.revision) | unique | length) != ($records | length)) then error("duplicate-policy-revision")
+      elif (($records | map(select(.revision == 1 and .supersedesRevision == null)) | length) != 1) then error("missing-policy-root")
+      elif ([$records[] | select(.revision > 1) as $record
+             | (([$records[] | select(.revision == ($record.revision - 1))] | length) != 1
+                or $record.supersedesRevision != ($record.revision - 1))]
+            | any) then error("branching-policy-chain")
+      else ($records | max_by(.revision))
+      end;
+    if (.sessionBudgetHistory? != null and (.sessionBudgetHistory | type) != "array") then
+      error("invalid-policy-history")
+    elif ($requestedBudget | valid_budget | not) then
+      error("invalid-requested-budget")
+    else
+      . as $root
+      | ($root.sessionBudgetHistory // []) as $history
+      | ([$history[] | select(.hostSessionId == $hostSessionId)]) as $records
+      | select_head($records) as $head
+      | ($requestedBudget | normalized_budget) as $normalized
+      | if $head.revision == 0 and $expectedRevision == 0 then
+          $root + {sessionBudgetHistory: ($history + [{
+            recordSchemaVersion: 1,
+            hostSessionId: $hostSessionId,
+            revision: 1,
+            supersedesRevision: null,
+            recordedAt: $recordedAt,
+            budget: $normalized
+          }])}
+        elif $head.revision == 1 and $expectedRevision == 0 and $head.budget == $normalized then
+          $root
+        elif $head.revision != $expectedRevision then
+          error("stale-policy-revision")
+        elif $head.budget == $normalized then
+          $root
+        else
+          $root + {sessionBudgetHistory: ($history + [{
+            recordSchemaVersion: 1,
+            hostSessionId: $hostSessionId,
+            revision: ($head.revision + 1),
+            supersedesRevision: $head.revision,
+            recordedAt: $recordedAt,
+            budget: $normalized
+          }])}
+        end
+    end
+    ' "$POLICY_SOURCE_FILE" > "$POLICY_TMP"
+  POLICY_RC=$?
+  set -e
+  if [[ "$POLICY_RC" -ne 0 ]]; then
+    echo "state-snapshot: session policy compare-and-append refused" >&2
+    exit 4
+  fi
+fi
+
+set +e
+BINDING_OUTPUT="$(bash "$REPOSITORY_BINDING" mirror-session \
+  --session-id "$SESSION_ID" \
+  --session-control-file "$SESSION_CONTROL_FILE" \
+  --packet-file "$NORMALIZED_PACKET_FILE" \
+  ${MIRROR_GOAL_NODE_ARGS[@]+"${MIRROR_GOAL_NODE_ARGS[@]}"} 2>&1)"
+BINDING_RC=$?
+set -e
+if [[ "$BINDING_RC" -ne 0 ]]; then
+  printf '%s\n' "$BINDING_OUTPUT" >&2
+  exit "$BINDING_RC"
+fi
 
 if [[ ! -f "$SESSION_FILE" ]]; then
   printf '{}\n' > "$SESSION_FILE"
 fi
 
 # --- Build snapshot record -------------------------------------------------
-
-AGENT_NAME="${BUBBLES_AGENT_NAME:-unknown}"
-TIMESTAMP="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
 # Compute next turnNumber from existing turnSnapshots array length.
 NEXT_TURN="$(jq '
@@ -700,12 +766,16 @@ jq \
   --arg posture "$POSTURE" \
   --arg cbKind "$CONTEXT_BOUNDARY_KIND" \
   --arg cbId "$CONTEXT_BOUNDARY_ID" \
+  --arg mbePosture "$MBE_POSTURE" \
+  --argjson mbeEpoch "${MBE_EPOCH_JSON:-null}" \
   --arg decision "$DECISION" \
   --arg dprinciple "$DECISION_PRINCIPLE" \
   --arg dchose "$DECISION_CHOSE" \
   --arg dconsidered "$DECISION_CONSIDERED" \
   --arg agent "$AGENT_NAME" \
   --arg host_session "$SESSION_ID" \
+  --arg has_policy "$([[ -n "$SESSION_BUDGET_JSON" ]] && printf true || printf false)" \
+  --slurpfile policy_state "${POLICY_TMP:-$SESSION_FILE}" \
   '
   def goal_ref:
     if (.goalContract | type) == "object" then
@@ -714,7 +784,11 @@ jq \
         sourceRequestDigest: .goalContract.sourceRequestDigest,
         workBoundary: .goalContract.workBoundary }
     else null end;
-  . as $root
+    . as $live
+    | (if $has_policy == "true"
+      then $live + {sessionBudgetHistory: $policy_state[0].sessionBudgetHistory}
+      else $live
+      end) as $root
   | ($root | goal_ref) as $goalRef
   | ($root + {
       turnSnapshots: ((($root.turnSnapshots // []) + [
@@ -729,15 +803,17 @@ jq \
           note: (if $note == "" then null else $note end),
           agent: $agent,
           hostSessionId: (if $host_session == "" then null else $host_session end),
-          goalRef: $goalRef
+          goalRef: $goalRef,
+          mbeEpoch: $mbeEpoch
         }
       ])),
       autonomyPosture: (if $posture == "" then ($root.autonomyPosture // null) else $posture end),
       contextBoundary: (
         if $cbKind == "" then ($root.contextBoundary // null)
-        else { kind: $cbKind,
-               checkpointId: (if $cbId == "" then null else $cbId end),
-               at: $timestamp }
+        else ({ kind: $cbKind,
+                checkpointId: (if $cbId == "" then null else $cbId end),
+                at: $timestamp }
+              + (if $mbeEpoch == null then {} else { mbeEpoch: $mbeEpoch } end))
         end
       ),
       autonomyDecisions: (
@@ -756,24 +832,32 @@ jq \
         end
       )
     })
+    + (if $mbePosture == "off" then {} else { mbeRolloutPosture: $mbePosture } end)
   ' "$SESSION_FILE" > "$TMP_FILE"
 
 mv "$TMP_FILE" "$SESSION_FILE"
 TMP_FILE=""
+[[ -z "$POLICY_TMP" ]] || rm -f "$POLICY_TMP"
+POLICY_TMP=""
+[[ -z "$PRE_TRANSACTION_STATE" ]] || rm -f "$PRE_TRANSACTION_STATE"
+PRE_TRANSACTION_STATE=""
 
 # --- Convergence loop update (Gate G082) -----------------------------------
 #
 # When both --convergence-iteration and --spec-dir are supplied, additively
-# update the `convergenceLoops[]` array entry keyed by (specDir, agent).
+# update the `convergenceLoops[]` array entry keyed by
+# (hostSessionId, specDir, agent).
 # If an entry for that key already exists, replace its `iterationCount` and
 # `lastUpdated`. Otherwise append a new entry. Other entries (for other
-# specs or other agents) are NEVER touched.
+# sessions, specs, or agents) are NEVER touched. Legacy entries without
+# `hostSessionId` do not match the expanded key and remain stored unchanged.
 #
 # This array is consumed by `bubbles/scripts/convergence-cap-guard.sh`
 # which enforces `maxConvergenceIterations` (default 10) per Gate G082.
 if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
   CONV_TMP="$(mktemp "$SESSION_DIR/.bubbles.session.json.convergence.XXXXXX")"
   jq \
+    --arg hostSessionId "$SESSION_ID" \
     --arg specDir "$SPEC_DIR" \
     --arg agent "$AGENT_NAME" \
     --argjson iterationCount "$CONV_ITER" \
@@ -790,8 +874,9 @@ if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
     | ($root | goal_ref) as $goalRef
     | ($root.convergenceLoops // []) as $loops
     | ([ $loops[]
-         | select(.specDir != $specDir or .agent != $agent)
+         | select(.hostSessionId != $hostSessionId or .specDir != $specDir or .agent != $agent)
        ] + [{
+         hostSessionId: $hostSessionId,
          specDir: $specDir,
          agent: $agent,
          iterationCount: $iterationCount,
@@ -803,11 +888,6 @@ if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
   mv "$CONV_TMP" "$SESSION_FILE"
   CONV_TMP=""
 fi
-
-# Release the exclusive session lock now that every read-modify-write critical
-# section (mirror-session mirror, turnSnapshots, convergenceLoops) has completed.
-# (The EXIT trap also releases it; this frees it promptly on the happy path.)
-release_session_lock
 
 # Echo a one-line summary to stdout for orchestrator log capture.
 if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then

@@ -43,6 +43,25 @@ restricted:
 # future ratchet, not for this pass.
 unrestricted: [ read, search, edit, agent, todo, execute, bubbles ]
 
+# IMP-055 MBE-2 reference profiles are descriptive inputs to repository
+# admission only. They do not remove current direct host tools and do not claim
+# native VS Code/MCP interception. Activation requires a separately proven host
+# enforcement packet.
+measuredBudgetProfiles:
+  posture: advisory
+  hostEnforcement: unsupported
+  defaultProfile: direct-compatible
+  profiles:
+    direct-compatible:
+      grantDecisionRequired: true
+      dispatchAdapter: none
+      permittedEpochClasses: [ planning, implementation, verification, certification ]
+    repository-reference:
+      grantDecisionRequired: true
+      dispatchAdapter: reference-broker
+      controlledFamilies: [ agent, execute ]
+      permittedEpochClasses: [ planning, implementation, verification, certification ]
+
 # SCOPE NOTE, recorded so the next reader does not mistake reach for coverage.
 # Only the top-level runners (bubbles.workflow, goal, sprint, iterate, and
 # bubbles.bug) declare an explicit `tools:` list today. Every other agent omits

@@ -56,7 +56,7 @@ expect_exit() {
   local desc="$1"; shift
   shift # drop --
   local rc=0
-  env -u BUBBLES_RISK_CONFIRM bash "$TARGET" "$@" >/dev/null 2>&1 || rc=$?
+  (unset BUBBLES_RISK_CONFIRM; bash "$TARGET" "$@") >/dev/null 2>&1 || rc=$?
   if [[ "$rc" -eq "$expected" ]]; then
     pass "$desc (exit $rc)"
   else
@@ -166,6 +166,20 @@ printf 'hostVerified=true\nrequestHash=%s\nexpiry=%s\n' "$VALID_HASH" "$((NOW + 
 printf 'hostVerified=false\nrequestHash=%s\nexpiry=%s\n' "$VALID_HASH" "$((NOW + 3600))" > "$TMPDIR/appr-nv.txt"
 printf 'hostVerified=true\nrequestHash=%s\nexpiry=%s\n' "$VALID_HASH" "$((NOW - 5))" > "$TMPDIR/appr-exp.txt"
 expect_exit 0 "event: valid action-bound approval allows"        -- --server trusted-srv --operation destroy --target spec/1 --data-classes internal --approval-file "$TMPDIR/appr-valid.txt"
+expect_exit 3 "event: reference enforcement requires approval and MBE admission" -- --server trusted-srv --operation destroy --target spec/1 --data-classes internal --approval-file "$TMPDIR/appr-valid.txt" --mbe-posture reference-enforce
+mbe_store="$TMPDIR/mbe-store"
+mbe_context="$TMPDIR/mbe-context.json"
+mbe_action="$TMPDIR/mbe-action.json"
+if python3 "$SCRIPT_DIR/measured-budget-runtime-v2-selftest.py" \
+  --emit-fixture --store-root "$mbe_store" --context "$mbe_context" \
+  --action-file "$mbe_action" --action-argv-json '["trusted-srv","destroy","spec/1"]'; then
+  expect_exit 0 "event: valid approval and coherent MBE admission allow together" -- \
+    --server trusted-srv --operation destroy --target spec/1 --data-classes internal \
+    --approval-file "$TMPDIR/appr-valid.txt" --mbe-posture reference-enforce \
+    --mbe-store-root "$mbe_store" --mbe-context "$mbe_context" --mbe-action "$mbe_action"
+else
+  fail "event: coherent MBE admission fixture generation succeeds"
+fi
 expect_exit 3 "event: approval replay to other target blocked"   -- --server trusted-srv --operation destroy --target spec/2 --data-classes internal --approval-file "$TMPDIR/appr-valid.txt"
 expect_exit 3 "event: non-host-verified approval blocked"        -- --server trusted-srv --operation destroy --target spec/1 --data-classes internal --approval-file "$TMPDIR/appr-nv.txt"
 expect_exit 3 "event: expired approval blocked"                  -- --server trusted-srv --operation destroy --target spec/1 --data-classes internal --approval-file "$TMPDIR/appr-exp.txt"

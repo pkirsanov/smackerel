@@ -28,7 +28,7 @@ bad() {
   return 0
 }
 
-WORK="$(mktemp -d)" || exit 2
+WORK="$(mktemp -d "$SCRIPT_DIR/../../.scenario-obligation-selftest.XXXXXX")" || exit 2
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
 make_case() {
@@ -45,13 +45,52 @@ run_lint() {
   set -e
 }
 
+if grep -Fq 'scenario-reference-reader.py' "$TARGET" \
+  && ! grep -Fq 'json.load(fh)' "$TARGET"; then
+  ok "S1 manifest semantics are delegated to the canonical reader"
+else
+  bad "S1 canonical reader ownership"
+fi
+
 # --- P1. a packet declaring nothing stays inert -----------------------------
-R="$(make_case p1 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"t","requiredTestType":"e2e-ui","linkedTests":["tests/a.ts"]}]}')"
+R="$(make_case p1 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"t","requiredTestType":"e2e-ui"}]}')"
 run_lint "$R"
 if [[ "$RC" -eq 0 ]]; then
-  ok "P1 a manifest with no behaviorTraits is inert"
+  ok "P1 a valid manifest with no obligations is inert"
 else
   bad "P1 inert on undeclared" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# An absent obligation matrix is inert only AFTER the canonical reader accepts
+# the complete manifest. Unknown strict-v2 fields must not disappear behind the
+# no-obligation fast path.
+R="$(make_case p1-invalid-no-obligation '{"schemaVersion":2,"scenarios":[{"id":"SCN-001-002","title":"t","requiredTestType":"unit","unknown":true}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 && "$OUT" == *"Additional properties are not allowed"* ]]; then
+  ok "P1b an invalid manifest with no obligations is refused before inertness"
+else
+  bad "P1b invalid no-obligation manifest" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# The projection used to travel in one environment variable, which fails with
+# E2BIG once a valid manifest grows beyond the process environment limit. This
+# manifest is intentionally large enough to cross that boundary while keeping
+# every scenario semantically simple and valid.
+LARGE_ROOT="$WORK/p1-large"
+mkdir -p "$LARGE_ROOT"
+{
+  printf '{"schemaVersion":1,"scenarios":['
+  for i in $(seq 1 1800); do
+    [[ "$i" -eq 1 ]] || printf ','
+    printf '{"id":"SCN-LARGE-%s","title":"large scenario %s","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"assert transformed output for large projection transport"}]}' "$i" "$i"
+  done
+  printf ']}\n'
+} >"$LARGE_ROOT/scenario-manifest.json"
+run_lint "$LARGE_ROOT"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P1c a large canonical projection is not constrained by environment size"
+else
+  bad "P1c large projection transport" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
 # --- P2. a coherent derived matrix passes -----------------------------------
@@ -282,6 +321,93 @@ if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'TRAIT-COVERED'; then
   ok "A13 a bare-list manifest is still linted, not skipped"
 else
   bad "A13 bare-list still validated" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- V1/V2 controls and closed-parser adversaries ---------------------------
+R="$(make_case v1 '{"schemaVersion":1,"scenarios":[{"scenarioId":"SCN-001-001","title":"t","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"unit assertion"}]}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "V1 a valid v1 identity alias is normalized and linted"
+else
+  bad "V1 valid v1 control" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case v2 '{"schemaVersion":2,"scenarios":[{"id":"SCN-001-002","title":"t","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"unit assertion"}]}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "V2 a valid closed v2 manifest preserves the lint contract"
+else
+  bad "V2 valid v2 control" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a13b '{"schemaVersion":1,"schemaVersion":2,"scenarios":[]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 && "$OUT" == *"duplicate JSON member"* ]]; then
+  ok "A13b duplicate JSON members fail closed through the canonical reader"
+else
+  bad "A13b duplicate member" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a13c '{"schemaVersion":2,"scenarios":[{"id":"SCN-001-003","title":"t","requiredTestType":"unit","unknown":true}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 && "$OUT" == *"Additional properties are not allowed"* ]]; then
+  ok "A13c strict-v2 unknown scenario fields fail closed"
+else
+  bad "A13c v2 closed object" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+READER_SHIM="$WORK/reader-failure-bin"
+mkdir -p "$READER_SHIM"
+REAL_PYTHON3="$(command -v python3)"
+cat >"$READER_SHIM/python3" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "${1:-}" == */scenario-reference-reader.py ]]; then
+  printf 'injected reader failure\n' >&2
+  exit 19
+fi
+exec "$REAL_PYTHON3" "$@"
+SHIM
+chmod +x "$READER_SHIM/python3"
+R="$(make_case a13d '{"schemaVersion":1,"scenarios":[]}')"
+set +e
+OUT="$(PATH="$READER_SHIM:$PATH" REAL_PYTHON3="$REAL_PYTHON3" bash "$TARGET" "$R" --quiet 2>&1)"
+RC=$?
+set -e
+if [[ "$RC" -eq 2 && "$OUT" == *"injected reader failure"* ]]; then
+  ok "A13d canonical reader failure is preserved and fails closed"
+else
+  bad "A13d reader failure" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# Replace the temporary projection pathname after the canonical reader writes
+# the original inode. The lint must consume the held descriptor, and cleanup
+# must leave the replacement untouched.
+REPLACE_TMP="$WORK/replacement-safe-tmp"
+REPLACE_BASH_ENV="$WORK/replacement-safe-bash-env"
+mkdir -p "$REPLACE_TMP"
+cat >"$REPLACE_BASH_ENV" <<'SHIM'
+python3() {
+  "$REAL_PYTHON3" "$@"
+  local reader_status=$?
+  if [[ "${1:-}" == */scenario-reference-reader.py ]]; then
+    rm -f -- "$REFERENCE_PROJECTION_FILE"
+    printf '%s\n' 'replacement-owned-by-another-writer' >"$REFERENCE_PROJECTION_FILE"
+  fi
+  return "$reader_status"
+}
+SHIM
+R="$(make_case replacement-safe '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-004","title":"t","requiredTestType":"unit","behaviorTraits":["pure-calculation"],"obligations":[{"trait":"pure-calculation","requiredProof":"unit assertion"}]}]}')"
+set +e
+OUT="$(TMPDIR="$REPLACE_TMP" BASH_ENV="$REPLACE_BASH_ENV" REAL_PYTHON3="$REAL_PYTHON3" bash "$TARGET" "$R" --quiet 2>&1)"
+RC=$?
+set -e
+REPLACEMENT_FILES=("$REPLACE_TMP"/scenario-obligation-projection.*)
+if [[ "$RC" -eq 0 && "${#REPLACEMENT_FILES[@]}" -eq 1 \
+    && -f "${REPLACEMENT_FILES[0]}" \
+    && "$(cat "${REPLACEMENT_FILES[0]}")" == "replacement-owned-by-another-writer" ]]; then
+  ok "A13e analysis uses the held inode and cleanup preserves a pathname replacement"
+else
+  bad "A13e replacement-safe cleanup" "rc=$RC files=${#REPLACEMENT_FILES[@]} out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
 # --- IMP-048 SCOPE-5: the return-time ordering contract (EV-12) -------------

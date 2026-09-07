@@ -222,8 +222,21 @@ assert_eq "P2 the receipt's restoredDigest equals its sourceDigest" \
   "$(kv restoredDigest)" "$(kv sourceDigest)"
 assert_eq "P2 the run is recorded as an isolated copy" "$(kv isolation)" "copied-fixture"
 
+EARNED_SOURCE_DIGEST="$(kv sourceDigest)"
+
 run_sut check --repo-root "$REPO" --spec-dir "$REPO/specs/feature"
 assert_eq "P1 a high-risk scenario WITH a valid receipt passes the check" "$LAST_RC" "0"
+
+# BUG-050 SCN-B050-006: an earned kill belongs to the captured source/restored
+# pair. A later legitimate production edit must not retroactively erase it.
+printf 'add() { echo $(( $1 + $2 + 0 )); }\n' > "$REPO/src/calc.sh"
+if [[ "$(sha "$REPO/src/calc.sh")" != "$EARNED_SOURCE_DIGEST" ]]; then
+  pass "SCN-B050-006 later production bytes are distinct from the captured mutation source"
+else
+  fail "SCN-B050-006 fixture did not create distinct later production bytes"
+fi
+run_sut check --repo-root "$REPO" --spec-dir "$REPO/specs/feature"
+assert_eq "SCN-B050-006 earned historical kill survives a later production edit" "$LAST_RC" "0"
 
 # ---------------------------------------------------------------------------
 # A2. The same scenario with NO receipt is a finding. This is the whole slice:
@@ -270,8 +283,8 @@ write_manifest
 SRC_D="$(sha "$REPO/src/calc.sh")"
 forge "{\"schemaVersion\":\"mutation-receipt/v1\",\"scenarioId\":\"SCN-001-001\",\"testId\":\"calc\",\"sourcePath\":\"src/calc.sh\",\"sourceDigest\":\"$SRC_D\",\"mutantId\":\"deadbeef\",\"expectedFailureSignature\":\"FAIL: add\",\"observedFailure\":\"FAIL: add 2 3 expected 5 got -1\",\"restoredDigest\":\"deadbeef\",\"isolation\":\"copied-fixture\",\"workspace\":\"/tmp/x\",\"startedAt\":\"x\",\"finishedAt\":\"x\",\"exitCode\":1,\"outcome\":\"KILLED\"}"
 run_sut check --repo-root "$REPO" --spec-dir "$REPO/specs/feature"
-assert_eq "A4 a receipt whose restoredDigest != sourceDigest is refused" "$LAST_RC" "1"
-assert_says "A4 the left-behind mutant is named" "MUTATION-NOT-RESTORED"
+assert_eq "SCN-B050-006/A4 a receipt whose restoredDigest != sourceDigest is refused" "$LAST_RC" "1"
+assert_says "SCN-B050-006/A4 the left-behind mutant is named" "MUTATION-NOT-RESTORED"
 
 # ---------------------------------------------------------------------------
 # A5/A6. ADVERSARIAL: a receipt ASSERTED rather than executed. The store is the

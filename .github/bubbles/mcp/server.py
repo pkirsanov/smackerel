@@ -163,6 +163,17 @@ def _resolve_prompts_dir(repo_root: Path) -> Path:
     return src
 
 
+def _resolve_agents_dir(repo_root: Path) -> Path:
+    """Return the path to Bubbles agent persona files in source/downstream layouts."""
+    src = repo_root / "agents"
+    if src.is_dir():
+        return src
+    downstream = repo_root / ".github" / "agents"
+    if downstream.is_dir():
+        return downstream
+    return src
+
+
 def _resolve_server_version(repo_root: Path) -> str:
     """Read VERSION (source repo) or .github/bubbles/.version (downstream)."""
     for candidate in (
@@ -548,57 +559,109 @@ class ResourceCatalog:
         }
 
 
+def _split_frontmatter(text: str) -> tuple[str, str]:
+    """Split '---\\n<frontmatter>\\n---\\n<body>' into (raw_frontmatter, body).
+
+    Returns ("", text.strip()) when no frontmatter block is present. The
+    frontmatter half is returned raw (not parsed) so nested YAML — lists of
+    dicts like an agent file's `handoffs:` — survives verbatim for callers
+    that want to display it rather than parse it.
+    """
+    if not text.startswith("---\n"):
+        return "", text.strip()
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        return "", text.strip()
+    frontmatter_text = text[4:end]
+    body = text[end + len("\n---\n") :].strip()
+    return frontmatter_text, body
+
+
+def _parse_simple_frontmatter(frontmatter_text: str) -> dict[str, str]:
+    """Best-effort top-level `key: value` scalar parse.
+
+    Skips indented/list lines (e.g. `  - label: ...`) so it degrades safely on
+    frontmatter with nested structures instead of misreading a list item as a
+    top-level key.
+    """
+    frontmatter: dict[str, str] = {}
+    for raw_line in frontmatter_text.splitlines():
+        if raw_line[:1] in (" ", "\t", "-"):
+            continue
+        line = raw_line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        frontmatter[key.strip()] = value.strip().strip('"\'')
+    return frontmatter
+
+
 class PromptCatalog:
-    """Loads Bubbles prompt shims from prompts/*.prompt.md.
+    """Loads Bubbles prompt shims from prompts/*.prompt.md, plus the agent
+    persona files (agents/*.agent.md) those prompts bind to.
 
     Prompt files are VS Code prompt shims with YAML frontmatter and a markdown
-    body. The MCP server does not synthesize prompt logic; it exposes those
-    existing files so MCP clients with prompt catalogs can discover and request
-    the same Bubbles entrypoints operators already use.
+    body; their `agent:` field names a persona file that VS Code Copilot
+    Chat's native agent mode switches to natively when the prompt runs there.
+    No other MCP client has an equivalent switch, so `prompts/get` inlines the
+    named persona's full body into the returned message instead of just
+    naming it — the only way a non-VS-Code MCP client (Claude Code, Claude
+    Desktop, Cursor, Cline) actually gets the persona's role, constraints, and
+    handoffs rather than a bare name it has no obligation to look up. This
+    does not touch VS Code's own path: Copilot resolves prompt/agent files
+    natively off disk and never calls this server's `prompts/get`.
+
+    The server still does not synthesize prompt or agent logic — it exposes
+    the existing files verbatim, one flattened together with the other on
+    request.
     """
 
-    def __init__(self, prompts_dir: Path, logger: logging.Logger):
+    def __init__(self, prompts_dir: Path, agents_dir: Path, logger: logging.Logger):
         self._prompts_dir = prompts_dir
+        self._agents_dir = agents_dir
         self._logger = logger
         self._prompts: dict[str, dict[str, Any]] = {}
+        self._agents: dict[str, dict[str, str]] = {}
         self._reload()
 
     @staticmethod
     def _split_prompt(text: str) -> tuple[dict[str, str], str]:
-        if not text.startswith("---\n"):
-            return {}, text.strip()
-        end = text.find("\n---\n", 4)
-        if end == -1:
-            return {}, text.strip()
-        frontmatter_text = text[4:end]
-        body = text[end + len("\n---\n") :].strip()
-        frontmatter: dict[str, str] = {}
-        for raw_line in frontmatter_text.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or ":" not in line:
-                continue
-            key, value = line.split(":", 1)
-            frontmatter[key.strip()] = value.strip().strip('"\'')
-        return frontmatter, body
+        frontmatter_text, body = _split_frontmatter(text)
+        return _parse_simple_frontmatter(frontmatter_text), body
 
     def _reload(self) -> None:
         if not self._prompts_dir.is_dir():
             self._logger.info("prompt catalog empty: %s not found", self._prompts_dir)
-            return
-        for path in sorted(self._prompts_dir.glob("*.prompt.md")):
-            text = path.read_text(encoding="utf-8")
-            frontmatter, body = self._split_prompt(text)
-            name = path.name.removesuffix(".prompt.md")
-            description = frontmatter.get("description", "")
-            agent = frontmatter.get("agent", name)
-            self._prompts[name] = {
-                "name": name,
-                "description": description,
-                "agent": agent,
-                "body": body,
-                "path": str(path),
-            }
-            self._logger.debug("loaded prompt: %s -> %s", name, path)
+        else:
+            for path in sorted(self._prompts_dir.glob("*.prompt.md")):
+                text = path.read_text(encoding="utf-8")
+                frontmatter, body = self._split_prompt(text)
+                name = path.name.removesuffix(".prompt.md")
+                description = frontmatter.get("description", "")
+                agent = frontmatter.get("agent", name)
+                self._prompts[name] = {
+                    "name": name,
+                    "description": description,
+                    "agent": agent,
+                    "body": body,
+                    "path": str(path),
+                }
+                self._logger.debug("loaded prompt: %s -> %s", name, path)
+
+        if not self._agents_dir.is_dir():
+            self._logger.info("agent catalog empty: %s not found", self._agents_dir)
+        else:
+            for path in sorted(self._agents_dir.glob("*.agent.md")):
+                text = path.read_text(encoding="utf-8")
+                frontmatter_text, body = _split_frontmatter(text)
+                name = path.name.removesuffix(".agent.md")
+                self._agents[name] = {
+                    "name": name,
+                    "frontmatter": frontmatter_text.strip("\n"),
+                    "body": body,
+                    "path": str(path),
+                }
+                self._logger.debug("loaded agent persona: %s -> %s", name, path)
 
     def list_prompts(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
@@ -614,6 +677,9 @@ class PromptCatalog:
 
     def get(self, name: str) -> Optional[dict[str, Any]]:
         return self._prompts.get(name)
+
+    def get_agent(self, name: str) -> Optional[dict[str, str]]:
+        return self._agents.get(name)
 
 
 # ---------------------------------------------------------------------------
@@ -1134,10 +1200,26 @@ class Server:
             raise _JsonRpcError(ERR_PROMPT_NOT_FOUND, f"unknown prompt: {name}")
         body = spec.get("body", "")
         description = spec.get("description", "")
-        agent = spec.get("agent", name)
+        agent_name = spec.get("agent", name)
         text = body
-        if agent:
-            text = f"Use agent: {agent}\n\n{text}".strip()
+        if agent_name:
+            agent = self._prompts.get_agent(agent_name)
+            if agent is not None:
+                text = (
+                    f"# Agent persona: {agent_name}\n"
+                    f"(source: {agent['path']} — VS Code Copilot Chat switches to "
+                    "this agent natively when this prompt runs there; no other MCP "
+                    "client does that automatically, so the persona is inlined "
+                    "below instead of just named. Its `tools:`/`handoffs:` "
+                    "frontmatter is guidance here, not an enforced tool "
+                    "restriction or an automatic handoff dispatch.)\n\n"
+                    f"```yaml\n{agent['frontmatter']}\n```\n\n"
+                    f"{agent['body']}\n\n"
+                    "---\n\n"
+                    f"## Task\n\n{body}"
+                ).strip()
+            else:
+                text = f"Use agent: {agent_name}\n\n{text}".strip()
         return {
             "description": description,
             "messages": [
@@ -1440,19 +1522,21 @@ def main() -> int:
     scripts_dir = _resolve_scripts_dir(repo_root)
     mcp_dir = _resolve_mcp_dir(repo_root)
     prompts_dir = _resolve_prompts_dir(repo_root)
+    agents_dir = _resolve_agents_dir(repo_root)
     version = _resolve_server_version(repo_root)
     logger.info(
-        "starting bubbles-mcp v%s transport=%s repo_root=%s scripts=%s mcp=%s prompts=%s",
+        "starting bubbles-mcp v%s transport=%s repo_root=%s scripts=%s mcp=%s prompts=%s agents=%s",
         version,
         transport_kind,
         repo_root,
         scripts_dir,
         mcp_dir,
         prompts_dir,
+        agents_dir,
     )
     tools = ToolCatalog(mcp_dir, scripts_dir, logger)
     resources = ResourceCatalog(mcp_dir, repo_root, scripts_dir, logger)
-    prompts = PromptCatalog(prompts_dir, logger)
+    prompts = PromptCatalog(prompts_dir, agents_dir, logger)
     transport = StdioTransport(sys.stdin.buffer, sys.stdout.buffer)
     server = Server(
         transport, tools, resources, prompts, repo_root, scripts_dir, version, logger

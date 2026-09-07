@@ -1,31 +1,69 @@
-# Acceptance Authority Contract (IMP-047 PD-12)
+# Acceptance Authority Contract (BUG-037; supersedes the IMP-047 PD-12 model)
 #
 # WHY THIS EXISTS
-# `uservalidation.md` carried ONE checklist and TWO meanings. The template
-# shipped its entries CHECKED, artifact lint REQUIRED at least one checked
-# entry, and Gate G136 then read "every item checked" as terminal human
-# acceptance. Composed, those three rules say: a planning template satisfies
-# human sign-off with no human act. That is a fabrication vector, and worse, it
-# is one automation can satisfy on a human's behalf without ever intending to —
-# writing the template IS the acceptance.
+# `uservalidation.md` is where a human rejects delivered behavior. The
+# repository owner's standing requirement is OPT-OUT acceptance:
 #
-# The repair is not a stricter checkbox. It is two DIFFERENT facts with two
-# DIFFERENT writers:
+#   The checklist ships CHECKED. A user who reviews the delivered behavior and
+#   objects to nothing performs NO act, and that silence IS acceptance. A user
+#   who does object UNCHECKS the item, which blocks the terminal transition
+#   until the behavior is fixed and the USER re-checks it.
+#
+# IMP-047 PD-12 inverted that into opt-in — ship unchecked, and demand a
+# separately authored `## Human Acceptance Record` at terminal. PD-12 was right
+# about a real defect and wrong about the repair. The defect was a COMPOSITION:
+# artifact lint REQUIRED the checklist to carry a checked entry, so the template
+# shipped checked because lint demanded it, and the terminal gate then read those
+# boxes as sign-off. Three rules jointly asserted a human acted while no rule
+# checked that one had. That lint rule was deleted by PD-12 and BUG-037 does not
+# restore it.
+#
+# BUG-037 removes the coupling rather than the default. The checked shipped
+# state now comes from THIS CONTRACT — `acceptance-checklist.shippedState`, a
+# recorded owner decision — and never from a lint refusal. `artifact-lint.sh`
+# deliberately keeps only the SHAPE questions and has no checked-entry rule to
+# force the template's hand.
+#
+# The three sections and their writers are unchanged:
 #
 #   AUTOMATION READINESS — automation verified the behavior is ready to be shown
 #                          to a human. Automation writes this. It is NOT
 #                          acceptance and never becomes acceptance.
-#   HUMAN ACCEPTANCE     — a human ran the behavior and accepted it. Only a
-#                          human-owned action or an external acceptance record
-#                          establishes it.
+#   ACCEPTANCE CHECKLIST — ships CHECKED. Automation authors that INITIAL state.
+#                          Automation MUST NOT re-check an item a user
+#                          unchecked, and MUST NOT toggle one to mirror a test
+#                          outcome. Only the first of those three is
+#                          mechanically checkable; the other two are
+#                          agent-instruction obligations, because a
+#                          template-authored `[x]` and an agent's overwrite of a
+#                          user's uncheck are byte-identical.
+#   HUMAN ACCEPTANCE     — OPTIONAL. Available for external UAT, explicit
+#     RECORD               sign-off, or compliance contexts that want a named
+#                          acceptor. It grants nothing extra and is required by
+#                          nothing, but every shape rule below still applies in
+#                          full WHEN it is authored.
 #
-# WHAT MECHANISM CAN AND CANNOT PROVE. No file check can prove a keystroke came
-# from a human. What it CAN do is remove every path where acceptance is the
-# DEFAULT: the template ships unchecked, lint no longer demands a checked entry,
-# and the terminal gate requires a separately authored record naming a
-# non-automation acceptor and a declared method. An agent that wants to forge
-# acceptance must now write a deliberate false record, which is a lie rather
-# than a side effect of using the template. That distinction is the whole point.
+# WHAT MECHANISM CAN AND CANNOT PROVE — stated plainly, because the trade is
+# deliberate. Under opt-out a checked box is NOT evidence that a human acted:
+# "the user reviewed this and was satisfied" and "nobody ever opened the file"
+# produce an identical file. Gate G136 therefore proves exactly one thing at a
+# terminal transition — that no user recorded an objection. It is a REJECTION
+# CHANNEL, not an acceptance proof. What survives intact is the part that costs
+# a satisfied user nothing: an unchecked item still refuses the transition and
+# is named, the guard still never edits the file, and an agent still cannot name
+# itself as `acceptedBy` when a record is present.
+#
+# FAILURE-CODE PREFIX (BUG-037 D-5). The `PD12-*` prefix is HISTORICAL and is
+# kept unrenamed on purpose: this file and
+# `bubbles/scripts/acceptance-authority-lib.sh` both ship downstream, and Gate
+# G136 prints these codes into guard output that downstream `report.md` evidence
+# blocks capture verbatim. Renaming them would orphan every downstream matcher
+# and every archived evidence block for a cosmetic gain. The closed set spans
+# three lifecycles. Default-active codes apply under the shipped registry.
+# `PD12-NO-RECORD` is conditional-active: shipped `requiredAtTerminal: false`
+# leaves it dormant, while an explicit supported `true` activates it.
+# `PD12-AUTHORITY-UNAVAILABLE` is bootstrap-active and fails closed without
+# depending on a successful registry read. No code is retired by this change.
 #
 # This registry is the SINGLE authority for the three sections and the record
 # shape. `bubbles/scripts/acceptance-authority-lib.sh` reads it;
@@ -51,23 +89,30 @@ sections:
     writer: human
     grantsAcceptance: true
     required: true
-    shippedState: unchecked
+    shippedState: checked
     note: >-
-      Ships UNCHECKED. An item is checked when a human accepts that behavior.
-      Automation MUST NOT check one; the terminal gate prints the item and stops
-      rather than checking it, because checking it would fabricate the exact
-      fact the gate exists to require.
+      Ships CHECKED. Automation authors that INITIAL state when it creates the
+      artifact. The user's only required act is to UNCHECK an item whose
+      behavior does not meet their expectation; unchecking nothing is
+      acceptance. An item left unchecked at a terminal transition is a
+      user-reported regression: the gate names it and stops. The gate MUST NOT
+      check it, and no agent, guard or lint may ever re-check an item a user
+      unchecked — that would erase the only rejection signal the user has.
 
   - id: acceptance-record
     heading: "## Human Acceptance Record"
     writer: human
     grantsAcceptance: true
     required: false
-    requiredAtTerminal: true
+    requiredAtTerminal: false
     note: >-
-      Required at a terminal transition. A checked box alone is no longer
-      terminal acceptance, because a checked box is exactly what a shipped
-      template used to provide for free.
+      OPTIONAL, and NOT required at a terminal transition, because unchecking
+      nothing is already the acceptance. It stays available for external UAT,
+      explicit sign-off, or compliance contexts that want a named acceptor.
+      Every shape rule below still applies in full when it IS authored. This
+      key is READ by the library rather than assumed, so a downstream
+      repository that genuinely wants a named acceptor at terminal can set it
+      to `true` in its own copy of this registry.
 
 # Fields the acceptance record must carry. `record` is required only for the
 # `external-record` method, where the acceptance happened somewhere else and the
@@ -101,19 +146,32 @@ forbiddenAcceptedBy:
     happened yet.
 
 # Failure codes. Closed set; each maps to one refusal message in the library so
-# a reader can grep the code rather than the prose.
+# a reader can grep the code rather than the prose. Lifecycle is explicit:
+# default-active under shipped policy, conditional-active under a supported
+# opt-in value, or bootstrap-active when authority cannot be resolved. The set
+# below is exactly the set the library can emit under supported authority states.
 failureCodes:
-  - id: PD12-NO-RECORD
-    meaning: A terminal transition claims acceptance with no Human Acceptance Record.
+  - id: PD12-AUTHORITY-UNAVAILABLE
+    lifecycle: bootstrap-active
+    meaning: The registry or a required authority field cannot be resolved safely.
   - id: PD12-RECORD-INCOMPLETE
+    lifecycle: default-active
     meaning: The record omits a required field.
   - id: PD12-METHOD-UNKNOWN
+    lifecycle: default-active
     meaning: The record declares a method outside the closed vocabulary.
   - id: PD12-METHOD-FIELD-MISSING
+    lifecycle: default-active
     meaning: The declared method requires a field the record does not carry.
   - id: PD12-AUTOMATION-ACCEPTOR
+    lifecycle: default-active
     meaning: acceptedBy names an automation identity.
   - id: PD12-UNCHECKED-ITEM
+    lifecycle: default-active
     meaning: An acceptance checklist item is still unchecked at a terminal transition.
   - id: PD12-READINESS-NOT-CHECKBOX
+    lifecycle: default-active
     meaning: An Automation Readiness bullet is not checkbox syntax.
+  - id: PD12-NO-RECORD
+    lifecycle: conditional-active
+    meaning: A supported authority requires an authored record at terminal, but none is present.

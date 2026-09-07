@@ -112,6 +112,26 @@ else
   fail "4+5. json mode: got '$out_json2'"
 fi
 
+# BUG-050 T7 canary: the bridge is the single semantic admission owner. Its
+# admitted-jsonl form must return the full receipt objects needed by freshness
+# and clone consumers, while excluding append-only history from another spec.
+cat >> "$LOG" <<EOF
+{"schemaVersion":3,"sessionId":"unrelated","agent":"bubbles.test","spec":"999-unrelated","cmd":"npm run unrelated","exitCode":0,"ts":"2026-06-05T17:10:00Z","stdoutHash":"e","stderrHash":"f","tags":["test"],"scenarioBinding":{"scenarioId":"SCN-999-001","phase":"green","testIdentity":"unrelated::test","sourceRevision":"$REV","negativeControl":"break unrelated behavior","claim":"unrelated history"}}
+EOF
+admitted_jsonl="$(bash "$BRIDGE" "$TEST_ROOT/specs/042-foo" --log "$LOG" --format=admitted-jsonl 2>&1)" && admitted_rc=0 || admitted_rc=$?
+if [[ "$admitted_rc" -eq 0 ]] && python3 -c "
+import json, sys
+rows = [json.loads(line) for line in sys.stdin if line.strip()]
+assert len(rows) == 2, rows
+assert {row['scenarioBinding']['scenarioId'] for row in rows} == {'SCN-042-001', 'SCN-042-002'}, rows
+assert all(row['spec'] == '042-foo' for row in rows), rows
+assert all(row['scenarioBinding']['phase'] == 'green' for row in rows), rows
+" <<<"$admitted_jsonl" 2>/dev/null; then
+  pass "BUG-050 T7 admitted-jsonl exposes the two semantically admitted full receipts only"
+else
+  fail "BUG-050 T7 admitted-jsonl projection failed (exit $admitted_rc, output '$admitted_jsonl')"
+fi
+
 # 6. unknown --format value rejected.
 if bash "$BRIDGE" "$TEST_ROOT/specs/042-foo" --format=xml 2>/dev/null; then
   fail "6. unknown --format value not rejected"

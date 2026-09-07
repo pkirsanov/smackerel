@@ -95,6 +95,40 @@ fi
 
 command -v python3 >/dev/null 2>&1 || die_usage "python3 is required"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REFERENCE_READER="$SCRIPT_DIR/scenario-reference-reader.py"
+[[ -f "$REFERENCE_READER" ]] || die_usage "scenario-reference-reader.py is required"
+REPO_ROOT="$(cd "$SPEC_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$REPO_ROOT" ]] || REPO_ROOT="$SPEC_DIR"
+
+# The canonical projection can be larger than the process environment limit.
+# Keep it in a private file instead of transporting it through an environment
+# variable. Hold the original inode open so cleanup removes only the file this
+# process created; if another process replaces the pathname, its replacement is
+# left untouched.
+REFERENCE_PROJECTION_FILE=""
+cleanup_reference_projection() {
+    local original_status=$?
+    if [[ -n "$REFERENCE_PROJECTION_FILE" && -e "$REFERENCE_PROJECTION_FILE" \
+            && -e /dev/fd/9 && "$REFERENCE_PROJECTION_FILE" -ef /dev/fd/9 ]]; then
+        rm -f -- "$REFERENCE_PROJECTION_FILE" || true
+    fi
+    exec 9>&-
+    return "$original_status"
+}
+
+umask 077
+REFERENCE_PROJECTION_FILE="$(mktemp "${TMPDIR:-/tmp}/scenario-obligation-projection.XXXXXX")" ||
+    die_usage "could not create private projection file"
+trap cleanup_reference_projection EXIT
+exec 9<>"$REFERENCE_PROJECTION_FILE" ||
+    die_usage "could not hold private projection file open"
+
+# This reader validates the complete manifest before the obligation lint can
+# become inert. A malformed manifest with no obligations therefore still exits
+# 2 rather than being treated as an empty obligation set.
+python3 "$REFERENCE_READER" "$MANIFEST" --repo-root "$REPO_ROOT" >"$REFERENCE_PROJECTION_FILE" || exit 2
+
 # --- IMP-047 S-D: the trait matrix is AUTHORITATIVE -------------------------
 #
 # The trait vocabulary and every live-proof obligation are READ from
@@ -142,18 +176,17 @@ ORDERING_REGISTRY="$(awk '
   }
 ' "$PROOF_REGISTRY_FILE")"
 
-MANIFEST="$MANIFEST" QUIET="$QUIET" PROOF_REGISTRY="$PROOF_REGISTRY" \
+REFERENCE_PROJECTION_FD=/dev/fd/9 QUIET="$QUIET" PROOF_REGISTRY="$PROOF_REGISTRY" \
   ORDERING_REGISTRY="$ORDERING_REGISTRY" python3 - <<'PY'
 import json, os, sys
 
-manifest_path = os.environ["MANIFEST"]
 quiet = os.environ.get("QUIET") == "1"
 
 try:
-    with open(manifest_path, encoding="utf-8") as fh:
-        manifest = json.load(fh)
-except (OSError, ValueError) as exc:
-    print(f"scenario-obligation-lint: cannot parse {manifest_path}: {exc}", file=sys.stderr)
+    with open(os.environ["REFERENCE_PROJECTION_FD"], encoding="utf-8") as projection_file:
+        projection = json.load(projection_file)
+except (KeyError, OSError, ValueError) as exc:
+    print(f"scenario-obligation-lint: invalid scenario-reference-reader projection: {exc}", file=sys.stderr)
     sys.exit(2)
 
 VOCABULARY = set()
@@ -266,20 +299,22 @@ SHARED_CONSUMER_PROOFS = {
 findings = []
 declared = 0
 
-# Two manifest envelopes exist in the wild: {"scenarios": [...]} and a BARE
-# top-level list of the same scenario objects. The grep-based counter this
-# replaced could not tell them apart, so both shipped. Reading only the object
-# form crashes on the bare list; refusing the bare list would false-reject real
-# specs that were certified with it. The scenario objects are identical — only
-# the wrapper differs — so normalise and validate both.
-scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
+# The canonical reader owns envelopes, versions, aliases, identities,
+# references, duplicate members, and strict-v2 closed-object validation.
+scenarios = projection.get("scenarios")
 if not isinstance(scenarios, list):
-    scenarios = []
+    print("scenario-obligation-lint: invalid scenario-reference-reader projection", file=sys.stderr)
+    sys.exit(2)
 
-for scenario in scenarios:
-    if not isinstance(scenario, dict):
-        continue
-    sid = scenario.get("id") or scenario.get("scenarioId") or "<unidentified-scenario>"
+for projected in scenarios:
+    if not isinstance(projected, dict) or not isinstance(projected.get("metadata"), dict):
+        print("scenario-obligation-lint: invalid scenario-reference-reader projection", file=sys.stderr)
+        sys.exit(2)
+    scenario = dict(projected["metadata"])
+    sid = projected.get("scenarioId")
+    scenario["id"] = sid
+    scenario["obligations"] = projected.get("obligations")
+    scenario["testMechanism"] = projected.get("testMechanism")
     traits = scenario.get("behaviorTraits")
     obligations = scenario.get("obligations")
 

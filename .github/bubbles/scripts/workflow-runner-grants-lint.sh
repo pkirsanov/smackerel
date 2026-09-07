@@ -7,6 +7,82 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 REPO_ROOT="$DEFAULT_ROOT"
 
+evaluate_runner_mode() {
+  local capabilities_file="$1"
+  local agent="$2"
+  local mode="$3"
+  local capabilities_json=""
+  local grant_kind=""
+
+  [[ -f "$capabilities_file" ]] || {
+    echo "workflow-runner-grants-lint: workflow mode grant authority is missing: $capabilities_file" >&2
+    return 2
+  }
+  capabilities_json="$(yq -o=json '.' "$capabilities_file" 2>/dev/null)" || {
+    echo "workflow-runner-grants-lint: workflow mode grant authority is malformed" >&2
+    return 2
+  }
+  if ! jq -e --arg agent "$agent" '
+    (.workflowModeGrants | type) == "object"
+    and (.workflowModeGrants.defaultAllowed == false)
+    and (.workflowModeGrants.agents | type) == "object"
+    and (.workflowModeGrants.agents[$agent] | type) == "object"
+    and ((.workflowModeGrants.agents[$agent] | keys - ["excludedModes", "maxRootModesPerRun", "modes"]) | length == 0)
+    and (.workflowModeGrants.agents[$agent].modes | type) == "array"
+    and all(.workflowModeGrants.agents[$agent].modes[]; type == "string" and length > 0)
+    and ((.workflowModeGrants.agents[$agent].excludedModes // []) | type) == "array"
+    and all((.workflowModeGrants.agents[$agent].excludedModes // [])[]; type == "string" and length > 0)
+  ' <<<"$capabilities_json" >/dev/null 2>&1; then
+    if jq -e --arg agent "$agent" '.workflowModeGrants.agents[$agent] != null' <<<"$capabilities_json" >/dev/null 2>&1; then
+      if jq -e --arg agent "$agent" '
+        ((.workflowModeGrants.agents[$agent] | keys - ["excludedModes", "maxRootModesPerRun", "modes"]) | length > 0)
+      ' <<<"$capabilities_json" >/dev/null 2>&1; then
+        echo "workflow-runner-grants-lint: workflow mode grant authority has an unsupported field for runner '$agent'" >&2
+      else
+        echo "workflow-runner-grants-lint: workflow mode grant authority is malformed for runner '$agent'" >&2
+      fi
+    else
+      echo "workflow-runner-grants-lint: runner '$agent' is denied by default" >&2
+    fi
+    return 1
+  fi
+  if jq -e --arg agent "$agent" --arg mode "$mode" '
+    (.workflowModeGrants.agents[$agent].excludedModes // []) | index($mode) != null
+  ' <<<"$capabilities_json" >/dev/null 2>&1; then
+    echo "workflow-runner-grants-lint: runner '$agent' is explicitly excluded from mode '$mode'" >&2
+    return 1
+  fi
+  grant_kind="$(jq -r --arg agent "$agent" --arg mode "$mode" '
+    .workflowModeGrants.agents[$agent].modes
+    | if any(. == $mode) then "exact"
+      elif any(. == "*") then "wildcard"
+      else "denied"
+      end
+  ' <<<"$capabilities_json")" || return 2
+  if [[ "$grant_kind" == "denied" ]]; then
+    echo "workflow-runner-grants-lint: runner '$agent' is denied mode '$mode' by default" >&2
+    return 1
+  fi
+  echo "workflow-runner-grants-lint: runner '$agent' admitted by $grant_kind grant for mode '$mode'"
+}
+
+if [[ "${1:-}" == "--evaluate-runner-mode" ]]; then
+  [[ $# -eq 4 ]] || {
+    echo "workflow-runner-grants-lint: --evaluate-runner-mode requires <capabilities-file> <runner> <mode>" >&2
+    exit 2
+  }
+  command -v yq >/dev/null 2>&1 || {
+    echo "workflow-runner-grants-lint: yq is required" >&2
+    exit 2
+  }
+  command -v jq >/dev/null 2>&1 || {
+    echo "workflow-runner-grants-lint: jq is required" >&2
+    exit 2
+  }
+  evaluate_runner_mode "$2" "$3" "$4"
+  exit $?
+fi
+
 if [[ "${1:-}" == "--repo-root" ]]; then
   shift
   REPO_ROOT="${1:?--repo-root requires a path}"

@@ -694,6 +694,25 @@ command_effective_risk_class() {
         *) printf '%s' "$default_risk" ;;
       esac
       ;;
+    research)
+      case "${command_args%% *}" in
+        plan|run|resume|validate|publish|cancel) printf '%s' 'owned_mutation' ;;
+        adapter-local-command) printf '%s' 'external_side_effect' ;;
+        *) printf '%s' 'read_only' ;;
+      esac
+      ;;
+    admission)
+      case "${command_args%% *}" in
+        adapter|usage) printf '%s' 'read_only' ;;
+        *)
+          if [[ "$command_args" == 'budget snapshot'* ]]; then
+            printf '%s' 'read_only'
+          else
+            printf '%s' 'owned_mutation'
+          fi
+          ;;
+      esac
+      ;;
     *)
       printf '%s' "$default_risk"
       ;;
@@ -1452,6 +1471,8 @@ Commands:
   dod <spec>                    Show unchecked DoD items for a spec
   policy <subcommand>           Manage control-plane defaults (status|get|set|reset)
   runtime <subcommand>          Manage runtime leases and coordination
+  research <subcommand>         Run the optional research runtime (status|capabilities|schema|validate-question|plan|run|resume|inspect|validate|publish|bridge|cancel|adapter-disabled|adapter-local-command)
+  admission <subcommand>        Use optional reference admission surfaces (adapter|usage|evaluate|issue-permit|record-usage|record-intent|record-fact|consume-permit|budget|epoch|corpus)
   session                       Show current session state
   lint <spec>                   Run artifact lint on a spec
   agnosticity [--staged]        Check portable Bubbles surfaces for drift
@@ -1842,10 +1863,36 @@ cmd_runtime_selftest() {
 cmd_scan() {
   [[ $# -lt 1 ]] && die "Usage: bubbles scan <spec>"
   local spec_dir
-  spec_dir="$(resolve_spec "$1")"
+  if [[ -d "$REPO_ROOT/$1" ]]; then
+    spec_dir="$REPO_ROOT/$1"
+  else
+    spec_dir="$(resolve_spec "$1")"
+  fi
   local verbose=""
+  local -a security_entry_environment=(
+    LC_ALL=C
+    PATH=/usr/bin:/bin
+    BUBBLES_SECURITY_ENTRY_MODE=direct
+  )
   [[ "${2:-}" == "--verbose" || "${2:-}" == "-v" ]] && verbose="--verbose"
-  bash "$SCRIPT_DIR/implementation-reality-scan.sh" "$spec_dir" $verbose
+  if [[ -n "${DEVELOPER_DIR:-}" ]]; then
+    if [[ "$DEVELOPER_DIR" == *$'\n'* || "$DEVELOPER_DIR" == *$'\r'* || "$DEVELOPER_DIR" == *$'\t'* ]]; then
+      die "DEVELOPER_DIR contains forbidden control bytes"
+    fi
+    security_entry_environment+=("DEVELOPER_DIR=$DEVELOPER_DIR")
+  fi
+  # The scanner resolves repository-relative implementation paths from its
+  # working tree. Anchor copied and installed CLI callers before privileged
+  # exec so an ambient caller directory cannot select a different repository.
+  cd "$REPO_ROOT" || die "Cannot enter repository root: $REPO_ROOT"
+  if [[ -n "$verbose" ]]; then
+    POSIXLY_CORRECT=y exec /usr/bin/env -i \
+      "${security_entry_environment[@]}" \
+      /bin/bash -p -- "$SCRIPT_DIR/implementation-reality-scan.sh" "$spec_dir" "$verbose"
+  fi
+  POSIXLY_CORRECT=y exec /usr/bin/env -i \
+    "${security_entry_environment[@]}" \
+    /bin/bash -p -- "$SCRIPT_DIR/implementation-reality-scan.sh" "$spec_dir"
 }
 
 cmd_regression_quality() {
@@ -4181,6 +4228,52 @@ cmd_recall() {
   bash "$SCRIPT_DIR/experience-recall.sh" "$@"
 }
 
+cmd_research() {
+  [[ $# -gt 0 ]] || die "research requires a subcommand. Try: status, capabilities, schema, validate-question, plan, run, resume, inspect, validate, publish, bridge, cancel, adapter-disabled, or adapter-local-command"
+  local operation="$1"
+  shift
+  case "$operation" in
+    status) operation="check" ;;
+    capabilities)
+      bash "$SCRIPT_DIR/research-run.sh" capabilities --project-root "$(project_root)" "$@"
+      return
+      ;;
+    check|schema|validate-question|plan|run|resume|inspect|validate|publish|bridge|cancel|adapter-disabled|adapter-local-command) ;;
+    *) die "Unknown research subcommand: $operation" ;;
+  esac
+  bash "$SCRIPT_DIR/research-run.sh" "$operation" "$@"
+}
+
+cmd_admission() {
+  [[ $# -gt 0 ]] || die "admission requires a subcommand. Try: adapter, usage, evaluate, issue-permit, record-usage, record-intent, record-fact, consume-permit, budget, epoch, or corpus"
+  local operation="$1"
+  shift
+  case "$operation" in
+    adapter)
+      bash "$SCRIPT_DIR/dispatch-adapter-resolve.sh" --repo-root "$(project_root)" "$@"
+      ;;
+    usage)
+      bash "$SCRIPT_DIR/usage-resolve.sh" --repo-root "$(project_root)" "$@"
+      ;;
+    evaluate|issue-permit|record-usage|record-intent|record-fact|consume-permit)
+      bash "$SCRIPT_DIR/dispatch-admission.sh" "$operation" "$@"
+      ;;
+    budget)
+      bash "$SCRIPT_DIR/goal-budget-ledger.sh" "$@"
+      ;;
+    epoch)
+      bash "$SCRIPT_DIR/session-epoch-authority.sh" "$@"
+      ;;
+    corpus)
+      bash "$SCRIPT_DIR/cost-corpus-evaluate.sh" "$@"
+      ;;
+    enforce|host-enforce)
+      die "admission host-native enforcement is unavailable; use a configured dispatch adapter or the repository-reference admission surface"
+      ;;
+    *) die "Unknown admission subcommand: $operation" ;;
+  esac
+}
+
 cmd_profile() {
   if [[ $# -eq 0 ]]; then
     bash "$SCRIPT_DIR/developer-profile.sh" show
@@ -4505,6 +4598,8 @@ main() {
     dod)                cmd_dod "$@" ;;
     policy)             cmd_policy "$@" ;;
     runtime)            cmd_runtime "$@" ;;
+    research)           cmd_research "$@" ;;
+    admission)          cmd_admission "$@" ;;
     session)            cmd_session "$@" ;;
     lint)               cmd_lint "$@" ;;
     agnosticity)        cmd_agnosticity "$@" ;;

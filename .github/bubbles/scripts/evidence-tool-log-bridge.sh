@@ -25,7 +25,7 @@
 # is preserved; tool-log path is additive proof.
 #
 # Usage:
-#   evidence-tool-log-bridge.sh <spec-dir> [--log <path>] [--format=text|json]
+#   evidence-tool-log-bridge.sh <spec-dir> [--log <path>] [--format=text|json|admitted-jsonl]
 #
 # Output:
 #   text (default)  Human-readable summary written to stdout.
@@ -41,6 +41,8 @@
 #                       "matches":        [{"scopeFile":..., "line":N, "dodBody":..., "cmd":..., "ts":..., "scenarioId":..., "claim":..., "sourceRevision":..., "exitCode":N}, ...],
 #                       "unbound":        [{"scopeFile":..., "line":N, "dodBody":..., "reason":...}, ...]
 #                     }
+#   admitted-jsonl  Full receipt objects admitted for this transition, one per
+#                   line. The append-only source log is never modified.
 #
 # Exit codes:
 #   0   success (advisory; coverage reported regardless of value)
@@ -54,10 +56,11 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: evidence-tool-log-bridge.sh <spec-dir> [--log <path>] [--format=text|json]
+Usage: evidence-tool-log-bridge.sh <spec-dir> [--log <path>] [--format=text|json|admitted-jsonl]
 
 Reports DoD ↔ tool-call log coverage. Text by default; JSON for MCP / programmatic
-consumption (`--format=json`).
+consumption (`--format=json`); admitted JSONL for transition-local consumers
+(`--format=admitted-jsonl`).
 USAGE
 }
 
@@ -76,8 +79,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$FORMAT" in
-  text|json) ;;
-  *) echo "evidence-tool-log-bridge: --format must be 'text' or 'json' (got: $FORMAT)" >&2; exit 2;;
+    text|json|admitted-jsonl) ;;
+    *) echo "evidence-tool-log-bridge: --format must be 'text', 'json', or 'admitted-jsonl' (got: $FORMAT)" >&2; exit 2;;
 esac
 
 [[ -d "$SPEC_DIR" ]] || { echo "evidence-tool-log-bridge: spec dir missing" >&2; exit 2; }
@@ -106,7 +109,9 @@ fi
 SPEC_SLUG="$(basename "$SPEC_DIR")"
 
 if [[ ! -f "$LOG" ]]; then
-  if [[ "$FORMAT" == "json" ]]; then
+    if [[ "$FORMAT" == "admitted-jsonl" ]]; then
+        exit 0
+    elif [[ "$FORMAT" == "json" ]]; then
     printf '{"spec":%s,"logPath":%s,"logPresent":false,"scopeFiles":0,"dodItems":0,"toolLogEntries":0,"matchedDodItems":0,"coveragePct":0,"matches":[],"unbound":[],"note":"no tool-call log found"}\n' \
       "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$SPEC_SLUG")" \
       "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$LOG")"
@@ -184,6 +189,7 @@ source_revision = os.environ.get('SOURCE_REVISION', '').strip()
 
 matches = []
 unbound = []
+checked_admitted_ids = set()
 for sf, ln, body in dod_items:
     pointer = POINTER_RE.search(body)
     if not pointer:
@@ -228,6 +234,7 @@ for sf, ln, body in dod_items:
             "sourceRevision": rev,
             "exitCode": exit_code,
         }
+        checked_admitted_ids.add(id(e))
         break
     if admitted:
         matches.append(admitted)
@@ -238,6 +245,80 @@ for sf, ln, body in dod_items:
 matched_count = len(matches)
 total = len(dod_items)
 pct = (matched_count * 100) // max(total, 1)
+
+if fmt == "admitted-jsonl":
+    manifest_subjects = {}
+    manifest_path = spec_dir / "scenario-manifest.json"
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(errors='replace'))
+            scenarios = manifest if isinstance(manifest, list) else (manifest.get('scenarios') or [])
+            for scenario in scenarios:
+                if not isinstance(scenario, dict):
+                    continue
+                scenario_id = (scenario.get('scenarioId') or scenario.get('id') or '').strip()
+                if not scenario_id:
+                    continue
+                subjects = []
+                title = (scenario.get('title') or '').strip()
+                if title:
+                    subjects.append(title)
+                for obligation in scenario.get('obligations') or []:
+                    if not isinstance(obligation, dict):
+                        continue
+                    required_proof = (obligation.get('requiredProof') or '').strip()
+                    if required_proof:
+                        subjects.append(required_proof)
+                manifest_subjects[scenario_id] = subjects
+        except (OSError, json.JSONDecodeError, TypeError):
+            manifest_subjects = {}
+
+    allowed_phases = {'red', 'implement', 'green', 'live', 'regression', 'observed'}
+
+    def target_spec_bound(entry):
+        value = (entry.get('spec') or '').strip().rstrip('/')
+        return value == spec_slug or value.rsplit('/', 1)[-1] == spec_slug
+
+    def complete_binding(entry):
+        binding = entry.get('scenarioBinding')
+        if not isinstance(binding, dict) or not target_spec_bound(entry):
+            return False
+        required = ('scenarioId', 'phase', 'testIdentity', 'sourceRevision',
+                    'negativeControl', 'claim')
+        if any(not isinstance(binding.get(field), str) or not binding[field].strip()
+               for field in required):
+            return False
+        if not isinstance(entry.get('cmd'), str) or not entry['cmd'].strip():
+            return False
+        exit_code = entry.get('exitCode')
+        if not isinstance(exit_code, int):
+            return False
+        phase = binding['phase'].strip().lower()
+        if phase not in allowed_phases:
+            return False
+        if (phase == 'red' and exit_code == 0) or (phase != 'red' and exit_code != 0):
+            return False
+        revision = binding['sourceRevision'].strip()
+        if source_revision and phase != 'red' and revision != source_revision:
+            return False
+        return True
+
+    def manifest_claim_bound(entry):
+        binding = entry['scenarioBinding']
+        subjects = manifest_subjects.get(binding['scenarioId'].strip())
+        if not subjects:
+            return False
+        claim_tokens = content(binding['claim'])
+        return any(content(subject) and not (content(subject) - claim_tokens)
+                   for subject in subjects)
+
+    for entry in entries:
+        if not complete_binding(entry):
+            continue
+        if id(entry) not in checked_admitted_ids and not manifest_claim_bound(entry):
+            continue
+        print(json.dumps(entry, separators=(',', ':')))
+    sys.exit(0)
 
 if fmt == "json":
     out = {

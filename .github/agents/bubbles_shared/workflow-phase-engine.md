@@ -111,6 +111,15 @@ Two obligations belong to this phase loop specifically:
 - A dependent of a failed occurrence is `BLOCKED_NOT_RUN` — not a pass, not a failure — while phases independent of that failure still execute so their diagnostics survive.
 - Exhausting the iteration budget with occurrences outstanding is reported as exhaustion and exits non-zero. It is never reported as completion.
 
+**One level down (IMP-058 SCOPE-5 / PERF-14).** The same no-replay guarantee
+above applies to a PHASE occurrence; it does not by itself stop a phase from
+re-running every check inside a suite it has already run byte-identically in
+an earlier phase. `test-core.md`'s "Test-Leaf Receipt Reuse" section owns the
+consumption contract for that layer — cite an `ACCEPTED` `test-leaf-receipt.sh`
+verdict instead of re-executing, record the citation via `gate-hit-log.sh
+receipt-reuse`, and never treat a cited execution as a substitute for this
+phase's own judgment on whether the evidence satisfies its contract.
+
 **One-to-one accounting rule:** The orchestrator MUST maintain a finding ledger. Every finding is tracked individually. The implement prompt MUST include the full finding list. The implement result MUST account for every finding. Unaccounted findings block advancement.
 
 **⛔ PROHIBITED PATTERNS:**

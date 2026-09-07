@@ -297,31 +297,46 @@ when one is configured, and otherwise from explicit repository-relative paths th
 planner records. The resolver matches only against those declared refs — it does
 not guess ownership from a filename resemblance.
 
-## Human Acceptance Is Terminal (IMP-040 SCOPE-10 / EV-8, Gate G136)
+## User Acceptance Is Terminal (IMP-040 SCOPE-10 / EV-8, BUG-037, Gate G136)
 
 A terminal transition fails on **any** unchecked item in `uservalidation.md`.
 
-Artifact lint requires the checklist to carry at least one checked `[x]` and
-never rejects an unchecked one, so one checked plus five unchecked passes lint
-and the spec reaches a terminal status with five behaviors no human accepted.
+Acceptance is **opt-out**. The `## Checklist` ships CHECKED and automation
+authors that initial state. A user who reviews the delivered behavior and
+objects to nothing performs no further act, and that silence is acceptance.
+Unchecking is the user's only required act, and it is how they REJECT a
+behavior — so an item left unchecked at a terminal transition is a
+user-reported regression.
 
-Lint is the wrong place to repair that. Lint also runs during **planning**, where
-a checked-by-default template is legitimate — the template records what *will* be
-accepted, it does not claim a human already ran it. Tightening lint would either
-break planning or force it to fabricate acceptance up front. The terminal
-transition is the moment the claim stops being provisional, so that is where the
-check belongs.
+That is the BUG-029 closure, unchanged: artifact lint never rejected an
+unchecked entry, so one checked plus five unchecked reached a terminal status
+with five behaviors nobody had accepted. Lint is still the wrong place to repair
+it. Lint runs while the user is mid-review, where unchecking every item is a
+legitimate state; refusing it there would refuse the user's own act of rejecting
+the work. The terminal transition is the moment the claim stops being
+provisional, so that is where the check belongs.
+
+**What the gate proves, stated honestly.** Exactly one thing: that no user
+recorded an objection in this file. It cannot distinguish "the user reviewed the
+behavior and was satisfied" from "nobody ever opened the file", because opt-out
+makes those two states byte-identical. It is a rejection channel, not a proof
+that a human acted. That is a deliberate owner trade, not an oversight.
+
+`## Human Acceptance Record` is OPTIONAL and is NOT required at terminal. It
+remains available for external UAT, explicit sign-off, or compliance contexts
+that want a named acceptor, and when it IS authored every shape rule still
+applies — including that `acceptedBy` may never name an agent.
 
 The gate runs only when the target status is `done`. A ceiling-bound mode
-(`validate-only`, `docs-only`, `spec-scope-hardening`, ...) is not claiming human
-acceptance of delivered behavior, and an open checklist is the correct state for
-it. Only the `## Checklist` section is parsed; a `[ ]` under `## Notes` is
-ignored.
+(`validate-only`, `docs-only`, `spec-scope-hardening`, ...) is not claiming
+delivered behavior is accepted, and an open checklist is the correct state for
+it. Only the `## Checklist` section supplies acceptance items; a `[ ]` under
+`## Notes` is ignored.
 
 **The guard prints the item and never changes it.** Checking a box on the
-author's behalf would fabricate exactly the human acceptance the gate exists to
-require. Either a human accepts the behavior and checks it, or the item is a real
-regression and the spec is not done.
+author's behalf would erase the only signal a user has for rejecting delivered
+behavior. After the behavior is fixed, the USER re-checks it — no agent, guard
+or lint may re-check an item a user unchecked.
 
 ## Changed-Spec Verification (IMP-040 SCOPE-11 / COV-12)
 
@@ -349,6 +364,64 @@ Measured across the six consumer repos on 2026-08-12: five carry a pre-push hook
 exactly one invokes any Bubbles guard, and one carries no hook at all. Gates that
 are never reached are indistinguishable from gates that do not exist. The command
 has no bypass flag; what varies between repos is whether it is invoked at all.
+
+## Test-Leaf Receipt Reuse (IMP-058 SCOPE-5 / PERF-14)
+
+`test-leaf-receipt.sh` (IMP-048 SCOPE-3) already guarantees that an individual
+test command is not re-run when its bytes have not changed since it last
+passed. On `origin/main` that guarantee is reachable by any specialist, but no
+agent instruction told one to use it, so a `full-delivery` chain re-executed
+the same suite once per phase on an unchanged tree — measured, not assumed:
+`execution-ledger` spec 001 re-ran one 4,409-case suite five times across
+`regression`, `simplify`, `gaps`, `harden`, and `stabilize` with no byte
+changed between runs.
+
+**This is a citation right, never an execution shortcut.** What is reused is
+the *execution* — the command ran, its exit code and output were captured.
+What is NEVER reused is the *judgment* — whether that evidence satisfies the
+current phase's own contract. Each phase still reads the evidence and decides
+for itself; a phase that wants a fresh run may always demand one, receipt or
+not.
+
+**When a suite is unchanged, cite instead of re-running:**
+
+1. Construct `testId` so it names what the receipt actually claims:
+   `<phase>:<check>` at minimum, `<phase>:<agent>:<check>` when more than one
+   agent could produce the same check id. A receipt is looked up by this
+   exact string — reusing a sloppy id (e.g. every phase sharing `"tests"`)
+   makes an unrelated phase's receipt look like this phase's own.
+2. Declare `--leaf-ref` for **every** path the check's result actually
+   depends on — the test files, the source under test, and any fixture or
+   config the suite reads. `test-leaf-receipt.sh` invalidates ONLY on a
+   declared ref (see its header: "precise invalidation ... a sibling covering
+   untouched owners stays ACCEPTED"). An under-declared ref set is a stale
+   ACCEPTED on a real behavioral change — this is the one way reuse can hide
+   a regression, and it is a declaration mistake, not a limitation of the
+   mechanism.
+3. Run `test-leaf-receipt.sh run --leaf <testId>=<command> --leaf-ref ...`.
+   `RAN_PASS` means it executed — record the evidence as today. `ACCEPTED`
+   means an identical receipt already exists — do not re-run the command,
+   and record the citation instead of a fresh execution:
+   `verified: receipt <testOccurrenceId>, digest <candidateDigest>, produced by <phase> at <finishedAt>`.
+4. Call `bash bubbles/scripts/gate-hit-log.sh receipt-reuse --test-id <testId>
+   --receipt-id <testOccurrenceId> --digest <candidateDigest> --phase <phase>
+   --agent <agent>` for every citation. This is what makes the saving
+   measured rather than assumed, and what makes an unsound reuse traceable to
+   the receipt that authorized it.
+
+**Repository opt-in, unchanged default.** `test-leaf-receipt.sh` runs every
+leaf with no receipt tracking unless the repository sets
+`testLeafReceipts: adapter: jsonl` in `.github/bubbles-project.yaml` — an
+unconfigured repository, including this one today, behaves exactly as before
+this section existed. This is not a separate flag layered on top; it is the
+mechanism's own existing default.
+
+**What this does not change.** G005 and the anti-fabrication chain see the
+same requirement they always have: a claim is backed by real captured output
+with a real exit code. A cited receipt satisfies that because it carries the
+original captured bytes, never a caller-supplied assertion — `run` observes
+the exit code and output hash itself and refuses to accept either from an
+argument.
 
 ## References
 - `evidence-rules.md`

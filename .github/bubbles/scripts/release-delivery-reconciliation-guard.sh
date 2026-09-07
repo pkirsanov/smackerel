@@ -247,8 +247,11 @@ is_delivered_status() {
 }
 
 # Does the spec's effective completed-phases record include "validate"?
-# Tolerates both the v3 certification.certifiedCompletedPhases[] and the older
-# top-level completedPhases[] shapes.
+# An explicit certification key is authoritative: only
+# certification.certifiedCompletedPhases[] may certify it. The older top-level
+# completedPhases[] shape remains compatible only when certification is absent.
+# A malformed explicit certification value therefore yields no certified
+# phases instead of silently falling back to legacy state.
 #
 # Elements may be bare strings OR per-phase provenance objects carrying
 # {phase, agent, certifiedAt, ...}. Both shapes are in the wild, and
@@ -263,7 +266,16 @@ is_validate_certified() {
   local state_json="$1"
   local phases
   phases="$(jq -r '
-    ((.certification.certifiedCompletedPhases // []) + (.completedPhases // []))
+    (if has("certification") then
+       if (.certification | type) == "object" then
+         (.certification.certifiedCompletedPhases // [])
+       else
+         []
+       end
+     else
+       (.completedPhases // [])
+     end)
+    | if type == "array" then . else [] end
     | .[]?
     | (if type == "string" then . else (.phase // empty) end)
     | ascii_downcase' "$state_json" 2>/dev/null || true)"
@@ -382,6 +394,26 @@ for FFILE in "${FEATURE_FILES[@]}"; do
 
     status="$(jq -r '.status // ""' "$state_json")"
     mode="$(jq -r '.workflowMode // .policySnapshot.workflowMode.mode // ""' "$state_json")"
+
+    # Explicit v3 certification controls delivery truth. A certification key
+    # must contain an object whose status mirror agrees with the top-level
+    # status. Any malformed or divergent explicit record is NOT-DELIVERED;
+    # legacy status/phase compatibility applies only when the key is absent.
+    if jq -e 'has("certification")' "$state_json" >/dev/null 2>&1; then
+      certification_type="$(jq -r '.certification | type' "$state_json")"
+      certification_status="$(jq -r 'if (.certification | type) == "object" then (.certification.status // "") else "" end' "$state_json")"
+      if ! jq -e '
+        (.certification | type) == "object"
+        and (.status | type) == "string"
+        and (.certification.status | type) == "string"
+        and (.status == .certification.status)' "$state_json" >/dev/null 2>&1; then
+        echo "[release-delivery-reconciliation-guard][ERROR] $phase_dir: required feature '$fid' → spec '$fspec' has incoherent explicit certification (top-level status '$status', certification type '$certification_type', certification status '${certification_status:-<missing>}')" >&2
+        phase_delivery_rc=1
+        SUMMARY_ROWS+=("$phase_dir|$fid|required|$fspec|NOT-DELIVERED (certification-conflict)")
+        continue
+      fi
+      status="$certification_status"
+    fi
 
     # Honest blocked distinction.
     if [[ "$status" == "blocked" ]]; then

@@ -31,6 +31,15 @@ Primary references:
 - `bubbles/workflows.yaml`
 - `agents/bubbles_shared/agent-common.md`
 
+### Provider-Neutral Runtime Capabilities
+
+The source CLI also exposes `research` and `admission`. These are not agents or workflow modes:
+
+- `research` builds immutable evidence through explicit lifecycle stages;
+- `admission` controls measured resource-consuming dispatch through budgets, permits, usage records, retry identities, and verified session epochs.
+
+Both are opt-in and default off. A permit is not authorization for a consequential action. See [Research And Admission Runtime](../recipes/research-and-admission-runtime.md).
+
 Framework evolution packet:
 - [Control Plane Design](CONTROL_PLANE_DESIGN.md)
 - [Control Plane Rollout](CONTROL_PLANE_ROLLOUT.md)

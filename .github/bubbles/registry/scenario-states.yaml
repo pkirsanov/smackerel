@@ -209,6 +209,10 @@ failureCodes:
     meaning: An implementation ref changed, so the scenario is AFFECTED and its GREEN is stale.
   - id: SCS-MISSING-BINDING
     meaning: A receipt names a scenario phase but omits a required binding field.
+  - id: SCS-CHAIN-PARTIAL
+    meaning: A later same-group proof campaign is missing its next required phase.
+  - id: SCS-APPEND-ORDER-CONFLICT
+    meaning: Resolver-derived append ordinals are missing, duplicated, nonpositive, or nonmonotonic.
 
 # Implementation may not start without a receipt-bound RED. This is the ordering
 # rule the whole model rests on: without it, "the test passes" is compatible with

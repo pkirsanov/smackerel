@@ -1,0 +1,237 @@
+# closure-tree-classification.tsv (IMP-059 SCOPE-1)
+#
+# Re-derives WHY each closureComplete: false SELFTEST in
+# bubbles/registry/validation-checks.yaml is incomplete, replacing the
+# 2026-09-04 manual-sample estimate with a mechanical, execution-based
+# classification. Regenerate: bash bubbles/scripts/generate-validation-checks.sh
+# --classify-closure-tree | LC_ALL=C sort > bubbles/registry/closure-tree-classification.tsv
+#
+# Buckets (see tree_match_kind()/classify_closure_tree() in
+# generate-validation-checks.sh for the exact rule each one applies):
+#   genuine-tree-walk               a real, unbounded tree-walk marker
+#                                    (git -C, bubbles_pruned_find, or a
+#                                    $REPO_ROOT/$repo_root token with no
+#                                    resolvable literal path after it).
+#   candidate-false-negative        every $REPO_ROOT/$repo_root token in
+#                                    the tree-flagged closure member(s) is
+#                                    bounded by a literal path that
+#                                    resolves to a real file -- an
+#                                    enumerable dependency already
+#                                    tracked by scan_file(), mis-flagged
+#                                    as an unbounded walk.
+#   candidate-false-negative+closure-unresolved
+#                                    same bounded-only tree evidence, but
+#                                    the closure ALSO has an unrelated
+#                                    unresolved bash/source dispatch, so
+#                                    fixing the tree heuristic alone
+#                                    would not flip this one to true.
+#   closure-unresolved              no tree-walk evidence at all; false
+#                                    only because of an unresolved
+#                                    bash/source variable dispatch
+#                                    somewhere in the closure -- a
+#                                    distinct, unrelated reason SCOPE-1
+#                                    leaves unclassified further, per
+#                                    the proposal.
+#
+# 2026-09-05 initial re-derivation (before SCOPE-2 remediation): 161
+# closureComplete: false selftests total (of 231 closureComplete: false
+# checks registry-wide). 133 genuine-tree-walk, 10 candidate-false-negative,
+# 3 candidate-false-negative+closure-unresolved, 15 closure-unresolved.
+# This was materially smaller than the proposal's 2026-09-04 manual-sample
+# estimate (~49 candidate false-negatives out of ~227 registry-wide false
+# entries). The proposal explicitly anticipated the drift ("the exact
+# counts... will have moved; re-verify before acting") and that estimate
+# was a manual sample, not a claim of precision -- so the gap was not
+# treated as an error in either number, and the 2026-09-04 estimate is left
+# as historical record rather than corrected.
+#
+# 2026-09-05 SCOPE-2 remediation (shape (a), per-selftest retrofit): 6 of
+# the 10 pure candidate-false-negative selftests (eval-corpus-selftest.sh,
+# eval-harness-selftest.sh, experience-recall-eval-selftest.sh,
+# goal-contract-selftest.sh, judge-adapter-contract-selftest.sh,
+# mode-alias-selftest.sh) had their SOLE closureComplete-triggering
+# reference rewritten from $REPO_ROOT/bubbles/<path> to the equivalent
+# $SCRIPT_DIR/../<path> -- textually identical resolution, but outside
+# reads_working_tree()'s match set -- and now carry closureComplete: true.
+# Each was re-run standalone (zero behavior change) and shellcheck-clean
+# before and after. The dependency this unlocked for
+# judge-adapter-contract-selftest.sh (bubbles/adapters/judge/ollama.sh) was
+# proven load-bearing by execution: moving it aside made the selftest FAIL
+# CLOSED (exit 1, "adapter exists ... not found"), not silently pass or
+# skip, satisfying this proposal's fail-closed acceptance bar; the file was
+# restored and reconfirmed byte-identical and passing.
+#
+# The remaining 4 candidate-false-negative entries (bug-packet-selftest.sh,
+# imp021-interaction-contracts-selftest.sh,
+# phase-relevance-resolve-selftest.sh, state-linkage-backfill-selftest.sh)
+# were investigated and deliberately LEFT UNFIXED: their triggering
+# references point outside bubbles/ (agents/, docs/, or BUGS.md at the repo
+# root), which needs a DOUBLE $SCRIPT_DIR/../../<path> hop. normalize_ref()
+# in generate-validation-checks.sh only collapses a SINGLE `dir/../` hop (its
+# own comment says so); tracing a double hop through it produces a wrong,
+# non-existent path, so the reference would be silently DROPPED from the
+# tracked closure rather than correctly re-pointed -- reintroducing exactly
+# the staleness this proposal exists to remove, and worse than leaving the
+# false-negative alone. Fixing this needs either a normalize_ref() multi-hop
+# fix (shared derivation logic -- shape (b), out of scope here) or a
+# different per-file approach; recorded as an open follow-up rather than
+# forced through with a regression. This file's counts (155 total false
+# selftests: 133 genuine-tree-walk, 4 candidate-false-negative, 3
+# candidate-false-negative+closure-unresolved, 15 closure-unresolved) are
+# post-remediation and should be treated as current; the 2026-09-04 and
+# pre-remediation 2026-09-05 figures above are historical only.
+bubbles/scripts/acceptance-authority-selftest.sh	genuine-tree-walk
+bubbles/scripts/adoption-profile-lib-selftest.sh	genuine-tree-walk
+bubbles/scripts/adversarial-aggregate-selftest.sh	genuine-tree-walk
+bubbles/scripts/adversarial-resolve-selftest.sh	genuine-tree-walk
+bubbles/scripts/agent-bundle-size-budget-selftest.sh	genuine-tree-walk
+bubbles/scripts/agent-ownership-lint-selftest.sh	candidate-false-negative+closure-unresolved
+bubbles/scripts/agnosticity-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/artifact-lint-selftest.sh	closure-unresolved
+bubbles/scripts/audit-result-contract-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/autonomy-posture-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/bash-baseline-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/batch-promotion-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/bsd-userland-sim-selftest.sh	genuine-tree-walk
+bubbles/scripts/bubbles-drift-check-selftest.sh	closure-unresolved
+bubbles/scripts/bug-packet-selftest.sh	candidate-false-negative
+bubbles/scripts/capability-freshness-selftest.sh	genuine-tree-walk
+bubbles/scripts/capability-ledger-selftest.sh	genuine-tree-walk
+bubbles/scripts/case-collision-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/ci-annotation-emitter-selftest.sh	genuine-tree-walk
+bubbles/scripts/closeout-report-selftest.sh	genuine-tree-walk
+bubbles/scripts/codeindex-adapter-contract-selftest.sh	candidate-false-negative+closure-unresolved
+bubbles/scripts/codeindex-resolve-selftest.sh	closure-unresolved
+bubbles/scripts/compact-obligation-basis-selftest.sh	genuine-tree-walk
+bubbles/scripts/compaction-discipline-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/competitive-docs-selftest.sh	genuine-tree-walk
+bubbles/scripts/context-compactor-selftest.sh	genuine-tree-walk
+bubbles/scripts/control-plane-config-merge-selftest.sh	genuine-tree-walk
+bubbles/scripts/control-plane-policy-activation-selftest.sh	genuine-tree-walk
+bubbles/scripts/control-plane-rce-selftest.sh	genuine-tree-walk
+bubbles/scripts/core-tier-pattern-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/delivery-implementation-delta-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/design-experiment-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/doctor-hygiene-surface-selftest.sh	genuine-tree-walk
+bubbles/scripts/done-spec-audit-selftest.sh	genuine-tree-walk
+bubbles/scripts/evidence-admission-hardening-selftest.sh	genuine-tree-walk
+bubbles/scripts/evidence-capture-selftest.sh	closure-unresolved
+bubbles/scripts/evidence-tool-log-bridge-selftest.sh	genuine-tree-walk
+bubbles/scripts/experience-recall-adapter-contract-selftest.sh	closure-unresolved
+bubbles/scripts/experience-recall-authority-selftest.sh	candidate-false-negative+closure-unresolved
+bubbles/scripts/experience-recall-cli-selftest.sh	genuine-tree-walk
+bubbles/scripts/experience-recall-index-selftest.sh	genuine-tree-walk
+bubbles/scripts/experience-recall-lifecycle-selftest.sh	genuine-tree-walk
+bubbles/scripts/framework-dogfood-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/framework-health-evidence-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/framework-validate-changed-only-selftest.sh	genuine-tree-walk
+bubbles/scripts/framework-validate-tier-selftest.sh	genuine-tree-walk
+bubbles/scripts/framework-validation-wiring-selftest.sh	genuine-tree-walk
+bubbles/scripts/gate-bands-selftest.sh	genuine-tree-walk
+bubbles/scripts/gate-enforcement-selftest.sh	genuine-tree-walk
+bubbles/scripts/gate-telemetry-capability-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/gate-vintage-selftest.sh	genuine-tree-walk
+bubbles/scripts/generate-cheatsheet-selftest.sh	genuine-tree-walk
+bubbles/scripts/generate-gate-coverage-map-selftest.sh	genuine-tree-walk
+bubbles/scripts/generate-installer-selftest.sh	genuine-tree-walk
+bubbles/scripts/generate-validation-checks-selftest.sh	genuine-tree-walk
+bubbles/scripts/goal-boundary-receipt-selftest.sh	closure-unresolved
+bubbles/scripts/guard-lib-timeout-selftest.sh	genuine-tree-walk
+bubbles/scripts/hooks/git-env-sanitize-selftest.sh	genuine-tree-walk
+bubbles/scripts/imp021-interaction-contracts-selftest.sh	candidate-false-negative
+bubbles/scripts/implementation-reality-scan-selftest.sh	genuine-tree-walk
+bubbles/scripts/install-provenance-selftest.sh	genuine-tree-walk
+bubbles/scripts/intent-routes-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/interop-apply-selftest.sh	genuine-tree-walk
+bubbles/scripts/interop-import-selftest.sh	genuine-tree-walk
+bubbles/scripts/learning-loop-selftest.sh	genuine-tree-walk
+bubbles/scripts/managed-docs-existence-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/management-truth-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/mcp-grant-selftest.sh	genuine-tree-walk
+bubbles/scripts/mcp-http-transport-selftest.sh	genuine-tree-walk
+bubbles/scripts/mcp-server-selftest.sh	genuine-tree-walk
+bubbles/scripts/mcp-trust-boundary-selftest.sh	genuine-tree-walk
+bubbles/scripts/micro-fix-admission-selftest.sh	closure-unresolved
+bubbles/scripts/migrate-modes-v5-to-v6-selftest.sh	genuine-tree-walk
+bubbles/scripts/mode-resolver-phase-multiplicity-selftest.sh	genuine-tree-walk
+bubbles/scripts/mode-resolver-selftest.sh	genuine-tree-walk
+bubbles/scripts/multi-root-honesty-selftest.sh	genuine-tree-walk
+bubbles/scripts/mutable-dispatch-authorization-selftest.sh	genuine-tree-walk
+bubbles/scripts/mutable-dispatch-caller-coverage-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/mutable-dispatch-gateway-selftest.sh	genuine-tree-walk
+bubbles/scripts/mutation-adapter-contract-selftest.sh	closure-unresolved
+bubbles/scripts/mutation-receipt-selftest.sh	genuine-tree-walk
+bubbles/scripts/observability-adapter-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/observability-check-selftest.sh	genuine-tree-walk
+bubbles/scripts/open-work-report-selftest.sh	genuine-tree-walk
+bubbles/scripts/open-work-surface-selftest.sh	genuine-tree-walk
+bubbles/scripts/orchestrator-persistence-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/orphaned-scaffolding-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/output-policy-coherence-guard-selftest.sh	closure-unresolved
+bubbles/scripts/payload-closure-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/phase-coordinator-selftest.sh	genuine-tree-walk
+bubbles/scripts/phase-relevance-resolve-selftest.sh	candidate-false-negative
+bubbles/scripts/post-cert-spec-edit-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/profile-transition-selftest.sh	genuine-tree-walk
+bubbles/scripts/prometheus-adapter-fetch-selftest.sh	genuine-tree-walk
+bubbles/scripts/propagation-policy-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/python-env-selftest.sh	genuine-tree-walk
+bubbles/scripts/receipt-identity-selftest.sh	genuine-tree-walk
+bubbles/scripts/registry-consistency-selftest.sh	genuine-tree-walk
+bubbles/scripts/release-manifest-purity-selftest.sh	genuine-tree-walk
+bubbles/scripts/release-manifest-selftest.sh	genuine-tree-walk
+bubbles/scripts/release-train-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/release-train-metadata-assign-selftest.sh	genuine-tree-walk
+bubbles/scripts/repo-binding-preflight-selftest.sh	closure-unresolved
+bubbles/scripts/repo-drift-report-selftest.sh	genuine-tree-walk
+bubbles/scripts/report-sections-selftest.sh	genuine-tree-walk
+bubbles/scripts/repository-binding-host-context-selftest.sh	genuine-tree-walk
+bubbles/scripts/required-specialists-registry-selftest.sh	genuine-tree-walk
+bubbles/scripts/research-admission-cli-selftest.sh	genuine-tree-walk
+bubbles/scripts/result-envelope-validate-selftest.sh	genuine-tree-walk
+bubbles/scripts/run-state-reaper-selftest.sh	genuine-tree-walk
+bubbles/scripts/run-state-registry-selftest.sh	genuine-tree-walk
+bubbles/scripts/runtime-concurrency-selftest.sh	genuine-tree-walk
+bubbles/scripts/runtime-lease-selftest.sh	genuine-tree-walk
+bubbles/scripts/scaffold-gate-selftest.sh	genuine-tree-walk
+bubbles/scripts/scenario-compile-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/scenario-match-lib-selftest.sh	genuine-tree-walk
+bubbles/scripts/scenario-state-resolve-selftest.sh	closure-unresolved
+bubbles/scripts/scenario-test-resolve-selftest.sh	genuine-tree-walk
+bubbles/scripts/selftest-coverage-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/session-cap-guard-selftest.sh	closure-unresolved
+bubbles/scripts/session-liveness-selftest.sh	genuine-tree-walk
+bubbles/scripts/session-review-selftest.sh	genuine-tree-walk
+bubbles/scripts/spec-review-handoff-selftest.sh	genuine-tree-walk
+bubbles/scripts/state-certification-reconcile-selftest.sh	genuine-tree-walk
+bubbles/scripts/state-linkage-backfill-selftest.sh	candidate-false-negative
+bubbles/scripts/state-snapshot-selftest.sh	genuine-tree-walk
+bubbles/scripts/state-transition-guard-perf-selftest.sh	genuine-tree-walk
+bubbles/scripts/state-transition-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/state-transition-required-specialists-selftest.sh	genuine-tree-walk
+bubbles/scripts/surface-reachability-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/test-impact-shadow-selftest.sh	closure-unresolved
+bubbles/scripts/test-inventory-adapter-contract-selftest.sh	closure-unresolved
+bubbles/scripts/test-leaf-receipt-selftest.sh	genuine-tree-walk
+bubbles/scripts/test-mechanism-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/tool-capture-shim-selftest.sh	closure-unresolved
+bubbles/scripts/tool-log-semantic-admission-selftest.sh	genuine-tree-walk
+bubbles/scripts/traceability-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/transition-contract-resolver-selftest.sh	genuine-tree-walk
+bubbles/scripts/trust-doctor-selftest.sh	genuine-tree-walk
+bubbles/scripts/upgrade-transactionality-selftest.sh	genuine-tree-walk
+bubbles/scripts/upkeep-calendar-selftest.sh	genuine-tree-walk
+bubbles/scripts/v4.1.0-selftest.sh	genuine-tree-walk
+bubbles/scripts/v5.2-selftest.sh	genuine-tree-walk
+bubbles/scripts/v5.3-selftest.sh	genuine-tree-walk
+bubbles/scripts/validation-batch-selftest.sh	genuine-tree-walk
+bubbles/scripts/validation-closure-selftest.sh	genuine-tree-walk
+bubbles/scripts/validation-receipt-selftest.sh	genuine-tree-walk
+bubbles/scripts/verify-changed-specs-selftest.sh	genuine-tree-walk
+bubbles/scripts/workflow-planning-provenance-selftest.sh	genuine-tree-walk
+bubbles/scripts/workflow-runner-grants-lint-selftest.sh	genuine-tree-walk
+bubbles/scripts/workflow-surface-selftest.sh	genuine-tree-walk
+bubbles/scripts/workflow-yaml-validity-selftest.sh	genuine-tree-walk
+bubbles/scripts/worktree-finalize-reap-selftest.sh	genuine-tree-walk
+bubbles/scripts/worktree-hygiene-guard-selftest.sh	genuine-tree-walk
+bubbles/scripts/worktree-spawn-selftest.sh	genuine-tree-walk

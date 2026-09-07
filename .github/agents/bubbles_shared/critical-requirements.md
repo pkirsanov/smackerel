@@ -179,6 +179,28 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
    - **No phantom references.** Never cite a gate ID, script, module, agent, skill, spec directory, or file path that was not confirmed to exist. Planned-but-undelivered work MUST be labeled as such at the point of citation, never written in the present tense. Mechanically checked by Gate G132 (`bubbles/scripts/reference-existence-lint.sh`) for paths and by `bubbles/scripts/gate-id-grep.sh` for gate IDs.
    - When work genuinely cannot proceed without an unverified premise, the agent MUST record an **Assumption** in the shape defined by [claim-grounding.md](claim-grounding.md) → Assumption Ledger. An assumption MUST NOT satisfy a DoD item, close a finding, or support a completion claim.
 
+## Privileged Reality-Scan Authority For G028
+
+- Run G028 through the canonical Bubbles CLI.
+- In the framework source checkout, use `bash bubbles/scripts/cli.sh scan <classified-work-path> --verbose`.
+- In an installed downstream checkout, use `bash .github/bubbles/scripts/cli.sh scan <classified-work-path> --verbose`.
+- `cli.sh scan` and transition-guard Check 16 MUST enter `privileged-bash-entry-v1` directly.
+- Establish `/usr/bin/env -i`, `BUBBLES_SECURITY_ENTRY_MODE=direct`, and `/bin/bash -p` before scanner module sourcing.
+- Direct raw scanner invocation remains compatibility-only.
+- Its `compat-reexec` path cannot prove pre-boundary cleanliness. It MUST NOT satisfy canonical G028 validation evidence.
+- Security authority requires `root-protected-perl-supervisor-v1` at fixed root-protected `/usr/bin/perl`.
+- It also requires `root-protected-native-python-v1` and complete `BSEC1`, `BPS1`, `PYSEC1`, `PYMOD1`, and `SCS1` protocols.
+- Perl MUST own one direct worker through `waitpid`.
+- Perl owns the fixed 30-second wall, two-second grace, output limits, signals, and status classification.
+- Bash may hold only the Perl supervisor wait handle. It MUST NOT signal worker or watchdog PIDs.
+- Worker text, pipe EOF, and descriptor-holding descendants MUST NOT decide completion. G028 makes no recursive descendant-containment claim.
+- Missing or untrusted `/usr/bin/perl` MUST fail closed as `SUPERVISOR_UNAVAILABLE` or `SUPERVISOR_UNTRUSTED`.
+- No PATH, Bash, Python, external-timeout, fallback, or bypass execution path may substitute.
+- Diagnostics may expose numeric status, closed enums, and protocol identities. They MUST NOT replay raw worker output, environment values, or PIDs.
+- Remediation MUST require a root-protected fixed `/usr/bin/perl` and an authenticated Python toolchain.
+- Validation evidence MUST bind the exact immutable candidate and active `privileged-native-supervision-v2` epoch.
+- Active evidence uses only `SEC-R1`, `SEC-R2`, `HAR-R1`, `HAR-R2`, and `HAR-R3` for this epoch. Historical identifiers cannot satisfy G028.
+
 ---
 
 ## Autonomy Floor (what no autonomy level may waive)
@@ -208,11 +230,14 @@ An agent that cannot proceed without waiving one of these MUST stop and say so p
 
 ## Detection Scans (MANDATORY before marking scope "Done")
 
-These scans enforce policies 8-12 and 18 mechanically. Agents MUST run the implementation reality scan which covers all of these:
+These scans enforce policies 8-12 and 18 mechanically. They also enforce the privileged G028 authority boundary. Agents MUST use its canonical CLI:
 
 ```bash
-# Run the comprehensive reality scan (covers stubs, fakes, hardcoded data, defaults, fallbacks)
-bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
+# Framework source checkout
+bash bubbles/scripts/cli.sh scan {FEATURE_DIR} --verbose
+
+# Installed downstream checkout
+bash .github/bubbles/scripts/cli.sh scan {FEATURE_DIR} --verbose
 # Exit code 0 = pass, Exit code 1 = BLOCKED
 ```
 

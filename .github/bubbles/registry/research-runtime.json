@@ -1,0 +1,21 @@
+{
+  "adapters": ["disabled", "local-command"],
+  "bridges": {
+    "bubbles-envelope": "parked",
+    "downstream-consumer": "parked"
+  },
+  "classifications": ["public", "internal", "confidential", "restricted"],
+  "contractType": "research-runtime-registry",
+  "coverageStates": ["satisfied", "missing", "stale", "conflicted", "unavailable"],
+  "evidenceRelations": ["support", "rebuttal", "context"],
+  "materialityVerdicts": ["proceed", "high-assurance", "human", "refuse"],
+  "operations": ["capabilities", "validate-question", "plan", "run", "resume", "inspect", "validate", "publish", "bridge", "cancel", "schema", "check", "adapter-disabled", "adapter-local-command"],
+  "recordTypes": ["ResearchQuestion", "ResearchRun", "SourceRecord", "NormalizedSource", "ClaimRecord", "EvidenceLink", "ConflictSet", "CoverageAssessment", "MaterialityAssessment", "StageReceipt", "ModelRouteDecision", "ResearchArtifact", "ValidationReceipt", "RunManifest"],
+  "schemaVersion": 1,
+  "selectorTypes": ["segment-byte-range", "line-range", "json-pointer", "table-cell-range"],
+  "stageRegistry": "research-stages.yaml",
+  "telemetryFields": ["contractType", "schemaVersion", "runId", "stageId", "stageClass", "adapterClass", "routeClass", "status", "durationMs", "counts", "digests", "errorCode"],
+  "validationCheckOutcomes": ["satisfied", "failed", "not-evaluated"],
+  "validationChecks": ["identity", "citations", "coverage", "conflicts", "privacy", "freshness", "budget"],
+  "version": "1"
+}

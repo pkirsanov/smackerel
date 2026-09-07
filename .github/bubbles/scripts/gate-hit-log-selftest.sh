@@ -405,6 +405,86 @@ else
   bad "report discloses legacy-derived evidence" "$out"
 fi
 
+# =============================================================================
+# IMP-058 SCOPE-5 (PERF-14) - receipt-reuse records.
+#
+# `receipt-reuse` is a separate record kind from `append`'s gate/run records:
+# it says a specialist phase cited an ACCEPTED test-leaf-receipt.sh verdict
+# instead of re-executing. Case 32 is the one that matters most: a reuse that
+# cannot name the receipt it reused is not traceable to anything and must not
+# be recorded as if it were.
+# =============================================================================
+
+# --- 30. receipt-reuse writes one line naming the testId and receipt --------
+r30="$WORK/r30"
+mkdir -p "$r30"
+bash "$TARGET" receipt-reuse --repo-root "$r30" --spec "specs/001-x" \
+  --phase test --agent bubbles.test --test-id "scope01:test:check43" \
+  --receipt-id "occ-abc123" --digest "sha256:deadbeef" >/dev/null 2>&1
+if grep -q '"kind":"receipt-reuse"' "$(log_of "$r30")" 2>/dev/null &&
+  grep -q '"testId":"scope01:test:check43"' "$(log_of "$r30")" 2>/dev/null &&
+  grep -q '"receiptId":"occ-abc123"' "$(log_of "$r30")" 2>/dev/null &&
+  grep -q '"digest":"sha256:deadbeef"' "$(log_of "$r30")" 2>/dev/null &&
+  grep -q '"phase":"test"' "$(log_of "$r30")" 2>/dev/null &&
+  grep -q '"agent":"bubbles.test"' "$(log_of "$r30")" 2>/dev/null; then
+  ok "receipt-reuse records testId, receiptId, digest, phase and agent"
+else
+  bad "receipt-reuse records testId, receiptId, digest, phase and agent" \
+    "$(cat "$(log_of "$r30")" 2>/dev/null)"
+fi
+
+# --- 31. receipt-reuse is append-only alongside gate/run records ------------
+bash "$TARGET" append --repo-root "$r30" --spec "specs/001-x" --mode full-delivery \
+  --target-status "done" --verdict PASS --exit-status 0 --passed "G024" >/dev/null 2>&1
+lines=$(wc -l <"$(log_of "$r30")" 2>/dev/null | tr -d ' ')
+if [[ "$lines" == "2" ]] && grep -q '"kind":"gate"' "$(log_of "$r30")" 2>/dev/null; then
+  ok "receipt-reuse shares the append-only log with gate/run records"
+else
+  bad "receipt-reuse shares the append-only log" "expected 2 lines, got '${lines:-none}'"
+fi
+
+# --- 32. ADVERSARIAL: missing test-id or receipt-id writes nothing ----------
+r32="$WORK/r32"
+mkdir -p "$r32"
+bash "$TARGET" receipt-reuse --repo-root "$r32" --spec s --phase test --agent a \
+  --receipt-id "occ-1" >/dev/null 2>&1
+bash "$TARGET" receipt-reuse --repo-root "$r32" --spec s --phase test --agent a \
+  --test-id "scope01:test:check1" >/dev/null 2>&1
+if [[ ! -f "$(log_of "$r32")" ]]; then
+  ok "receipt-reuse missing --test-id or --receipt-id writes nothing"
+else
+  bad "receipt-reuse missing --test-id or --receipt-id writes nothing" \
+    "$(cat "$(log_of "$r32")" 2>/dev/null)"
+fi
+
+# --- 33. ADVERSARIAL: opt-out writes nothing for receipt-reuse too ----------
+r33="$WORK/r33"
+mkdir -p "$r33"
+BUBBLES_GATE_HIT_LOG=off bash "$TARGET" receipt-reuse --repo-root "$r33" --spec s \
+  --phase test --agent a --test-id "scope01:test:check1" --receipt-id "occ-1" >/dev/null 2>&1
+if [[ ! -f "$(log_of "$r33")" ]]; then
+  ok "BUBBLES_GATE_HIT_LOG=off suppresses receipt-reuse too"
+else
+  bad "BUBBLES_GATE_HIT_LOG=off suppresses receipt-reuse too" "log file was created"
+fi
+
+# --- 34. report counts receipt-reuse records without treating them as gates -
+out="$(bash "$TARGET" report --repo-root "$r30" --all-classes 2>&1)"
+if printf '%s' "$out" | grep -q 'test-leaf-receipt reuses recorded: 1' &&
+  printf '%s' "$out" | grep -q 'gates with any record: 1'; then
+  ok "report counts the receipt-reuse record separately from the one gate record"
+else
+  bad "report counts receipt-reuse separately from gates" "$out"
+fi
+
+# --- 35. json report exposes receiptReuseRecords -----------------------------
+out="$(bash "$TARGET" report --repo-root "$r30" --json --all-classes 2>&1)"
+if printf '%s' "$out" | grep -q '"receiptReuseRecords":1'; then
+  ok "json report exposes receiptReuseRecords"
+else
+  bad "json report exposes receiptReuseRecords" "$out"
+fi
+
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"
 if [[ "$failures" -gt 0 ]]; then
   printf '%s: FAILED\n' "$NAME"

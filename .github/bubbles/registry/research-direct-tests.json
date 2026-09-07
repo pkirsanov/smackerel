@@ -1,0 +1,32 @@
+{
+  "contractType": "research-direct-test-registry",
+  "schemaVersion": 1,
+  "groups": [
+    {
+      "id": "research-runtime",
+      "command": ["python3", "bubbles/scripts/research-runtime-selftest.py"],
+      "dependencies": [
+        "bubbles/scripts/execution-control-store.py",
+        "bubbles/scripts/measured-budget-runtime.py",
+        "bubbles/registry/measured-budget-runtime-contracts.json",
+        "bubbles/registry/research-runtime.json",
+        "bubbles/registry/research-stages.yaml"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "research-adapter-contract",
+      "command": ["python3", "bubbles/scripts/research-adapter-contract-selftest.py"],
+      "dependencies": [
+        "bubbles/adapters/research/disabled.sh",
+        "bubbles/adapters/research/local-command.sh",
+        "bubbles/scripts/research-runtime.py"
+      ],
+      "timeoutSeconds": 60
+    }
+  ],
+  "sharedValidationRegistration": "parked-for-bubbles.test",
+  "sharedValidationRegistrationCompatibility": "legacy IMP-054 direct-runner value retained for the registered research-runtime selftest",
+  "sharedValidationStatus": "registered-unconditionally",
+  "sharedValidationDriver": "bubbles/scripts/framework-validate.sh"
+}

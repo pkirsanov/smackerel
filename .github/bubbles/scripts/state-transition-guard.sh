@@ -103,8 +103,12 @@ record_gate_ids_from_message() {
   local outcome="$1"
   local remaining="$2"
   local gate_id
-  while [[ "$remaining" =~ (G[0-9][0-9][0-9]) ]]; do
-    gate_id="${BASH_REMATCH[1]}"
+  # A gate id is an identifier, not an arbitrary four-byte substring. Without
+  # both boundaries, active bug-marker suffixes are misread as gate ids and
+  # pollute the structured transition result. Keep this POSIX ERE-shaped for
+  # Bash 4+ on both Linux and macOS; no GNU/PCRE word-boundary extension.
+  while [[ "$remaining" =~ (^|[^[:alnum:]_])(G[0-9][0-9][0-9])([^[:alnum:]_]|$) ]]; do
+    gate_id="${BASH_REMATCH[2]}"
     if [[ "$outcome" == "pass" ]]; then
       record_passed_gate "$gate_id"
     else
@@ -578,12 +582,21 @@ detect_scope_layout() {
 
 combined_scopes_tmp=""
 scope_section_tmp_files=()
+scope_projection_tmp_files=()
 
 build_scope_analysis_units() {
   local scope_path="$1"
   local current_tmp=""
   local current_label=""
   local line=""
+
+  # BUG-041 F-041-02. The `done < "$scope_path"` below is a redirection, so a
+  # missing file is a redirection FAILURE, and under the `set -euo pipefail` at
+  # the top of this script that killed the guard outright — no verdict, no
+  # failureCount, no gate lines. A caller must never be able to turn a missing
+  # artifact into an un-evaluable packet; whether a missing scopes.md is a
+  # failure is Check 1's decision, made on a live guard.
+  [[ -f "$scope_path" ]] || return 0
 
   if [[ "$scope_layout" != "single-file" ]] || [[ "$(basename "$scope_path")" != "scopes.md" ]]; then
     scope_analysis_files+=("$scope_path")
@@ -635,11 +648,15 @@ scope_analysis_label() {
 
 cleanup_tmp_artifacts() {
   if [[ -n "$combined_scopes_tmp" ]] && [[ -f "$combined_scopes_tmp" ]]; then
-    rm -f "$combined_scopes_tmp"
+    rm -f -- "$combined_scopes_tmp"
   fi
 
   if [[ ${#scope_section_tmp_files[@]} -gt 0 ]]; then
-    rm -f "${scope_section_tmp_files[@]}"
+    rm -f -- "${scope_section_tmp_files[@]}"
+  fi
+
+  if [[ ${#scope_projection_tmp_files[@]} -gt 0 ]]; then
+    rm -f -- "${scope_projection_tmp_files[@]}"
   fi
 }
 
@@ -687,6 +704,162 @@ case "$workflow_grants_lint_script" in
   "$guard_repo_root/"*) workflow_grants_lint_args=(--repo-root "$guard_repo_root") ;;
 esac
 
+# ── BUG-041 F-041-02: packet-form-aware artifact resolution ──────────────────
+# BUG-041 taught artifact-lint.sh to read a BUG packet's artifact set from its
+# declared form and left THIS surface blind. The result was a split-brain the
+# same change created: a `compact` packet — the DEFAULT bug route since
+# IMP-047 S-D — passed lint and then died here, because the scope setup below
+# pushed "$feature_dir/scopes.md" unconditionally into a `done <` redirection.
+#
+# The artifact set is READ through bug-packet-resolve.sh, the sole production
+# reader of bubbles/registry/bug-packet.yaml, and is NOT restated here. A
+# private branch in this script would be the fourth copy of the contract that
+# BUG-041 exists to end (design.md §4).
+#
+# FAIL-CLOSED IN THE STRICT DIRECTION. `bug_packet_form` stays empty — and the
+# pre-existing `full`-shaped behaviour therefore applies verbatim — for a
+# non-bug directory, a missing or unreadable registry, a missing resolver, an
+# absent declaration, a word outside the declared vocabulary, or a declaration
+# that micro-fix admission does not confirm. A requirement is reduced ONLY when
+# the registry positively declares a reduced form AND admission grants it, so
+# silence, breakage, and ambiguity all resolve to MORE checking, never less.
+bug_packet_form=""
+bug_packet_required_artifacts=()
+bug_packet_requires_scopes_md=true
+bug_packet_form_note=""
+# BUG-042. Obligations the resolved form retains, as `id|dischargedIn|attestedIn`
+# triples, and the DISTINCT attestation artifacts they name. Empty for the `full`
+# form and for every feature directory, which is what keeps this change inert
+# everywhere except a reduced bug packet.
+bug_packet_obligations=()
+bug_packet_attestation_files=()
+
+guard_is_bug_packet=false
+if [[ -f "$feature_dir/state.json" ]] && grep -q '"bugId"[[:space:]]*:' "$feature_dir/state.json"; then
+  guard_is_bug_packet=true
+elif [[ "$(basename "$feature_dir")" =~ ^BUG-[0-9]{3} ]]; then
+  guard_is_bug_packet=true
+fi
+
+if [[ "$guard_is_bug_packet" == true ]]; then
+  bug_packet_resolver="$(resolve_guarded_framework_script bug-packet-resolve.sh || true)"
+  bug_packet_facts=""
+  if [[ -z "$bug_packet_resolver" ]]; then
+    bug_packet_form_note="bug-packet-resolve.sh not found; applying the unreduced artifact set"
+  elif ! bug_packet_facts="$(bash "$bug_packet_resolver" 2>/dev/null)"; then
+    bug_packet_form_note="bubbles/registry/bug-packet.yaml is unreadable; applying the unreduced artifact set"
+  else
+    bug_decl_field="$(printf '%s\n' "$bug_packet_facts" | sed -n 's/^field=//p' | head -1)"
+    bug_decl_default="$(printf '%s\n' "$bug_packet_facts" | sed -n 's/^default=//p' | head -1)"
+    bug_declared_word=""
+    if [[ -n "$bug_decl_field" ]] && [[ -f "$feature_dir/state.json" ]]; then
+      bug_declared_word="$(sed -n "s/.*\"${bug_decl_field}\"[[:space:]]*:[[:space:]]*\"\([A-Za-z-]*\)\".*/\1/p" "$feature_dir/state.json" | head -1)"
+    fi
+
+    bug_resolved_form=""
+    if [[ -z "$bug_decl_field" ]] || [[ -z "$bug_decl_default" ]]; then
+      bug_packet_form_note="bug-packet.yaml declares no form-declaration field or absent-default; applying the unreduced artifact set"
+    elif [[ -z "$bug_declared_word" ]]; then
+      bug_packet_form_note="no state.json .$bug_decl_field declaration; applying the registry absent-default '$bug_decl_default' artifact set"
+      bug_resolved_form="$bug_decl_default"
+    else
+      bug_resolved_form="$(printf '%s\n' "$bug_packet_facts" | sed -n "s/^vocab=${bug_declared_word}|//p" | head -1)"
+      if [[ -z "$bug_resolved_form" ]]; then
+        bug_packet_form_note="state.json .$bug_decl_field=\"$bug_declared_word\" is outside bug-packet.yaml's declared vocabulary; applying the '$bug_decl_default' artifact set"
+        bug_resolved_form="$bug_decl_default"
+      else
+        bug_packet_form_note="packet form '$bug_resolved_form' (state.json .$bug_decl_field=\"$bug_declared_word\")"
+      fi
+    fi
+
+    # Declaring a reduced form is a REQUEST, never a grant. bug-packet.yaml sets
+    # `escalation.overrideFlag: none` precisely so this field cannot become the
+    # override, so the request must also survive micro-fix admission.
+    if [[ -n "$bug_resolved_form" ]] && [[ "$bug_resolved_form" != "$bug_decl_default" ]]; then
+      bug_admission_script="$(resolve_guarded_framework_script micro-fix-admission.sh || true)"
+      bug_admitted_form=""
+      if [[ -n "$bug_admission_script" ]]; then
+        bug_admitted_form="$(bash "$bug_admission_script" --resolve-form "$feature_dir" 2>/dev/null | sed -n 's/^form=//p' | head -1)"
+      fi
+      if [[ "$bug_admitted_form" != "$bug_resolved_form" ]]; then
+        bug_packet_form_note="state.json declares the '$bug_resolved_form' packet but micro-fix admission resolves '${bug_admitted_form:-unavailable}'; the '$bug_decl_default' artifact set is required"
+        bug_resolved_form="$bug_decl_default"
+      else
+        bug_packet_form_note="packet form '$bug_resolved_form' confirmed by micro-fix admission"
+      fi
+    fi
+
+    if [[ -n "$bug_resolved_form" ]]; then
+      bug_packet_form="$bug_resolved_form"
+      bug_packet_requires_scopes_md=false
+      while IFS= read -r bug_artifact_fact; do
+        [[ -n "$bug_artifact_fact" ]] || continue
+        bug_artifact_conditional="${bug_artifact_fact##*|}"
+        bug_artifact_id="${bug_artifact_fact%|*}"
+        # A conditional artifact is not unconditionally required; its own gate owns it.
+        [[ "$bug_artifact_conditional" == "yes" ]] && continue
+        case "$bug_artifact_id" in
+          scopes.md) bug_packet_requires_scopes_md=true ;;
+          *) bug_packet_required_artifacts+=("$bug_artifact_id") ;;
+        esac
+      done < <(printf '%s\n' "$bug_packet_facts" | sed -n "s/^artifact=${bug_packet_form}|//p")
+
+      # An empty requirement set is a false-PASS. Refuse the reduction and keep
+      # the unreduced behaviour rather than emit it.
+      if [[ ${#bug_packet_required_artifacts[@]} -eq 0 ]] && [[ "$bug_packet_requires_scopes_md" == false ]]; then
+        bug_packet_form=""
+        bug_packet_required_artifacts=()
+        bug_packet_requires_scopes_md=true
+        bug_packet_form_note="bug-packet.yaml declares no artifacts for form '$bug_resolved_form'; applying the unreduced artifact set"
+      fi
+
+      # BUG-042. The obligations the form retains, read from the SAME facts.
+      # This is what gives a scopes.md-less form a completion basis: without it
+      # the DoD count is 0, Check 4 records Check-4-structure, and the DEFAULT
+      # bug route can be evaluated but never certified.
+      if [[ -n "$bug_packet_form" ]]; then
+        while IFS= read -r bug_obligation_fact; do
+          [[ -n "$bug_obligation_fact" ]] || continue
+          bug_packet_obligations+=("$bug_obligation_fact")
+          bug_obligation_attested="${bug_obligation_fact##*|}"
+          [[ -n "$bug_obligation_attested" ]] || continue
+          bug_obligation_seen=false
+          for bug_obligation_known in ${bug_packet_attestation_files[@]+"${bug_packet_attestation_files[@]}"}; do
+            [[ "$bug_obligation_known" == "$feature_dir/$bug_obligation_attested" ]] && bug_obligation_seen=true && break
+          done
+          [[ "$bug_obligation_seen" == true ]] || bug_packet_attestation_files+=("$feature_dir/$bug_obligation_attested")
+        done < <(printf '%s\n' "$bug_packet_facts" | sed -n "s/^obligation=${bug_packet_form}|//p")
+      fi
+    fi
+  fi
+fi
+
+# BUG-042 (DI-038-04). The attestation predicate for ONE registry-declared
+# obligation, extracted so Check 4 (completion basis) and Check 15 (Gate G027
+# work evidence) ask the SAME question of the SAME facts instead of two copies
+# free to drift. Exit: 0 attested, 1 unchecked, 2 no attestation line,
+# 3 attestation artifact absent.
+bug_packet_obligation_state() {
+  local _fact="$1"
+  local _id="${_fact%%|*}"
+  local _rest="${_fact#*|}"
+  local _discharged="${_rest%%|*}"
+  local _attested="${_rest##*|}"
+  local _file="$feature_dir/$_attested"
+
+  [[ -n "$_attested" ]] && [[ -f "$_file" ]] || return 3
+
+  # A bare tick asserts that something was done somewhere; a tick citing the
+  # artifact that carries the work is checkable against that artifact.
+  if grep -E '^\- \[x\] ' "$_file" | grep -F -- "$_id" | grep -qF -- "$_discharged"; then
+    return 0
+  fi
+  if grep -E '^\- \[ \] ' "$_file" | grep -qF -- "$_id"; then
+    return 1
+  fi
+  return 2
+}
+
 if [[ "$scope_layout" == "per-scope-directory" ]]; then
   while IFS= read -r scope_path; do
     scope_files+=("$scope_path")
@@ -696,7 +869,12 @@ if [[ "$scope_layout" == "per-scope-directory" ]]; then
     report_files+=("$scope_report_path")
   done < <(find "$feature_dir/scopes" -mindepth 2 -maxdepth 2 -type f -name 'report.md' | sort)
 else
-  scope_files+=("$feature_dir/scopes.md")
+  # A form whose artifact set omits scopes.md has no scope analysis to perform.
+  # A form that DOES require it still enrols the path so Check 1 can report the
+  # absence as a failure — enrolment is what makes the requirement visible.
+  if [[ "$bug_packet_requires_scopes_md" == true ]] || [[ -f "$feature_dir/scopes.md" ]]; then
+    scope_files+=("$feature_dir/scopes.md")
+  fi
   report_files+=("$feature_dir/report.md")
 fi
 
@@ -757,6 +935,20 @@ echo ""
 # =============================================================================
 echo "--- Check 1: Required Artifacts ---"
 required_files=("spec.md" "design.md" "uservalidation.md" "state.json")
+# BUG-041 F-041-02. The literal list above is the FEATURE contract and stays
+# authoritative for specs/<NNN-feature>/ and for every bug packet on the
+# unreduced form. When bug-packet.yaml positively declares a reduced form AND
+# micro-fix admission grants it, the required set comes from the registry
+# instead, so this surface and artifact-lint.sh answer the artifact question
+# from the same authority rather than from two private lists.
+if [[ -n "$bug_packet_form" ]] && [[ ${#bug_packet_required_artifacts[@]} -gt 0 ]]; then
+  info "Bug packet: $bug_packet_form_note"
+  if [[ "$bug_packet_requires_scopes_md" == false ]]; then
+    required_files=("${bug_packet_required_artifacts[@]}")
+  fi
+elif [[ -n "$bug_packet_form_note" ]]; then
+  info "Bug packet: $bug_packet_form_note"
+fi
 for required_file in "${required_files[@]}"; do
   if [[ -f "$feature_dir/$required_file" ]]; then
     pass "Required artifact exists: $required_file"
@@ -795,6 +987,15 @@ if [[ "$scope_layout" == "per-scope-directory" ]]; then
 else
   if [[ -f "$feature_dir/scopes.md" ]]; then
     pass "Required artifact exists: scopes.md"
+  elif [[ "$bug_packet_requires_scopes_md" == false ]]; then
+    # BUG-041 F-041-02. bug-packet.yaml's `compact` form declares three
+    # artifacts and scopes.md is not one of them, so its absence is the declared
+    # shape of the packet, not a missing artifact. This is a REDUCTION OF
+    # ARTIFACTS, NOT OF OBLIGATIONS: micro-fix-packet.yaml's four
+    # preservedObligations still bind, and the scope-derived checks below simply
+    # have no units to analyse. See the note in Check 1's output for the
+    # obligations this surface cannot mechanically evaluate on this form.
+    info "scopes.md not required by the '$bug_packet_form' packet form; scope-derived analysis has no units"
   else
     fail "Missing required artifact: $feature_dir/scopes.md"
   fi
@@ -859,9 +1060,9 @@ if [[ -z "$policy_workflow_mode" ]]; then
 elif [[ -z "$state_workflow_mode" ]]; then
   info "Top-level workflowMode missing — skipping consistency check"
 elif [[ "$state_workflow_mode" != "$policy_workflow_mode" ]]; then
-  fail "workflowMode contradiction: top-level='$state_workflow_mode' vs policySnapshot='$policy_workflow_mode' — at least one was fabricated"
+  fail "workflowMode contradiction: top-level='$state_workflow_mode' vs policySnapshot='$policy_workflow_mode' — at least one was fabricated (Gate G074)"
 else
-  pass "workflowMode consistent across top-level and policySnapshot ($state_workflow_mode)"
+  pass "workflowMode consistent across top-level and policySnapshot ($state_workflow_mode) (Gate G074)"
 fi
 echo ""
 
@@ -1099,7 +1300,7 @@ if [[ -x "$framework_ownership_lint_script" || -f "$framework_ownership_lint_scr
   if [[ "$_c3g_rc" -eq 124 ]]; then
     fail "Framework ownership lint TIMED OUT after 30s (BUG-001 guard) — G042/G063 not certified. Inspect $framework_ownership_lint_script for an unbounded walk."
   elif [[ "$_c3g_rc" -eq 0 ]]; then
-    pass "Framework ownership lint passed — artifact ownership enforcement and concrete result contract are internally consistent (${_c3g_elapsed}s)"
+    pass "Framework ownership lint passed — artifact ownership enforcement and concrete result contract are internally consistent (${_c3g_elapsed}s) (G042/G063)"
   else
     fail "Framework ownership lint failed — G042/G063 cannot be certified during state transition"
     while IFS= read -r lint_line; do
@@ -1189,7 +1390,8 @@ echo ""
 echo "--- Check 4: DoD Completion (Zero Unchecked) ---"
 total_checked=0
 total_unchecked=0
-for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
+for scope_index in "${!scope_analysis_files[@]}"; do
+  scope_path="${scope_analysis_files[$scope_index]}"
   [[ -f "$scope_path" ]] || continue
   total_checked=$((total_checked + $(grep -cE '^\- \[x\] ' "$scope_path" || true)))
   total_unchecked=$((total_unchecked + $(grep -cE '^\- \[ \] ' "$scope_path" || true)))
@@ -1218,7 +1420,24 @@ sys.exit(0 if any(isinstance(r, dict) and (r.get("id") or "").strip() for r in r
   fi
 fi
 
-if [[ "$total_dod" -eq 0 ]]; then
+# BUG-042. THIRD completion basis, ranked BELOW scenario-states and ABOVE the
+# legacy checkbox count. It is selected only when bug-packet.yaml positively
+# declares obligations for the resolved packet form, so `full` — which declares
+# none — is untouched, and so is every feature directory.
+#
+# It is strictly STRONGER than the legacy basis it outranks. The legacy basis
+# counts a list the author wrote, so it can only ask "is anything unchecked" and
+# can never know the list is COMPLETE. Here the required SET comes from the
+# registry, so an author who omits an obligation does not shorten the
+# requirement, they fail it. Zero-unchecked is preserved verbatim on top.
+completion_basis="legacy-checkbox"
+if [[ "$scenario_basis" == "scenario-states" ]]; then
+  completion_basis="scenario-states"
+elif [[ ${#bug_packet_obligations[@]} -gt 0 ]]; then
+  completion_basis="registry-obligations"
+fi
+
+if [[ "$total_dod" -eq 0 ]] && [[ "$completion_basis" != "registry-obligations" ]]; then
   record_failed_check Check-4-structure
   fail "Resolved scope artifacts have ZERO DoD checkbox items — cannot verify completion"
 elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
@@ -1227,7 +1446,7 @@ elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
   info "NOT_APPLICABLE: Check-4-completion — planning maturity permits unchecked implementation DoD"
 elif ! check_is_applicable Check-4-completion; then
   info "NOT_APPLICABLE: Check-4-completion — a framework proposal never implements, so it certifies no DoD completion"
-elif [[ "$scenario_basis" == "scenario-states" ]]; then
+elif [[ "$completion_basis" == "scenario-states" ]]; then
   info "Completion basis: REQUIRED SCENARIO STATES (checkbox counts are reported, not decisive)"
   scenario_rc=0
   scenario_out="$(bash "$SCRIPT_DIR/scenario-state-resolve.sh" --spec-dir "$feature_dir" \
@@ -1247,6 +1466,43 @@ elif [[ "$scenario_basis" == "scenario-states" ]]; then
   fi
   if [[ "$total_unchecked" -gt 0 ]]; then
     info "$total_unchecked unchecked DoD item(s) remain; reported for the operator, not counted as the completion basis"
+  fi
+elif [[ "$completion_basis" == "registry-obligations" ]]; then
+  info "Completion basis: REGISTRY-DECLARED OBLIGATIONS (bug-packet.yaml '$bug_packet_form' form declares ${#bug_packet_obligations[@]}; the required set is not author-chosen)"
+  obligation_failures=0
+  for obligation_fact in "${bug_packet_obligations[@]}"; do
+    obligation_id="${obligation_fact%%|*}"
+    obligation_rest="${obligation_fact#*|}"
+    obligation_discharged="${obligation_rest%%|*}"
+    obligation_attested="${obligation_rest##*|}"
+    obligation_state=0
+    bug_packet_obligation_state "$obligation_fact" || obligation_state=$?
+
+    if [[ "$obligation_state" -eq 3 ]]; then
+      record_failed_check Check-4-obligations
+      fail "Obligation '$obligation_id' names attestation artifact '${obligation_attested:-<none>}', which does not exist in $feature_dir"
+      obligation_failures=$((obligation_failures + 1))
+      continue
+    fi
+
+    if [[ "$obligation_state" -eq 0 ]]; then
+      pass "Obligation '$obligation_id' is attested [x] in $obligation_attested, naming its discharge site $obligation_discharged"
+    elif [[ "$obligation_state" -eq 1 ]]; then
+      record_failed_check Check-4-obligations
+      fail "Obligation '$obligation_id' is declared by bug-packet.yaml but its attestation line in $obligation_attested is UNCHECKED"
+      obligation_failures=$((obligation_failures + 1))
+    else
+      record_failed_check Check-4-obligations
+      fail "Obligation '$obligation_id' has NO attestation line in $obligation_attested citing its discharge site $obligation_discharged — the required set is registry-derived and cannot be shortened"
+      obligation_failures=$((obligation_failures + 1))
+    fi
+  done
+  if [[ "$obligation_failures" -eq 0 ]]; then
+    pass "All ${#bug_packet_obligations[@]} registry-declared obligation(s) are attested [x] for the '$bug_packet_form' packet form"
+  fi
+  if [[ "$total_unchecked" -gt 0 ]]; then
+    record_failed_check Check-4-completion
+    fail "Resolved scope artifacts have $total_unchecked UNCHECKED DoD items — ALL must be [x] for 'done'"
   fi
 elif [[ "$total_unchecked" -gt 0 ]]; then
   record_failed_check Check-4-completion
@@ -1279,7 +1535,17 @@ echo ""
 # =============================================================================
 echo "--- Check 4A: DoD Format Manipulation Detection (Gate G041) ---"
 total_manipulated=0
-for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
+# BUG-042. On a reduced packet form the completion claim lives in the registry's
+# `attestedIn` artifact rather than in scopes.md, so this check must follow it
+# there. Scanning only scope_files would let the relocation reopen the exact
+# reformatting bypass this check exists to close. The array is EMPTY on every
+# feature directory and on the `full` form, so the scanned set is unchanged
+# there.
+c4a_scan_files=(
+  ${scope_files[@]+"${scope_files[@]}"}
+  ${bug_packet_attestation_files[@]+"${bug_packet_attestation_files[@]}"}
+)
+for scope_path in ${c4a_scan_files[@]+"${c4a_scan_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
   # BUG-026: consume the shared DoD parser (bubbles/scripts/dod-section-lib.sh).
@@ -1383,7 +1649,34 @@ total_scopes=$((not_started_scopes + in_progress_scopes + blocked_scopes + done_
 
 info "Resolved scopes: total=$total_scopes, Done=$done_scopes, In Progress=$in_progress_scopes, Not Started=$not_started_scopes, Blocked=$blocked_scopes"
 
-if [[ "$total_scopes" -eq 0 ]]; then
+# BUG-042. A form whose declared artifact set omits scopes.md has no scope
+# decomposition, so there is nothing to cross-reference and the structural
+# failure below is asking a question the contract does not pose. This does NOT
+# waive anything: it substitutes the assertion that IS meaningful on such a
+# form. A packet with no scope decomposition that nonetheless claims completed
+# scopes is a contradiction, and saying so ADDS a check where the guard
+# previously only blocked.
+check5_scopeless_form=false
+if [[ "$total_scopes" -eq 0 ]] && [[ -n "$bug_packet_form" ]] && [[ "$bug_packet_requires_scopes_md" == false ]]; then
+  check5_scopeless_form=true
+  info "NOT_APPLICABLE: Check-5-all-done — the '$bug_packet_form' packet form declares no scopes.md, so there is no scope decomposition to cross-reference"
+  scopeless_completed_count="$(jq -r '
+    if ((.certification? | type) == "object")
+        and ((.certification.completedScopes? | type) == "array") then
+      (.certification.completedScopes | length)
+    elif ((.completedScopes? | type) == "array") then
+      (.completedScopes | length)
+    else
+      0
+    end
+  ' "$state_file")"
+  if [[ "$scopeless_completed_count" -eq 0 ]]; then
+    pass "completedScopes is EMPTY, as the '$bug_packet_form' form requires — no scope decomposition, no completed scopes"
+  else
+    record_failed_check Check-5-scopeless-completed-scopes
+    fail "The '$bug_packet_form' packet form declares no scopes.md, yet state.json claims $scopeless_completed_count completed scope(s) — a packet with no scope decomposition cannot have completed one"
+  fi
+elif [[ "$total_scopes" -eq 0 ]]; then
   record_failed_check Check-5-structure
   fail "Resolved scope artifacts have no scope status markers"
 elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
@@ -1431,6 +1724,11 @@ invalid_completed_scopes="$(printf '%s\n' "$completed_scopes_json" \
 
 if [[ "$invalid_completed_scopes" != "[]" ]]; then
   fail "completedScopes is present but its entries are not string scope IDs (found: ${invalid_completed_scopes:0:60}) — entries must be quoted scope IDs such as \"01-core-scope\", not ordinals; nothing can map an ordinal to a scope artifact"
+elif [[ "$check5_scopeless_form" == true ]]; then
+  # Already asserted above, against the emptiness rule that applies to a form
+  # with no scope decomposition. Re-deriving it here as a count mismatch would
+  # report one defect twice.
+  :
 elif [[ "$done_scopes" -gt 0 ]] && [[ "$state_completed_scopes_count" -eq 0 ]]; then
   fail "Resolved scope artifacts report $done_scopes Done scope(s) but state.json completedScopes is EMPTY — state.json integrity failure"
 elif [[ "$done_scopes" -ne "$state_completed_scopes_count" ]]; then
@@ -1582,15 +1880,673 @@ echo ""
 echo "--- Check 5A: SLA Stress Coverage ---"
 sla_scope_count=0
 
+# BUG-032 / SCN-032-020, SCN-032-021, SCN-032-033, and SCN-032-034:
+# project each enumerated scope unit once. A candidate stream becomes visible
+# only after the input read, producer status, structure, and completion trailer
+# all close successfully.
+_scope_project_markdown_context() {
+  local input_snapshot="$1"
+  local candidate_records="$2"
+
+  LC_ALL=C awk '
+    function emit(record) {
+      print record
+    }
+    function trimmed(text, value) {
+      value = text
+      sub(/^[[:blank:]]*/, "", value)
+      sub(/[[:blank:]]*$/, "", value)
+      return value
+    }
+    function marker_name(character) {
+      return character == "`" ? "backtick" : "tilde"
+    }
+    function parse_fence(text, position, leading, character, run_length, rest, word_count, key) {
+      FENCE_VALID = 0
+      FENCE_CHARACTER = ""
+      FENCE_LENGTH = 0
+      FENCE_INFO = ""
+      FENCE_ONLY = 0
+      position = 1
+      leading = 0
+      while (substr(text, position, 1) == " ") {
+        leading++
+        position++
+      }
+      if (leading > 3) return 0
+      character = substr(text, position, 1)
+      if (character != "`" && character != "~") return 0
+      run_length = 0
+      while (substr(text, position + run_length, 1) == character) run_length++
+      if (run_length < 3) return 0
+      rest = substr(text, position + run_length)
+      FENCE_VALID = 1
+      FENCE_CHARACTER = character
+      FENCE_LENGTH = run_length
+      FENCE_ONLY = rest ~ /^[[:blank:]]*$/
+      rest = trimmed(rest)
+      for (key in FENCE_WORDS) delete FENCE_WORDS[key]
+      if (rest != "") {
+        word_count = split(rest, FENCE_WORDS, /[[:blank:]]+/)
+        if (word_count > 0) FENCE_INFO = tolower(FENCE_WORDS[1])
+      }
+      return 1
+    }
+    function heading_value(text, value) {
+      value = trimmed(text)
+      if (value !~ /^#+[[:blank:]]+/) return ""
+      sub(/^#+[[:blank:]]+/, "", value)
+      sub(/[[:blank:]]*#*[[:blank:]]*$/, "", value)
+      return tolower(value)
+    }
+    function clear_cells(cell_index) {
+      for (cell_index = 1; cell_index <= TABLE_CELL_CAP; cell_index++) delete TABLE_CELLS[cell_index]
+      TABLE_CELL_CAP = 0
+    }
+    function parse_table(text, value, cell_index, character, cell, column_count) {
+      clear_cells()
+      TABLE_COLUMN_COUNT = 0
+      value = trimmed(text)
+      if (substr(value, 1, 1) != "|" || substr(value, length(value), 1) != "|") return 0
+      cell = ""
+      column_count = 0
+      for (cell_index = 2; cell_index < length(value); cell_index++) {
+        character = substr(value, cell_index, 1)
+        if (character == "|" && substr(value, cell_index - 1, 1) != "\\") {
+          column_count++
+          TABLE_CELLS[column_count] = trimmed(cell)
+          cell = ""
+        } else {
+          cell = cell character
+        }
+      }
+      column_count++
+      TABLE_CELLS[column_count] = trimmed(cell)
+      TABLE_CELL_CAP = column_count
+      TABLE_COLUMN_COUNT = column_count
+      return column_count > 0
+    }
+    function delimiter_row_valid(expected_columns, cell_index) {
+      if (TABLE_COLUMN_COUNT != expected_columns) return 0
+      for (cell_index = 1; cell_index <= TABLE_COLUMN_COUNT; cell_index++) {
+        if (TABLE_CELLS[cell_index] !~ /^:?-{3,}:?$/) return 0
+      }
+      return 1
+    }
+    function type_column_index(cell_index, cell, count, result) {
+      count = 0
+      result = 0
+      for (cell_index = 1; cell_index <= TABLE_COLUMN_COUNT; cell_index++) {
+        cell = tolower(TABLE_CELLS[cell_index])
+        gsub(/[*`]/, "", cell)
+        cell = trimmed(cell)
+        if (cell == "type" || cell == "test type") {
+          count++
+          result = cell_index
+        }
+      }
+      return count == 1 ? result : 0
+    }
+    function emit_active(kind, context, text) {
+      printf "%s\t%d\t%s\t%d\t%s\n", kind, NR, context, length(text), text
+      active_count++
+    }
+    function emit_fixture(kind, text) {
+      printf "F\t%d\t%s\t%d\n", NR, kind, length(text)
+      fixture_count++
+    }
+    function emit_error(reason, line_number, boundary) {
+      if (!projection_error) {
+        printf "E\t%d\t%s\t%s\n", line_number, reason, boundary
+      }
+      projection_error = 1
+      exit 3
+    }
+    function process_active(text, heading, lower) {
+      if (text ~ /^[[:blank:]]*$/) return
+      if (parse_fence(text)) {
+        fence_character = FENCE_CHARACTER
+        fence_length = FENCE_LENGTH
+        fence_open_line = NR
+        if (FENCE_INFO == "gherkin") {
+          fence_mode = "fixture"
+          emit_fixture("gherkin-fence", text)
+        } else {
+          fence_mode = "ordinary"
+        }
+        return
+      }
+      heading = heading_value(text)
+      if (heading == "examples") {
+        table_state = "examples-await-header"
+        table_start_line = NR
+        return
+      }
+      if (heading == "test plan") {
+        table_state = "test-plan-await-header"
+        table_start_line = NR
+        return
+      }
+      lower = tolower(trimmed(text))
+      if (lower == "examples:") {
+        table_state = "examples-await-header"
+        table_start_line = NR
+        return
+      }
+      if (text ~ /^[[:blank:]]*-[[:blank:]]+\[[ xX]\]/) {
+        emit_active("D", "dod", text)
+      } else {
+        emit_active("A", "active", text)
+      }
+    }
+    BEGIN {
+      fence_mode = ""
+      fence_character = ""
+      fence_length = 0
+      fence_open_line = 0
+      table_state = "active"
+      table_start_line = 0
+      table_columns = 0
+      table_data_rows = 0
+      test_type_column = 0
+      active_count = 0
+      fixture_count = 0
+      structural_count = 0
+      projection_error = 0
+    }
+    {
+      raw = $0
+      if (fence_mode == "fixture") {
+        if (parse_fence(raw) && FENCE_ONLY) {
+          if (FENCE_CHARACTER == fence_character && FENCE_LENGTH == fence_length) {
+            emit_fixture("gherkin-fence", raw)
+            fence_mode = ""
+            next
+          }
+          emit_error("fence-identity-error", NR,
+            "opener-line=" fence_open_line " opener-marker: " marker_name(fence_character) ":" fence_length " closer-line=" NR " closer-marker: " marker_name(FENCE_CHARACTER) ":" FENCE_LENGTH)
+        }
+        emit_fixture("gherkin-fence", raw)
+        next
+      }
+      if (fence_mode == "ordinary") {
+        if (parse_fence(raw) && FENCE_ONLY \
+          && FENCE_CHARACTER == fence_character && FENCE_LENGTH == fence_length) {
+          fence_mode = ""
+          next
+        }
+        emit_active("A", "ordinary-text-fence", raw)
+        next
+      }
+
+      if (table_state == "examples-await-header" || table_state == "test-plan-await-header") {
+        if (raw ~ /^[[:blank:]]*$/) next
+        if (!parse_table(raw)) {
+          emit_error(table_state ~ /^examples/ ? "examples-table-error" : "test-plan-table-error",
+            NR, "row=" NR " expected=header")
+        }
+        table_columns = TABLE_COLUMN_COUNT
+        test_type_column = table_state ~ /^test-plan/ ? type_column_index() : 0
+        if (table_state ~ /^test-plan/ && test_type_column == 0) {
+          emit_error("test-plan-table-error", NR, "row=" NR " expected=one-type-column")
+        }
+        emit_fixture(table_state ~ /^examples/ ? "examples-header" : "test-plan-header", raw)
+        structural_count++
+        table_state = table_state ~ /^examples/ ? "examples-await-delimiter" : "test-plan-await-delimiter"
+        next
+      }
+      if (table_state == "examples-await-delimiter" || table_state == "test-plan-await-delimiter") {
+        if (!parse_table(raw) || !delimiter_row_valid(table_columns)) {
+          emit_error(table_state ~ /^examples/ ? "examples-table-error" : "test-plan-table-error",
+            NR, "row=" NR " expected=delimiter columns=" table_columns)
+        }
+        emit_fixture(table_state ~ /^examples/ ? "examples-delimiter" : "test-plan-delimiter", raw)
+        structural_count++
+        table_data_rows = 0
+        table_state = table_state ~ /^examples/ ? "examples-data" : "test-plan-data"
+        next
+      }
+      if (table_state == "examples-data" || table_state == "test-plan-data") {
+        if (parse_table(raw)) {
+          if (TABLE_COLUMN_COUNT != table_columns) {
+            emit_error(table_state == "examples-data" ? "examples-table-error" : "test-plan-table-error",
+              NR, "row=" NR " columns=" TABLE_COLUMN_COUNT "/" table_columns)
+          }
+          table_data_rows++
+          structural_count++
+          fixture_count++
+          if (table_state == "test-plan-data") {
+            printf "T\t%d\ttest-plan\tdata\t%d\t%d\t%d\t%s\n",
+              NR, TABLE_COLUMN_COUNT, test_type_column, length(raw), raw
+          } else {
+            printf "F\t%d\texamples-data\t%d\n", NR, length(raw)
+          }
+          next
+        }
+        if (table_data_rows == 0) {
+          emit_error(table_state == "examples-data" ? "examples-table-error" : "test-plan-table-error",
+            NR, "row=" NR " expected=data columns=" table_columns)
+        }
+        table_state = "active"
+        table_columns = 0
+        table_data_rows = 0
+        test_type_column = 0
+      }
+      process_active(raw)
+    }
+    END {
+      if (projection_error) exit 3
+      if (fence_mode == "fixture") {
+        printf "E\t%d\tunclosed-fence-error\topener-line=%d required-closer: %s:%d\n",
+          fence_open_line, fence_open_line, marker_name(fence_character), fence_length
+        exit 3
+      }
+      if (table_state != "active" && table_state !~ /-data$/) {
+        reason = table_state ~ /^examples/ ? "examples-table-error" : "test-plan-table-error"
+        printf "E\t%d\t%s\trow=%d expected=%s\n", NR + 1, reason, NR + 1,
+          table_state ~ /await-header$/ ? "header" : "delimiter"
+        exit 3
+      }
+      if (table_state ~ /-data$/ && table_data_rows == 0) {
+        reason = table_state == "examples-data" ? "examples-table-error" : "test-plan-table-error"
+        printf "E\t%d\t%s\trow=%d expected=data columns=%d\n",
+          NR + 1, reason, NR + 1, table_columns
+        exit 3
+      }
+      printf "C\t%d\t%d\t%d\t%d\n", NR + 1, active_count, fixture_count, structural_count
+    }
+  ' "$input_snapshot" > "$candidate_records"
+}
+
+SCOPE_CONTEXT_STATUS=()
+SCOPE_CONTEXT_PRODUCER_STATUS=()
+SCOPE_CONTEXT_INPUT_READ_STATUS=()
+SCOPE_CONTEXT_REASON=()
+SCOPE_CONTEXT_SOURCE_LOCATION=()
+SCOPE_CONTEXT_BOUNDARY=()
+SCOPE_CONTEXT_ACTIVE_COUNT=()
+SCOPE_CONTEXT_FIXTURE_COUNT=()
+SCOPE_CONTEXT_STRUCTURAL_STATUS=()
+SCOPE_CONTEXT_RECORD_FILE=()
+SCOPE_CONTEXT_REPORTED=()
+SCOPE_CONTEXT_ACTIVE_LINES=()
+SCOPE_CONTEXT_ACTIVE_LOCATIONS=()
+SCOPE_CONTEXT_DOD_LINES=()
+SCOPE_CONTEXT_TEST_ROWS=()
+
+_scope_context_set_error() {
+  local scope_index="$1"
+  local reason="$2"
+  local source_location="$3"
+  local boundary="$4"
+  local input_status="$5"
+  local producer_status="$6"
+  local scope_label=""
+
+  scope_label="$(scope_analysis_label "$scope_index")"
+  if [[ "$source_location" =~ ^[0-9]+$ ]]; then
+    source_location="$scope_label:$source_location"
+  fi
+  SCOPE_CONTEXT_STATUS[$scope_index]="error"
+  SCOPE_CONTEXT_PRODUCER_STATUS[$scope_index]="$producer_status"
+  SCOPE_CONTEXT_INPUT_READ_STATUS[$scope_index]="$input_status"
+  SCOPE_CONTEXT_REASON[$scope_index]="$reason"
+  SCOPE_CONTEXT_SOURCE_LOCATION[$scope_index]="$source_location"
+  SCOPE_CONTEXT_BOUNDARY[$scope_index]="$boundary"
+  SCOPE_CONTEXT_ACTIVE_COUNT[$scope_index]="discarded"
+  SCOPE_CONTEXT_FIXTURE_COUNT[$scope_index]="discarded"
+  SCOPE_CONTEXT_STRUCTURAL_STATUS[$scope_index]="discarded"
+  SCOPE_CONTEXT_RECORD_FILE[$scope_index]=""
+}
+
+_scope_context_report() {
+  local scope_index="$1"
+  local scope_label=""
+  local result="continue"
+  local correction="none"
+  local check8b_disposition="pending"
+  local check5a_disposition="pending"
+  local dependent_checks="pending"
+
+  [[ "${SCOPE_CONTEXT_REPORTED[$scope_index]:-0}" -eq 0 ]] || return 0
+  scope_label="$(scope_analysis_label "$scope_index")"
+  if [[ "${SCOPE_CONTEXT_STATUS[$scope_index]}" == "error" ]]; then
+    result="blocked"
+    check8b_disposition="error"
+    check5a_disposition="error"
+    dependent_checks="skipped"
+    case "${SCOPE_CONTEXT_REASON[$scope_index]}" in
+      context-read-error) correction="Restore readable regular scope input, then rerun the guard." ;;
+      context-projection-error) correction="Rewrite only the named scope structure so projection can complete, then rerun the guard." ;;
+      fence-identity-error|unclosed-fence-error) correction="Close only the named Gherkin fixture fence with its exact marker type and length." ;;
+      examples-table-error) correction="Repair only the named Examples table header, delimiter, or first malformed row." ;;
+      test-plan-table-error) correction="Repair only the named Test Plan table header, delimiter, or first malformed row." ;;
+    esac
+  fi
+
+  printf '%s\n' \
+    'check: Context projection' \
+    "scope: $scope_label" \
+    'consumers: Check 8B,Check 5A' \
+    "projection-status: ${SCOPE_CONTEXT_STATUS[$scope_index]}" \
+    "producer-status: ${SCOPE_CONTEXT_PRODUCER_STATUS[$scope_index]}" \
+    "input-read-status: ${SCOPE_CONTEXT_INPUT_READ_STATUS[$scope_index]}" \
+    "source-location: ${SCOPE_CONTEXT_SOURCE_LOCATION[$scope_index]}" \
+    "active-count: ${SCOPE_CONTEXT_ACTIVE_COUNT[$scope_index]}" \
+    "fixture-count: ${SCOPE_CONTEXT_FIXTURE_COUNT[$scope_index]}" \
+    "structural-status: ${SCOPE_CONTEXT_STRUCTURAL_STATUS[$scope_index]}" \
+    "reason: ${SCOPE_CONTEXT_REASON[$scope_index]}" \
+    "boundary: ${SCOPE_CONTEXT_BOUNDARY[$scope_index]}" \
+    "check-8b-disposition: $check8b_disposition" \
+    "check-8b-impact-checks: $dependent_checks" \
+    "check-5a-disposition: $check5a_disposition" \
+    "check-5a-stress-checks: $dependent_checks" \
+    "result: $result" \
+    "correction: $correction"
+  SCOPE_CONTEXT_REPORTED[$scope_index]=1
+  if [[ "$result" == "blocked" ]]; then
+    fail "Context projection failed for $scope_label with reason ${SCOPE_CONTEXT_REASON[$scope_index]}"
+  fi
+}
+
+_scope_context_source_identity() {
+  local source_path="$1"
+
+  if stat -c '%d:%i:%s:%Y:%Z' -- "$source_path" 2>/dev/null; then
+    return 0
+  fi
+  stat -f '%d:%i:%z:%m:%c' "$source_path" 2>/dev/null
+}
+
+_scope_context_prepare() {
+  local scope_index="$1"
+  local scope_path=""
+  local source_identity_before=""
+  local source_identity_after=""
+  local input_snapshot=""
+  local candidate_records=""
+  local stderr_sink=""
+  local producer_status=0
+  local record=""
+  local record_kind=""
+  local record_rest=""
+  local error_line=""
+  local error_reason=""
+  local error_boundary=""
+  local completion_count=0
+  local completion_line=""
+  local completion_active=""
+  local completion_fixture=""
+  local completion_structural=""
+  local last_kind=""
+  local scope_label=""
+
+  if [[ "$scope_index" -lt 0 || "$scope_index" -ge ${#scope_analysis_files[@]} ]]; then
+    return 2
+  fi
+  scope_path="${scope_analysis_files[$scope_index]}"
+  scope_label="$(scope_analysis_label "$scope_index")"
+  SCOPE_CONTEXT_REPORTED[$scope_index]=0
+  if [[ ! -f "$scope_path" || -L "$scope_path" ]]; then
+    _scope_context_set_error "$scope_index" context-read-error scope-start input-read error not-reached
+    return 2
+  fi
+  if ! source_identity_before="$(_scope_context_source_identity "$scope_path")"; then
+    _scope_context_set_error "$scope_index" context-read-error scope-start input-read error not-reached
+    return 2
+  fi
+
+  if ! input_snapshot="$(mktemp "${TMPDIR:-/tmp}/bubbles-scope-context-input.XXXXXX")"; then
+    _scope_context_set_error "$scope_index" context-projection-error scope-start temp-create not-reached error
+    return 3
+  fi
+  scope_projection_tmp_files+=("$input_snapshot")
+  if ! candidate_records="$(mktemp "${TMPDIR:-/tmp}/bubbles-scope-context-records.XXXXXX")"; then
+    _scope_context_set_error "$scope_index" context-projection-error scope-start temp-create not-reached error
+    return 3
+  fi
+  scope_projection_tmp_files+=("$candidate_records")
+  if ! stderr_sink="$(mktemp "${TMPDIR:-/tmp}/bubbles-scope-context-error.XXXXXX")"; then
+    _scope_context_set_error "$scope_index" context-projection-error scope-start temp-create not-reached error
+    return 3
+  fi
+  scope_projection_tmp_files+=("$stderr_sink")
+  if [[ ! -f "$input_snapshot" || -L "$input_snapshot" \
+    || ! -f "$candidate_records" || -L "$candidate_records" \
+    || ! -f "$stderr_sink" || -L "$stderr_sink" \
+    || "$input_snapshot" == "$candidate_records" \
+    || "$input_snapshot" == "$stderr_sink" \
+    || "$candidate_records" == "$stderr_sink" ]]; then
+    _scope_context_set_error "$scope_index" context-projection-error scope-start temp-identity not-reached error
+    return 3
+  fi
+
+  if ! cat -- "$scope_path" > "$input_snapshot" 2> "$stderr_sink"; then
+    : > "$candidate_records"
+    _scope_context_set_error "$scope_index" context-read-error scope-start input-read error not-reached
+    return 2
+  fi
+  if ! source_identity_after="$(_scope_context_source_identity "$scope_path")" \
+    || [[ ! -f "$scope_path" || -L "$scope_path" ]] \
+    || [[ "$source_identity_before" != "$source_identity_after" ]]; then
+    : > "$input_snapshot"
+    : > "$candidate_records"
+    _scope_context_set_error "$scope_index" context-read-error scope-start input-read error not-reached
+    return 2
+  fi
+  : > "$stderr_sink"
+  if _scope_project_markdown_context "$input_snapshot" "$candidate_records" 2> "$stderr_sink"; then
+    producer_status=0
+  else
+    producer_status=$?
+  fi
+
+  while IFS= read -r record || [[ -n "$record" ]]; do
+    record_kind="${record%%$'\t'*}"
+    last_kind="$record_kind"
+    if [[ "$record_kind" == "E" ]]; then
+      record_rest="${record#*$'\t'}"
+      error_line="${record_rest%%$'\t'*}"
+      record_rest="${record_rest#*$'\t'}"
+      error_reason="${record_rest%%$'\t'*}"
+      error_boundary="${record_rest#*$'\t'}"
+      break
+    fi
+    if [[ "$record_kind" == "C" ]]; then
+      completion_count=$((completion_count + 1))
+      record_rest="${record#*$'\t'}"
+      completion_line="${record_rest%%$'\t'*}"
+      record_rest="${record_rest#*$'\t'}"
+      completion_active="${record_rest%%$'\t'*}"
+      record_rest="${record_rest#*$'\t'}"
+      completion_fixture="${record_rest%%$'\t'*}"
+      completion_structural="${record_rest#*$'\t'}"
+    fi
+  done < "$candidate_records"
+
+  if [[ "$producer_status" -ne 0 || -n "$error_reason" ]]; then
+    if [[ -n "$error_reason" ]]; then
+      _scope_context_set_error "$scope_index" "$error_reason" "${error_line:-scope-start}" \
+        "${error_boundary:-producer}" complete error
+    else
+      _scope_context_set_error "$scope_index" context-projection-error scope-start producer complete error
+    fi
+    : > "$candidate_records"
+    return 3
+  fi
+  if [[ "$completion_count" -ne 1 || "$last_kind" != "C" \
+    || ! "$completion_line" =~ ^[0-9]+$ \
+    || ! "$completion_active" =~ ^[0-9]+$ \
+    || ! "$completion_fixture" =~ ^[0-9]+$ \
+    || ! "$completion_structural" =~ ^[0-9]+$ ]]; then
+    _scope_context_set_error "$scope_index" context-projection-error scope-start completion-trailer complete error
+    : > "$candidate_records"
+    return 3
+  fi
+
+  SCOPE_CONTEXT_STATUS[$scope_index]="complete"
+  SCOPE_CONTEXT_PRODUCER_STATUS[$scope_index]="complete"
+  SCOPE_CONTEXT_INPUT_READ_STATUS[$scope_index]="complete"
+  SCOPE_CONTEXT_REASON[$scope_index]="none"
+  SCOPE_CONTEXT_SOURCE_LOCATION[$scope_index]="scope-start"
+  SCOPE_CONTEXT_BOUNDARY[$scope_index]="complete"
+  SCOPE_CONTEXT_ACTIVE_COUNT[$scope_index]="$completion_active"
+  SCOPE_CONTEXT_FIXTURE_COUNT[$scope_index]="$completion_fixture"
+  SCOPE_CONTEXT_STRUCTURAL_STATUS[$scope_index]="preserved"
+  SCOPE_CONTEXT_RECORD_FILE[$scope_index]="$candidate_records"
+  return 0
+}
+
+_scope_context_consume() {
+  local scope_index="$1"
+  local consumer_name="$2"
+  local record_file="${SCOPE_CONTEXT_RECORD_FILE[$scope_index]:-}"
+  local record=""
+  local record_kind=""
+  local record_rest=""
+  local record_line=""
+  local record_context=""
+  local record_boundary=""
+  local record_column_count=""
+  local record_type_column=""
+  local record_bytes=""
+  local record_text=""
+  local seen_completion=0
+  local malformed=0
+  local -a staged_active=()
+  local -a staged_locations=()
+  local -a staged_dod=()
+  local -a staged_test_rows=()
+  local -a staged_test_column_counts=()
+  local -a staged_test_type_columns=()
+
+  SCOPE_CONTEXT_ACTIVE_LINES=()
+  SCOPE_CONTEXT_ACTIVE_LOCATIONS=()
+  SCOPE_CONTEXT_DOD_LINES=()
+  SCOPE_CONTEXT_TEST_ROWS=()
+  SCOPE_CONTEXT_TEST_COLUMN_COUNTS=()
+  SCOPE_CONTEXT_TEST_TYPE_COLUMNS=()
+  if [[ "${SCOPE_CONTEXT_STATUS[$scope_index]:-error}" != "complete" ]]; then
+    _scope_context_report "$scope_index"
+    return 2
+  fi
+  if [[ -z "$record_file" || ! -f "$record_file" || -L "$record_file" ]]; then
+    _scope_context_set_error "$scope_index" context-read-error scope-start projection-read complete complete
+    _scope_context_report "$scope_index"
+    return 2
+  fi
+
+  while IFS= read -r record || [[ -n "$record" ]]; do
+    record_kind="${record%%$'\t'*}"
+    if [[ "$seen_completion" -eq 1 ]]; then
+      malformed=1
+      break
+    fi
+    case "$record_kind" in
+      A|D)
+        record_rest="${record#*$'\t'}"
+        record_line="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_context="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_bytes="${record_rest%%$'\t'*}"
+        record_text="${record_rest#*$'\t'}"
+        if [[ ! "$record_line" =~ ^[0-9]+$ || ! "$record_bytes" =~ ^[0-9]+$ \
+          || -z "$record_context" ]]; then
+          malformed=1
+          break
+        fi
+        staged_active+=("$record_text")
+        staged_locations+=("$record_line")
+        if [[ "$record_kind" == "D" ]]; then
+          staged_dod+=("$record_text")
+        fi
+        ;;
+      T)
+        record_rest="${record#*$'\t'}"
+        record_line="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_context="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_boundary="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_column_count="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_type_column="${record_rest%%$'\t'*}"
+        record_rest="${record_rest#*$'\t'}"
+        record_bytes="${record_rest%%$'\t'*}"
+        record_text="${record_rest#*$'\t'}"
+        if [[ ! "$record_line" =~ ^[0-9]+$ || "$record_context" != "test-plan" \
+          || "$record_boundary" != "data" || ! "$record_column_count" =~ ^[0-9]+$ \
+          || ! "$record_type_column" =~ ^[0-9]+$ || ! "$record_bytes" =~ ^[0-9]+$ ]]; then
+          malformed=1
+          break
+        fi
+        if [[ "$record_column_count" -lt 1 || "$record_type_column" -lt 1 \
+          || "$record_type_column" -gt "$record_column_count" ]]; then
+          malformed=1
+          break
+        fi
+        staged_test_rows+=("$record_text")
+        staged_test_column_counts+=("$record_column_count")
+        staged_test_type_columns+=("$record_type_column")
+        ;;
+      F) ;;
+      C)
+        seen_completion=1
+        ;;
+      E|*)
+        malformed=1
+        break
+        ;;
+    esac
+  done < "$record_file"
+
+  if [[ "$malformed" -ne 0 || "$seen_completion" -ne 1 ]]; then
+    _scope_context_set_error "$scope_index" context-read-error scope-start \
+      "projection-read:$consumer_name" complete complete
+    _scope_context_report "$scope_index"
+    return 2
+  fi
+  SCOPE_CONTEXT_ACTIVE_LINES=("${staged_active[@]}")
+  # shellcheck disable=SC2034  # populated alongside its sibling arrays for a future consumer
+  SCOPE_CONTEXT_ACTIVE_LOCATIONS=("${staged_locations[@]}")
+  SCOPE_CONTEXT_DOD_LINES=("${staged_dod[@]}")
+  SCOPE_CONTEXT_TEST_ROWS=("${staged_test_rows[@]}")
+  SCOPE_CONTEXT_TEST_COLUMN_COUNTS=("${staged_test_column_counts[@]}")
+  SCOPE_CONTEXT_TEST_TYPE_COLUMNS=("${staged_test_type_columns[@]}")
+  _scope_context_report "$scope_index"
+  return 0
+}
+
+for scope_context_index in "${!scope_analysis_files[@]}"; do
+  _scope_context_prepare "$scope_context_index" || true
+done
+
 scope_declares_performance_contract() {
-  local scope_path="$1"
+  local scope_index="$1"
   local performance_line=""
   local performance_signal='latency|throughput|p95|p99|response[ -]time|\bsla\b|\bslo\b'
   local affirmative_marker='target|budget|threshold|objective|guarantee|percentile|no more than|at most|at least|less than|greater than|under[[:space:]]+[0-9]|within[[:space:]]+[0-9]|[0-9]+([.][0-9]+)?[[:space:]]*(ms|milliseconds?|seconds?|rps|requests?[[:space:]]+per[[:space:]]+second|%|percent(age)?|ops)'
   local quantitative_marker='no more than|at most|at least|less than|greater than|under[[:space:]]+[0-9]|within[[:space:]]+[0-9]|[0-9]+([.][0-9]+)?[[:space:]]*(ms|milliseconds?|seconds?|rps|requests?[[:space:]]+per[[:space:]]+second|%|percent(age)?|ops)'
   local opt_out_marker='observability[^.;]*(opted out|disabled|unavailable|not applicable)|\bno[[:space:]]+(trace[[:space:]]+or[[:space:]]+)?(sla|slo)\b|\b(sla|slo|latency|throughput|p95|p99|response[ -]time)[^.;]*(not applicable|opted out|disabled|unavailable|absent|not declared|not required)|does not declare[^.;]*(sla|slo|latency|throughput|p95|p99|response[ -]time)|\bno[^.;]*(sla|slo|latency|throughput|p95|p99|response[ -]time)[^.;]*(evidence|target|budget|threshold|objective|guarantee)?[^.;]*(injected|captured|declared|required|available)?'
 
-  while IFS= read -r performance_line || [[ -n "$performance_line" ]]; do
+  SCOPE_PERFORMANCE_CONTRACTS=()
+  SCOPE_PERFORMANCE_TEST_ROWS=()
+  SCOPE_PERFORMANCE_TEST_COLUMN_COUNTS=()
+  SCOPE_PERFORMANCE_TEST_TYPE_COLUMNS=()
+  SCOPE_PERFORMANCE_DOD_LINES=()
+  SCOPE_PERFORMANCE_CONTEXT_ERROR=""
+
+  if ! _scope_context_consume "$scope_index" "Check 5A"; then
+    SCOPE_PERFORMANCE_CONTEXT_ERROR="${SCOPE_CONTEXT_REASON[$scope_index]}"
+    return 2
+  fi
+  SCOPE_PERFORMANCE_TEST_ROWS=("${SCOPE_CONTEXT_TEST_ROWS[@]}")
+  SCOPE_PERFORMANCE_TEST_COLUMN_COUNTS=("${SCOPE_CONTEXT_TEST_COLUMN_COUNTS[@]}")
+  SCOPE_PERFORMANCE_TEST_TYPE_COLUMNS=("${SCOPE_CONTEXT_TEST_TYPE_COLUMNS[@]}")
+  SCOPE_PERFORMANCE_DOD_LINES=("${SCOPE_CONTEXT_DOD_LINES[@]}")
+  for performance_line in ${SCOPE_CONTEXT_ACTIVE_LINES[@]+"${SCOPE_CONTEXT_ACTIVE_LINES[@]}"}; do
     if ! grep -Eiq "$performance_signal" <<< "$performance_line"; then
       continue
     fi
@@ -1599,33 +2555,206 @@ scope_declares_performance_contract() {
       # A concrete threshold wins over broad negation: "no more than 200 ms"
       # is an upper bound, while "no SLO target is declared" is an opt-out.
       if grep -Eiq "$quantitative_marker" <<< "$performance_line"; then
-        return 0
+        SCOPE_PERFORMANCE_CONTRACTS+=("$performance_line")
       fi
       continue
     fi
 
     if grep -Eiq "$affirmative_marker" <<< "$performance_line"; then
+      SCOPE_PERFORMANCE_CONTRACTS+=("$performance_line")
+    fi
+  done
+
+  [[ "${#SCOPE_PERFORMANCE_CONTRACTS[@]}" -gt 0 ]]
+}
+
+_performance_contract_matches_text() {
+  local contract_lower="${1,,}"
+  local candidate_lower="${2,,}"
+  local allow_active_reference="$3"
+  local metric_pattern=""
+  local secondary_pattern=""
+  local number_unit_pattern='([0-9]+([.][0-9]+)?)[[:space:]]*(ms|milliseconds?|seconds?|rps|requests?[[:space:]]+per[[:space:]]+second|%|percent|percentage|ops)'
+  local number=""
+  local unit=""
+  local escaped_number=""
+  local number_pattern=""
+  local unit_pattern=""
+
+  if [[ "$contract_lower" =~ (^|[^[:alnum:]_])p95([^[:alnum:]_]|$) ]]; then
+    metric_pattern='(^|[^[:alnum:]_])p95([^[:alnum:]_]|$)'
+  elif [[ "$contract_lower" =~ (^|[^[:alnum:]_])p99([^[:alnum:]_]|$) ]]; then
+    metric_pattern='(^|[^[:alnum:]_])p99([^[:alnum:]_]|$)'
+  elif [[ "$contract_lower" =~ (^|[^[:alnum:]_])throughput([^[:alnum:]_]|$) ]]; then
+    metric_pattern='(^|[^[:alnum:]_])throughput([^[:alnum:]_]|$)'
+  elif [[ "$contract_lower" =~ response[[:space:]-]time ]]; then
+    metric_pattern='response[[:space:]-]time'
+  elif [[ "$contract_lower" =~ (^|[^[:alnum:]_])sla([^[:alnum:]_]|$) ]]; then
+    metric_pattern='(^|[^[:alnum:]_])sla([^[:alnum:]_]|$)'
+  elif [[ "$contract_lower" =~ (^|[^[:alnum:]_])slo([^[:alnum:]_]|$) ]]; then
+    metric_pattern='(^|[^[:alnum:]_])slo([^[:alnum:]_]|$)'
+  elif [[ "$contract_lower" =~ (^|[^[:alnum:]_])latency([^[:alnum:]_]|$) ]]; then
+    metric_pattern='(^|[^[:alnum:]_])latency([^[:alnum:]_]|$)'
+  else
+    return 1
+  fi
+  [[ "$candidate_lower" =~ $metric_pattern ]] || return 1
+
+  if [[ "$contract_lower" =~ (^|[^[:alnum:]_])latency([^[:alnum:]_]|$) ]] \
+    && [[ "$metric_pattern" != '(^|[^[:alnum:]_])latency([^[:alnum:]_]|$)' ]]; then
+    secondary_pattern='(^|[^[:alnum:]_])latency([^[:alnum:]_]|$)'
+    [[ "$candidate_lower" =~ $secondary_pattern ]] || return 1
+  fi
+
+  if [[ "$contract_lower" =~ $number_unit_pattern ]]; then
+    number="${BASH_REMATCH[1]}"
+    unit="${BASH_REMATCH[3]}"
+    escaped_number="${number//./\\.}"
+    number_pattern="(^|[^0-9.])${escaped_number}([^0-9.]|$)"
+    case "$unit" in
+      ms|millisecond|milliseconds) unit_pattern='(^|[^[:alnum:]_])(ms|milliseconds?)([^[:alnum:]_]|$)' ;;
+      second|seconds) unit_pattern='(^|[^[:alnum:]_])seconds?([^[:alnum:]_]|$)' ;;
+      rps|request\ per\ second|requests\ per\ second) unit_pattern='(^|[^[:alnum:]_])(rps|requests?[[:space:]]+per[[:space:]]+second)([^[:alnum:]_]|$)' ;;
+      %|percent|percentage) unit_pattern='(%|(^|[^[:alnum:]_])percent(age)?([^[:alnum:]_]|$))' ;;
+      ops) unit_pattern='(^|[^[:alnum:]_])ops([^[:alnum:]_]|$)' ;;
+    esac
+    if [[ "$candidate_lower" =~ $number_pattern ]] \
+      && [[ "$candidate_lower" =~ $unit_pattern ]]; then
       return 0
     fi
+    if [[ "$allow_active_reference" == "yes" ]] \
+      && [[ "$candidate_lower" =~ (^|[^[:alnum:]_])active([^[:alnum:]_]|$) ]] \
+      && [[ "$candidate_lower" =~ (^|[^[:alnum:]_])(target|budget|threshold|objective|guarantee|contract)([^[:alnum:]_]|$) ]]; then
+      return 0
+    fi
+    return 1
+  fi
+  return 0
+}
 
-    return 0
-  done < "$scope_path"
+_scope_test_plan_type_cell_is_stress() {
+  local normalized_row="$1"
+  local expected_column_count="$2"
+  local type_column_index="$3"
 
+  LC_ALL=C awk -v expected_columns="$expected_column_count" \
+    -v type_column="$type_column_index" '
+    function trimmed(value) {
+      sub(/^[[:blank:]]+/, "", value)
+      sub(/[[:blank:]]+$/, "", value)
+      return value
+    }
+    function clear_cells(cell_index) {
+      for (cell_index = 1; cell_index <= TABLE_CELL_CAP; cell_index++) delete TABLE_CELLS[cell_index]
+      TABLE_CELL_CAP = 0
+    }
+    function parse_table(text, value, cell_index, character, cell, column_count) {
+      clear_cells()
+      TABLE_COLUMN_COUNT = 0
+      value = trimmed(text)
+      if (substr(value, 1, 1) != "|" || substr(value, length(value), 1) != "|") return 0
+      cell = ""
+      column_count = 0
+      for (cell_index = 2; cell_index < length(value); cell_index++) {
+        character = substr(value, cell_index, 1)
+        if (character == "|" && substr(value, cell_index - 1, 1) != "\\") {
+          column_count++
+          TABLE_CELLS[column_count] = trimmed(cell)
+          cell = ""
+        } else {
+          cell = cell character
+        }
+      }
+      column_count++
+      TABLE_CELLS[column_count] = trimmed(cell)
+      TABLE_CELL_CAP = column_count
+      TABLE_COLUMN_COUNT = column_count
+      return column_count > 0
+    }
+    {
+      if (NR != 1 || expected_columns !~ /^[0-9]+$/ || type_column !~ /^[0-9]+$/ \
+        || expected_columns < 1 || type_column < 1 || type_column > expected_columns) exit 2
+      if (!parse_table($0) || TABLE_COLUMN_COUNT != expected_columns) exit 2
+      exit TABLE_CELLS[type_column] == "stress" ? 0 : 1
+    }
+  ' <<< "$normalized_row"
+}
+
+_scope_has_matching_stress_row() {
+  local contract="$1"
+  local row_index=""
+  local row=""
+  local row_lower=""
+  local expected_column_count=""
+  local type_column_index=""
+
+  for row_index in "${!SCOPE_PERFORMANCE_TEST_ROWS[@]}"; do
+    row="${SCOPE_PERFORMANCE_TEST_ROWS[$row_index]}"
+    expected_column_count="${SCOPE_PERFORMANCE_TEST_COLUMN_COUNTS[$row_index]:-}"
+    type_column_index="${SCOPE_PERFORMANCE_TEST_TYPE_COLUMNS[$row_index]:-}"
+    row_lower="${row,,}"
+    row_lower="${row_lower//\*/}"
+    row_lower="${row_lower//\`/}"
+    if _scope_test_plan_type_cell_is_stress "$row_lower" "$expected_column_count" "$type_column_index" \
+      && _performance_contract_matches_text "$contract" "$row_lower" yes; then
+      return 0
+    fi
+  done
   return 1
 }
 
-for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
+_scope_has_matching_stress_dod() {
+  local contract="$1"
+  local dod_line=""
+  local dod_lower=""
+  local dod_pattern='^[[:space:]]*-[[:space:]]+\[[ xX]\]'
+  local stress_pattern='(^|[^[:alnum:]_])stress([^[:alnum:]_]|$)'
+
+  for dod_line in ${SCOPE_PERFORMANCE_DOD_LINES[@]+"${SCOPE_PERFORMANCE_DOD_LINES[@]}"}; do
+    dod_lower="${dod_line,,}"
+    if [[ "$dod_lower" =~ $dod_pattern ]] \
+      && [[ "$dod_lower" =~ $stress_pattern ]] \
+      && _performance_contract_matches_text "$contract" "$dod_lower" no; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+for scope_index in "${!scope_analysis_files[@]}"; do
+  scope_path="${scope_analysis_files[$scope_index]}"
   [[ -f "$scope_path" ]] || continue
 
   # BUG-032: mention is not affirmation. Explicit no-SLA/no-SLO, not-applicable,
   # unavailable, and opted-out lines are ignored unless the same line carries
   # a target, budget, threshold, guarantee, comparator, or quantitative unit.
-  if scope_declares_performance_contract "$scope_path"; then
+  if scope_declares_performance_contract "$scope_index"; then
+    scope_performance_status=0
+  else
+    scope_performance_status=$?
+  fi
+  if [[ "$scope_performance_status" -eq 2 ]]; then
+    fail "SLA performance context projection failed for ${scope_path#$feature_dir/}: $SCOPE_PERFORMANCE_CONTEXT_ERROR"
+  elif [[ "$scope_performance_status" -eq 0 ]]; then
     sla_scope_count=$((sla_scope_count + 1))
-    if grep -Eq '^\|[[:space:]]*Stress[[:space:]]*\|' "$scope_path" || grep -Eiq 'stress' "$scope_path"; then
+    scope_missing_stress_row=0
+    scope_missing_stress_dod=0
+    for performance_contract in "${SCOPE_PERFORMANCE_CONTRACTS[@]}"; do
+      _scope_has_matching_stress_row "$performance_contract" \
+        || scope_missing_stress_row=1
+      _scope_has_matching_stress_dod "$performance_contract" \
+        || scope_missing_stress_dod=1
+    done
+    if [[ "$scope_missing_stress_row" -eq 1 ]]; then
+      fail "SLA-sensitive scope is missing canonical Stress Test Plan row: ${scope_path#$feature_dir/}"
+    fi
+    if [[ "$scope_missing_stress_dod" -eq 1 ]]; then
+      fail "SLA-sensitive scope is missing faithful stress DoD item: ${scope_path#$feature_dir/}"
+    fi
+    if [[ "$scope_missing_stress_row" -eq 0 && "$scope_missing_stress_dod" -eq 0 ]]; then
       pass "SLA-sensitive scope includes stress coverage: ${scope_path#$feature_dir/}"
     else
-      fail "SLA-sensitive scope is missing explicit stress coverage: ${scope_path#$feature_dir/}"
+      fail "SLA-sensitive scope is missing explicit stress coverage: ${scope_path#$feature_dir/} (Gate G026)"
     fi
   fi
 done
@@ -2725,7 +3854,11 @@ echo ""
 #     run is a legitimate pattern, so this is surfaced rather than blocked.
 # =============================================================================
 echo "--- Check 7C: Phase-Claim Execution Backing ---"
-claim_backing_analysis="$(python3 - "$state_file" <<'PY'
+# macOS Bash 3.2 misparses a here-document body embedded directly inside a
+# command substitution when that body contains Python parentheses. Keep the
+# here-document in a function body and capture only the function invocation.
+_check7c_claim_backing_analysis() {
+  python3 - "$1" <<'PY'
 import json
 import sys
 
@@ -2803,7 +3936,9 @@ if unbacked:
 if excess:
     print(f"EXCESS={'|'.join(excess)}")
 PY
-)"
+}
+claim_backing_analysis="$(_check7c_claim_backing_analysis "$state_file")"
+unset -f _check7c_claim_backing_analysis
 
 if echo "$claim_backing_analysis" | grep -q '^NO_CLAIMS=1'; then
   info "No completedPhaseClaims recorded — phase-claim backing check skipped"
@@ -3964,15 +5099,53 @@ if [[ -n "$state_workflow_mode" ]]; then
       fi
 
       if [[ "$has_implement" == "true" || "$has_test" == "true" ]]; then
-        # Implementation phases claimed — completedScopes MUST be non-empty
-        if [[ "$state_completed_scopes_count" -eq 0 ]]; then
-          fail "Execution/certification phases claim implement/test phases but completedScopes is EMPTY — FABRICATION (Gate G027)"
-          info "This means phases were recorded without any scope actually completing"
+        # BUG-042 (DI-038-04). G027's INTENT is anti-fabrication: implement/test
+        # must not be recorded without evidence that work happened. Its PROXY
+        # was "scopes completed". A packet form whose declared artifact set
+        # omits scopes.md has no scope decomposition by construction, and
+        # Check 5 requires completedScopes to be EMPTY on exactly that form —
+        # so no value of completedScopes satisfied both checks and the DEFAULT
+        # bug route was unfalsifiable: claim the phases and G027 fires, omit
+        # them and G022 fires. The intent is kept in full; only the proxy is
+        # swapped for the one work-evidence signal such a form does carry, the
+        # registry-declared obligation attestations. Resolution reuses the
+        # SAME `bug_packet_form` facts every other check reads.
+        g027_scopeless_form=false
+        if [[ -n "$bug_packet_form" ]] && [[ "$bug_packet_requires_scopes_md" == false ]]; then
+          g027_scopeless_form=true
         fi
 
-        # Implementation phases claimed — scope artifact statuses must show work done
-        if [[ "$done_scopes" -eq 0 ]]; then
-          fail "Execution/certification phases claim implement/test phases but ZERO scopes are marked 'Done' — FABRICATION (Gate G027)"
+        if [[ "$g027_scopeless_form" == true ]]; then
+          if [[ ${#bug_packet_obligations[@]} -eq 0 ]]; then
+            fail "Execution/certification phases claim implement/test phases but the '$bug_packet_form' packet form declares NO scopes.md and NO obligations — nothing attests that work happened — FABRICATION (Gate G027)"
+            info "A form with neither a scope decomposition nor registry-declared obligations carries no work evidence to check"
+          else
+            g027_unattested=0
+            for g027_obligation_fact in "${bug_packet_obligations[@]}"; do
+              g027_obligation_state=0
+              bug_packet_obligation_state "$g027_obligation_fact" || g027_obligation_state=$?
+              if [[ "$g027_obligation_state" -ne 0 ]]; then
+                g027_unattested=$((g027_unattested + 1))
+                fail "Execution/certification phases claim implement/test phases but registry-declared obligation '${g027_obligation_fact%%|*}' is NOT attested — FABRICATION (Gate G027)"
+              fi
+            done
+            if [[ "$g027_unattested" -eq 0 ]]; then
+              pass "Phase-obligation coherence verified: implement/test are backed by all ${#bug_packet_obligations[@]} registry-declared obligation attestation(s) for the '$bug_packet_form' form"
+            else
+              info "This means phases were recorded without the work evidence the '$bug_packet_form' form declares"
+            fi
+          fi
+        else
+          # Implementation phases claimed — completedScopes MUST be non-empty
+          if [[ "$state_completed_scopes_count" -eq 0 ]]; then
+            fail "Execution/certification phases claim implement/test phases but completedScopes is EMPTY — FABRICATION (Gate G027)"
+            info "This means phases were recorded without any scope actually completing"
+          fi
+
+          # Implementation phases claimed — scope artifact statuses must show work done
+          if [[ "$done_scopes" -eq 0 ]]; then
+            fail "Execution/certification phases claim implement/test phases but ZERO scopes are marked 'Done' — FABRICATION (Gate G027)"
+          fi
         fi
 
         # If ALL phases claimed but scopes are partial, that's suspicious
@@ -4025,19 +5198,35 @@ if [[ -f "$reality_scan_script" ]]; then
   esac
 
   if [[ "$run_reality_scan" == "true" ]]; then
-    reality_output="$(bubbles_run_with_timeout 120 bash "$reality_scan_script" "$feature_dir" --verbose 2>&1 || true)"
-    # shellcheck disable=SC2034  # captured for symmetry; reality_output drives the checks.
-    reality_exit="$?"
-
-    # Show condensed output
+    if reality_output="$(
+      if [[ -n "${DEVELOPER_DIR:-}" ]]; then
+        if [[ "$DEVELOPER_DIR" == *$'\n'* || "$DEVELOPER_DIR" == *$'\r'* || "$DEVELOPER_DIR" == *$'\t'* ]]; then
+          printf '%s\n' 'state-transition-guard: DEVELOPER_DIR contains forbidden control bytes' >&2
+          exit 2
+        fi
+        POSIXLY_CORRECT=y exec /usr/bin/env -i \
+          LC_ALL=C \
+          PATH=/usr/bin:/bin \
+          BUBBLES_SECURITY_ENTRY_MODE=direct \
+          "DEVELOPER_DIR=$DEVELOPER_DIR" \
+          /bin/bash -p -- "$reality_scan_script" "$feature_dir" --verbose 2>&1
+      fi
+      POSIXLY_CORRECT=y exec /usr/bin/env -i \
+        LC_ALL=C \
+        PATH=/usr/bin:/bin \
+        BUBBLES_SECURITY_ENTRY_MODE=direct \
+        /bin/bash -p -- "$reality_scan_script" "$feature_dir" --verbose 2>&1
+    )"; then
+      reality_exit=0
+    else
+      reality_exit=$?
+    fi
+    printf '%s\n' "$reality_output"
     violation_count="$(echo "$reality_output" | grep -c '🔴 VIOLATION' || true)"
     if [[ "$violation_count" -gt 0 ]]; then
       fail "Implementation reality scan found $violation_count source code violation(s) — STUB/FAKE DATA DETECTED (Gate G028)"
-      # Show first 10 violations
-      echo "$reality_output" | grep '🔴 VIOLATION' | head -10
-      if [[ "$violation_count" -gt 10 ]]; then
-        info "... and $((violation_count - 10)) more violation(s). Run 'bash $reality_scan_script $feature_dir --verbose' for full details."
-      fi
+    elif [[ "$reality_exit" -ne 0 ]]; then
+      fail "Implementation reality scan exited $reality_exit without a valid clean verdict (Gate G028)"
     else
       pass "Implementation reality scan passed — no stub/fake/hardcoded data patterns detected"
     fi
@@ -4050,7 +5239,7 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 17: Strict mode commit enforcement (commit-per-spec)
+# CHECK 17: Strict Mode commit enforcement (commit-per-spec); Check 16 direct canary: /usr/bin/env -i /bin/bash -p BUBBLES_SECURITY_ENTRY_MODE=direct
 # =============================================================================
 echo "--- Check 17: Strict Mode Commit Enforcement ---"
 if [[ "$state_workflow_mode" == "full-delivery" ]] && [[ "$state_status" == "done" ]]; then
@@ -4099,6 +5288,9 @@ echo ""
 #        <!-- bubbles:g040-skip-end --> HTML-comment markers is excluded
 #        from the scan, letting governance docs / post-mortems quote
 #        follow-up narrative inline without flipping spec status.
+#   (iv) The literal label token `Exposure-Deferred:` — mandated in scope
+#        bodies by vertical-delivery-plan-guard.sh — is stripped from each
+#        scope line before the scan. The reason written after it remains.
 # =============================================================================
 echo "--- Check 18: Deferral Language Scan (Gate G040) ---"
 
@@ -4128,7 +5320,7 @@ else
   # merely names an artifact. Guarded by two selftest cases below: a negative
   # (prohibition prose must NOT block) and its adversarial twin (a real
   # admission MUST still block), so the narrowing cannot silently disable it.
-  deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|(is|are|was|were|remains?|stays?|left|leaving)[[:space:]]+(still[[:space:]]+)?an?[[:space:]]+placeholder|placeholder[[:space:]]+(value|until|for now)|temporary workaround'
+  deferral_pattern='(^|[^[:alnum:]_])(deferred|defer to|deferred to|future[[:blank:]-]+scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate[[:blank:]-]+ticket|separate issue|separate PR|tracked separately|handled separately|punt|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|(is|are|was|were|remains?|stays?|left|leaving)[[:space:]]+(still[[:space:]]+)?an?[[:space:]]+placeholder|placeholder[[:space:]]+(value|until|for now)|temporary workaround)([^[:alnum:]_]|$)'
   # Strategy (i): exclude schema-canonical follow-up field names mandated
   # by completion-governance.md AND the canonical "Follow-Up Narrative"
   # section heading itself. Both are schema-structural usage, not deferred-
@@ -4146,8 +5338,49 @@ else
   # nearby — that contract is enforced by skill/instruction docs and via
   # routine artifact-lint review, not by this regex (multi-line context
   # analysis would slow the guard substantially).
-  deferral_exclusion_pattern='no deferred items|no deferred work|no deferrals|without deferred work|zero deferred items|zero deferrals|no issues deferred|no issues deferred or skipped|followUpOwner|followUpAction|followUpTarget|followUps|follow-up narrative|follow-up section|\[lockdown-deferred-fr-[0-9]+\]|\[lockdown-deferred-[a-z0-9-]+-fr-[0-9]+\]|\[awaiting-operator-commit\]|\[awaiting-third-party-approval\]|\[awaiting-cutover-window\]|\[awaiting-regulator-review\]'
+  deferral_span_exclusion_pattern='no deferred items|no deferred work|no deferrals|without deferred work|zero deferred items|zero deferrals|no issues deferred or skipped|no issues deferred|followupowner|followupaction|followuptarget|followups|follow-up narrative|follow-up section'
+  deferral_exclusion_pattern='\[lockdown-deferred-fr-[0-9]+\]|\[lockdown-deferred-[a-z0-9-]+-fr-[0-9]+\]|\[awaiting-operator-commit\]|\[awaiting-third-party-approval\]|\[awaiting-cutover-window\]|\[awaiting-regulator-review\]'
   total_deferral_hits=0
+
+  _g040_strip_structural_spans() {
+    LC_ALL=C awk -v exclusions="$deferral_span_exclusion_pattern" '
+      {
+        line = $0
+        lower = tolower(line)
+        while (match(lower, exclusions)) {
+          line = substr(line, 1, RSTART - 1) substr(line, RSTART + RLENGTH)
+          lower = tolower(line)
+        }
+        print line
+      }
+    '
+  }
+
+  _g040_print_exact_pair_match() {
+    local source_line="$1"
+
+    LC_ALL=C awk -v line="$source_line" '
+      BEGIN {
+        lower = tolower(line)
+        inner = "(separate[[:blank:]-]+ticket|future[[:blank:]-]+scope)"
+        outer = "(^|[^[:alnum:]_])" inner "([^[:alnum:]_]|$)"
+        if (match(lower, outer)) {
+          full = substr(line, RSTART, RLENGTH)
+          full_lower = tolower(full)
+          if (match(full_lower, inner)) {
+            original = substr(full, RSTART, RLENGTH)
+            canonical = substr(tolower(original), 1, 8) == "separate" \
+              ? "separate ticket" : "future scope"
+            gsub(/\t/, "\\t", original)
+            printf "   canonical-phrase: %s\n", canonical
+            printf "   matched-form: %s\n", original
+            found = 1
+          }
+        }
+        exit found ? 0 : 1
+      }
+    '
+  }
 
   # Strategy (iii): the awk filter strips fenced code AND content between
   # bubbles:g040-skip-begin / bubbles:g040-skip-end sentinel markers.
@@ -4157,7 +5390,10 @@ else
     /^```/ || /^    ```/ { in_block = !in_block; next }
     /<!-- bubbles:g040-skip-begin -->/ { skip = 1; next }
     /<!-- bubbles:g040-skip-end -->/ { skip = 0; next }
-    !in_block && !skip { print }
+    !in_block && !skip {
+      gsub(/(-[[:space:]]*)?[*]*[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]-[Dd][Ee][Ff][Ee][Rr][Rr][Ee][Dd][[:space:]]*:[*]*/, " ")
+      print
+    }
   '
 
   for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
@@ -4166,7 +5402,7 @@ else
     # Count deferral language hits (case-insensitive), excluding inside code fence blocks
     # We scan outside code blocks only to avoid false positives from test descriptions or docs
     deferral_hits="$({
-      awk "$deferral_strip_awk" "$scope_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
+      awk "$deferral_strip_awk" "$scope_path" | _g040_strip_structural_spans | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
     } || true)"
 
     if [[ "$deferral_hits" -gt 0 ]]; then
@@ -4178,12 +5414,14 @@ else
       shown_lines=0
       while IFS= read -r deferral_line; do
         [[ -n "$deferral_line" ]] || continue
-        echo "   → $deferral_line"
+        if ! _g040_print_exact_pair_match "$deferral_line"; then
+          echo "   → $deferral_line"
+        fi
         shown_lines=$((shown_lines + 1))
         if [[ "$shown_lines" -ge 5 ]]; then
           break
         fi
-      done < <(awk "$deferral_strip_awk" "$scope_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" || true)
+      done < <(awk "$deferral_strip_awk" "$scope_path" | _g040_strip_structural_spans | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" || true)
     fi
   done
 
@@ -4228,12 +5466,23 @@ else
     fi
 
     report_deferral_hits="$({
-      awk -v bw="$rpt_before_window" "$deferral_strip_report_awk" "$rpt_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
+      awk -v bw="$rpt_before_window" "$deferral_strip_report_awk" "$rpt_path" | _g040_strip_structural_spans | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
     } || true)"
 
     if [[ "$report_deferral_hits" -gt 0 ]]; then
       fail "Report artifact contains $report_deferral_hits deferral language hit(s): ${rpt_path#$feature_dir/} — evidence of deferred work (Gate G040)"
       total_deferral_hits=$((total_deferral_hits + report_deferral_hits))
+      shown_lines=0
+      while IFS= read -r deferral_line; do
+        [[ -n "$deferral_line" ]] || continue
+        if ! _g040_print_exact_pair_match "$deferral_line"; then
+          echo "   → $deferral_line"
+        fi
+        shown_lines=$((shown_lines + 1))
+        if [[ "$shown_lines" -ge 5 ]]; then
+          break
+        fi
+      done < <(awk -v bw="$rpt_before_window" "$deferral_strip_report_awk" "$rpt_path" | _g040_strip_structural_spans | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" || true)
     fi
   done
 
@@ -4423,11 +5672,21 @@ echo "--- Check 22: DoD-Gherkin Content Fidelity (Gate G068) ---"
 
 dod_fidelity_failures=0
 dod_fidelity_total=0
-for scope_index in "${!scope_analysis_files[@]}"; do
-  scope_path="${scope_analysis_files[$scope_index]}"
+# BUG-042. Same reason as Check 4A: on a reduced form the DoD-shaped content is
+# in the attestation artifact, so G068 must see it. Empty elsewhere.
+c22_scan_files=(
+  ${scope_analysis_files[@]+"${scope_analysis_files[@]}"}
+  ${bug_packet_attestation_files[@]+"${bug_packet_attestation_files[@]}"}
+)
+for scope_index in "${!c22_scan_files[@]}"; do
+  scope_path="${c22_scan_files[$scope_index]}"
   [[ -f "$scope_path" ]] || continue
 
-  scope_label="$(scope_analysis_label "$scope_index")"
+  if [[ "$scope_index" -lt "${#scope_analysis_files[@]}" ]]; then
+    scope_label="$(scope_analysis_label "$scope_index")"
+  else
+    scope_label="${scope_path#$feature_dir/}"
+  fi
 
   # Extract Gherkin scenarios
   scope_scenarios="$(grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//' || true)"
@@ -4536,10 +5795,13 @@ else
   # The rule is deliberately narrow. Identical output from a RE-RUN of the same
   # command is normal. Deterministic validators can also emit identical output
   # when the same validator category runs independently over distinct targets.
-  # That sibling case is accepted only when family, category, and exit status
-  # agree while target/input closure and execution provenance are all present
-  # and distinct. A substantive collision across incompatible command families
-  # or categories still identifies one result backing unrelated claims.
+  # Category is diagnostic metadata subject only to a known, non-mixed sanity
+  # floor; matching or differing category labels establish neither identity nor
+  # cloning. The sibling case instead requires compatible program/family and
+  # exit status plus present, distinct target/input closure and execution
+  # provenance. A substantive collision across incompatible identities or
+  # unproven target/execution provenance still identifies one result backing
+  # unrelated claims.
   if command -v jq >/dev/null 2>&1; then
     # An EMPTY stdout is excluded, and that exclusion is what makes the rule
     # correct rather than merely narrow. Every command that writes nothing to
@@ -4588,28 +5850,121 @@ else
     # case that is now the only reachable one; it just cannot, alone, allege
     # forgery when command identity is single.
     c43_empty_stdout_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    c43_analysis_rc=0
     c43_analysis="$(jq -rs --arg empty_sha "$c43_empty_stdout_sha256" '
       # BUG-033 facet 2: unwrap every TRANSPARENT prefix, not just a bare
-      # leading `bash`/`sh`. A shell invoked with `-c`, an `env` prefix, and
-      # leading `VAR=value` assignments do not change WHICH program ran, so
-      # three ordinary spellings of one command must resolve to one family.
+      # leading `bash`/`sh`. A shell invoked with `-c`, an `env` prefix, a
+      # leading `VAR=value` assignment, and a bare canonical
+      # `timeout`/`gtimeout` wrapper do not change WHICH program ran, so
+      # ordinary spellings of one command must resolve to one family. Receipt
+      # metadata cannot authenticate the executable behind a path-qualified
+      # timeout token, so those forms retain their wrapper identity.
       # Before this, `node -e x`, `env P=1 node -e x` and `zsh -c node -e x`
       # resolved to `node`, `env` and `zsh`, and the group was refused as a
       # multi-identity collision — the re-spelling case the rule above promises
       # to tolerate. `bash -c x` was worse still: it stripped `bash` and left
       # `-c`, so the family was a flag. The recursion is what makes composed
       # prefixes (`env A=1 zsh -c ...`) collapse rather than half-collapse.
-      def strip_wrappers:
-        if ((.[0] // "") | test("^(bash|sh|zsh|ksh|dash)$"))
-          then (if ((.[1] // "") == "-c") then (.[2:] | strip_wrappers) else (.[1:] | strip_wrappers) end)
-        elif ((.[0] // "") == "env") then (.[1:] | strip_wrappers)
-        elif ((.[0] // "") | test("^[A-Za-z_][A-Za-z0-9_]*=")) then (.[1:] | strip_wrappers)
+      # BUG-033 facet 3 merge note: two independent fixes for the same
+      # bounded-launcher gap landed on divergent branches -- one taught the
+      # guard the timeout command closed option grammar (--kill-after,
+      # --signal, -k, -s, -v, --preserve-status, --foreground, --verbose,
+      # --), the other taught it the exact portable Perl alarm launcher
+      # (perl -e alarm-shift-exec, see below). Neither supersedes the other.
+      # normalize_tokens is now the single source of truth for both, plus
+      # the wrapper-name accumulation command_normalization needs;
+      # strip_wrappers derives from it so the two can never diverge.
+      def executable_basename:
+        split("/") | last;
+      def timeout_duration:
+        test("^[+]?(([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?|0[xX]([0-9A-Fa-f]+([.][0-9A-Fa-f]*)?|[.][0-9A-Fa-f]+)[pP][+-]?[0-9]+|[iI][nN][fF]([iI][nN][iI][tT][yY])?)[smhd]?$");
+      def timeout_signal:
+        test("^([0-9]+|(SIG)?(HUP|INT|QUIT|ILL|TRAP|ABRT|IOT|BUS|FPE|KILL|USR1|SEGV|USR2|PIPE|ALRM|TERM|STKFLT|CHLD|CLD|CONT|STOP|TSTP|TTIN|TTOU|URG|XCPU|XFSZ|VTALRM|PROF|WINCH|IO|POLL|PWR|SYS|INFO|EMT|RTMIN([+][0-9]+)?|RTMAX(-[0-9]+)?))$"; "i");
+      # Consume only the closed BUG-033 option grammar. An unknown, attached,
+      # clustered, or incomplete option returns null, leaving the timeout
+      # invocation as the program identity instead of guessing where its
+      # command begins.
+      def strip_timeout_options:
+        if length == 0 then null
+        elif .[0] == "--" then .[1:]
+        elif (.[0] | test("^(--preserve-status|--foreground|--verbose)$")) then
+          .[1:] | strip_timeout_options
+        elif (.[0] | test("^--kill-after=.+$")) then
+          if (.[0] | sub("^--kill-after="; "") | timeout_duration)
+            then .[1:] | strip_timeout_options else null end
+        elif (.[0] | test("^--signal=.+$")) then
+          if (.[0] | sub("^--signal="; "") | timeout_signal)
+            then .[1:] | strip_timeout_options else null end
+        elif (.[0] | test("^(--kill-after|-k)$")) then
+          if length >= 2 and (.[1] | timeout_duration)
+            then .[2:] | strip_timeout_options else null end
+        elif (.[0] | test("^(--signal|-s)$")) then
+          if length >= 2 and (.[1] | timeout_signal)
+            then .[2:] | strip_timeout_options else null end
+        elif .[0] == "-v" then .[1:] | strip_timeout_options
+        elif (.[0] | startswith("-")) then null
         else . end;
+      def normalize_tokens:
+        def walk($wrappers):
+          if (((.[0] // "") | executable_basename) | test("^(bash|sh|zsh|ksh|dash)$"))
+            then (if ((.[1] // "") == "-c")
+              then (.[2:] | walk($wrappers + ["shell"]))
+              else (.[1:] | walk($wrappers + ["shell"])) end)
+          elif (((.[0] // "") | executable_basename) == "env")
+            then (.[1:] | walk($wrappers + ["env"]))
+          elif ((.[0] // "") | test("^[A-Za-z_][A-Za-z0-9_]*="))
+            then (.[1:] | walk($wrappers + ["assignment"]))
+          elif ((.[0] // "") | test("^(timeout|gtimeout)$"))
+            then (. as $tokens
+                  | ($tokens[1:] | strip_timeout_options) as $tail
+                  | if (($tail | type) == "array")
+                      and (($tail | length) >= 2)
+                      and (($tail[0] // "") | timeout_duration)
+                    then ($tail[1:] | walk($wrappers + [$tokens[0]]))
+                    else {tokens: $tokens, wrappers: $wrappers} end)
+          elif (length >= 9)
+            and ((.[0] // "") == "/usr/bin/perl")
+            and ((.[1] // "") == "-e")
+            and ((.[2] // "") == "\u0027alarm")
+            and ((.[3] // "") == "shift")
+            and ((.[4] // "") == "@ARGV;")
+            and ((.[5] // "") == "exec")
+            and ((.[6] // "") == "@ARGV\u0027")
+            and (((.[7] // "") | startswith("-")) | not)
+            then (.[8:] | walk($wrappers + ["portable-perl-alarm"]))
+          else {tokens: ., wrappers: $wrappers} end;
+        walk([]);
+      def command_normalization:
+        . as $recorded
+        | ( . / " " | map(select(length > 0)) ) as $raw
+        | ($raw | normalize_tokens) as $normalized
+        | ($normalized.tokens[0] // "") as $head
+        | (($head == "timeout") or ($head == "gtimeout") or ($head == "/usr/bin/perl")) as $unsupported
+        | ($normalized.wrappers | map(select(test("^(timeout|gtimeout|portable-perl-alarm)$")))) as $bounded
+        | (if $unsupported then ["unsupported"]
+           elif ($bounded | length) > 0 then $bounded
+           else ["direct"] end) as $launchers
+        | {
+            recordedCommand: $recorded,
+            tokens: $normalized.tokens,
+            wrappers: $normalized.wrappers,
+            launchers: $launchers,
+            launcher: $launchers[0],
+            identity: (if $unsupported then $recorded else ($normalized.tokens | join(" ")) end),
+            identitySource: (if $unsupported then "recorded-command"
+              elif ($normalized.wrappers | length) > 0 then "normalized-underlying-command"
+              else "underlying-command" end),
+            normalization: (if $unsupported then "unchanged"
+              elif ($normalized.wrappers | length) > 0 then "normalized"
+              else "unchanged" end)
+          };
+      def strip_wrappers:
+        normalize_tokens | .tokens;
       def cmd_parts:
         ( . / " " | map(select(length > 0)) ) | strip_wrappers;
       def command_family:
         cmd_parts as $t
-        | ( ($t[0] // "") | split("/") | last ) as $exe
+        | ( ($t[0] // "") | executable_basename ) as $exe
         | $exe;
       # BUG-028 fix C: a generic dispatch verb is not a subject. Keeping only
       # the FIRST positional made `npm run lint` and `npm run test` one
@@ -4713,6 +6068,70 @@ else
           and (($exits | unique | length) == 1)
           and ($targets | all_distinct_nonempty)
           and ($provenance | all_distinct_nonempty);
+      def collision_reason:
+        . as $rows
+        | ($rows | map(.cmd | command_family)) as $families
+        | ($rows | map(.cmd | program_identity)) as $programs
+        | ($rows | map(evidence_category)) as $categories
+        | ($rows | map(.exitCode)) as $exits
+        | ($rows | group_by(.cmd | cmd_identity) | map(.[0] | target_identity)) as $targets
+        | ($rows | map(provenance_identity)) as $provenance
+        | if (($families | unique | length) != 1)
+            or (($families[0] // "") == "")
+            or (($programs | unique | length) != 1)
+            or (($programs[0] // "") == "") then "command-identity-mismatch"
+          elif (($targets | all_distinct_nonempty) | not) then "target-conflict"
+          elif (($provenance | all_distinct_nonempty) | not) then "provenance-conflict"
+          elif (all($categories[]; . != "other" and ((startswith("mixed:")) | not)) | not) then "category-invalid"
+          elif (all($exits[]; type == "number") | not)
+            or (($exits | unique | length) != 1) then "exit-result-mismatch"
+          else "classification-error" end;
+      def receipt_detail:
+        . as $row
+        | ($row.cmd | command_normalization) as $normalized
+        | {
+            recordedCommand: $row.cmd,
+            identity: $normalized.identity,
+            commandIdentity: ($row.cmd | cmd_identity),
+            programIdentity: ($row.cmd | program_identity),
+            family: ($row.cmd | command_family),
+            category: ($row | evidence_category),
+            target: ($row | target_identity),
+            provenance: ($row | provenance_identity),
+            exit: $row.exitCode,
+            launcher: $normalized.launcher,
+            launchers: $normalized.launchers,
+            identitySource: $normalized.identitySource,
+            normalization: $normalized.normalization
+          };
+      def diagnostic_pair($reason):
+        map(receipt_detail) as $details
+        | ([range(0; ($details | length)) as $i
+            | range($i + 1; ($details | length)) as $j
+            | select(
+                if $reason == "command-identity-mismatch" then
+                  ($details[$i].programIdentity != $details[$j].programIdentity)
+                  or ($details[$i].family != $details[$j].family)
+                elif $reason == "target-conflict" then
+                  ($details[$i].target == "")
+                  or ($details[$j].target == "")
+                  or ($details[$i].target == $details[$j].target)
+                elif $reason == "provenance-conflict" then
+                  ($details[$i].provenance == "")
+                  or ($details[$j].provenance == "")
+                  or ($details[$i].provenance == $details[$j].provenance)
+                elif $reason == "category-invalid" then
+                  ($details[$i].category == "other")
+                  or ($details[$j].category == "other")
+                  or ($details[$i].category | startswith("mixed:"))
+                  or ($details[$j].category | startswith("mixed:"))
+                elif $reason == "exit-result-mismatch" then
+                  (($details[$i].exit | type) != "number")
+                  or (($details[$j].exit | type) != "number")
+                  or ($details[$i].exit != $details[$j].exit)
+                else true end)
+            | [$details[$i], $details[$j]]]
+          | .[0]) // $details[0:2];
       def identity_detail:
         "family=" + (.cmd | command_family)
         + " category=" + evidence_category
@@ -4721,28 +6140,169 @@ else
         + " cmd=" + .cmd;
       map(select((.stdoutHash // "") != "" and (.cmd // "") != "" and (.stdoutHash != $empty_sha) and ((has("stdoutBytes") and .stdoutBytes == 0) | not)))
       | group_by(.stdoutHash)
+      | map(select((map(.cmd | cmd_identity) | unique | length) > 1))
+      | map(. as $rows
+        | ($rows | deterministic_siblings) as $accepted
+        | ($rows | collision_reason) as $reason
+        | {
+            accepted: $accepted,
+            hash: $rows[0].stdoutHash,
+            reason: (if $accepted then "deterministic-siblings" else $reason end),
+            identities: ($rows | map(identity_detail)),
+            rows: ($rows | map(receipt_detail)),
+            pair: (if $accepted then [] else ($rows | diagnostic_pair($reason)) end)
+          })
       | {
-          siblings: map(select(
-            ((map(.cmd | cmd_identity) | unique | length) > 1)
-            and deterministic_siblings
-          )),
-          clones: (map(select(
-            ((map(.cmd | cmd_identity) | unique | length) > 1)
-            and (deterministic_siblings | not)
-          )) | map({hash: .[0].stdoutHash, identities: map(identity_detail)}))
+          siblings: map(select(.accepted) | del(.accepted)),
+          clones: map(select(.accepted | not) | del(.accepted))
         }
-    ' "$c43_log" 2>/dev/null || true)"
-    c43_sibling_count="$(printf '%s' "$c43_analysis" | jq -r '.siblings | length' 2>/dev/null || echo 0)"
-    c43_clones="$(printf '%s' "$c43_analysis" | jq -r '
-      .clones[]?
-      | "\(.hash[0:12])… reused across incompatible or unproven identities: \(.identities | join(" AND "))"
-    ' 2>/dev/null || true)"
-    if [[ -n "$c43_clones" ]]; then
-      fail "Evidence receipt CLONE — one substantive stdout is cited across incompatible command/category identities or receipts that cannot prove independent target/execution provenance: $(printf '%s' "$c43_clones" | tr '\n' ';' | head -c 800)"
-    elif [[ "$c43_sibling_count" -gt 0 ]]; then
-      pass "No receipt clones ($c43_sibling_count deterministic sibling hash collision(s) accepted by compatible family/category/exit plus distinct target and execution provenance)"
+    ' "$c43_log" 2>/dev/null)" || c43_analysis_rc=$?
+
+    c43_emit_field() {
+      local line="$1"
+      local width="${COLUMNS:-80}"
+      local current candidate
+      local index
+      local -a words
+
+      case "$width" in
+        ""|*[!0-9]*) width=80 ;;
+      esac
+      if [[ "$width" -ge 60 ]] || [[ "${#line}" -le "$width" ]]; then
+        printf '%s\n' "$line"
+        return 0
+      fi
+
+      IFS=' ' read -r -a words <<< "$line"
+      [[ "${#words[@]}" -gt 0 ]] || {
+        printf '\n'
+        return 0
+      }
+      current="${words[0]}"
+      for ((index = 1; index < ${#words[@]}; index++)); do
+        candidate="$current ${words[$index]}"
+        if [[ "${#candidate}" -gt "$width" ]]; then
+          printf '%s\n' "$current"
+          current="  ${words[$index]}"
+        else
+          current="$candidate"
+        fi
+      done
+      printf '%s\n' "$current"
+    }
+
+    c43_sibling_count=0
+    c43_clone_count=0
+    if [[ "$c43_analysis_rc" -eq 0 ]] && printf '%s' "$c43_analysis" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      c43_sibling_count="$(printf '%s' "$c43_analysis" | jq -r '.siblings | length')"
+      c43_clone_count="$(printf '%s' "$c43_analysis" | jq -r '.clones | length')"
+      c43_panels="$(printf '%s' "$c43_analysis" | jq -r '
+        def escaped: tostring | tojson | .[1:-1];
+        def accepted_lines:
+          ([.rows[].launchers[]?] | unique) as $seen
+          | ["direct", "timeout", "gtimeout", "portable-perl-alarm", "unsupported"] as $order
+          | ([$order[] as $candidate | select($seen | index($candidate)) | $candidate] | join(",")) as $launchers
+          | (if any(.rows[]; .identitySource == "recorded-command") then "recorded-command"
+             elif any(.rows[]; .identitySource == "normalized-underlying-command") then "normalized-underlying-command"
+             else "underlying-command" end) as $source
+          | [
+              "check=43 verdict=ACCEPTED",
+              "reason=deterministic-siblings",
+              "identity=" + (.rows[0].programIdentity | escaped),
+              "identity_source=" + $source,
+              "launchers=" + $launchers,
+              "targets=distinct-per-command-identity",
+              "provenance=distinct-per-receipt",
+              "exit_results=compatible",
+              "effect=COLLISION_ACCEPTED"
+            ];
+        def refused_lines:
+          . as $collision
+          | if .reason == "command-identity-mismatch" then
+              [
+                "check=43 verdict=REFUSED",
+                "reason=command-identity-mismatch",
+                "launcher_a=" + (.pair[0].launcher | escaped),
+                "identity_a=" + (.pair[0].identity | escaped),
+                "identity_source_a=" + (.pair[0].identitySource | escaped),
+                "normalization_a=" + (.pair[0].normalization | escaped),
+                "category_a=" + (.pair[0].category | escaped),
+                "launcher_b=" + (.pair[1].launcher | escaped),
+                "identity_b=" + (.pair[1].identity | escaped),
+                "identity_source_b=" + (.pair[1].identitySource | escaped),
+                "normalization_b=" + (.pair[1].normalization | escaped),
+                "category_b=" + (.pair[1].category | escaped),
+                "effect=TRANSITION_BLOCKED"
+              ]
+            elif .reason == "target-conflict" then
+              [
+                "check=43 verdict=REFUSED",
+                "reason=target-conflict",
+                "identity_a=" + (.pair[0].identity | escaped),
+                "target_a=" + (.pair[0].target | escaped),
+                "identity_b=" + (.pair[1].identity | escaped),
+                "target_b=" + (.pair[1].target | escaped),
+                "effect=TRANSITION_BLOCKED"
+              ]
+            elif .reason == "provenance-conflict" then
+              [
+                "check=43 verdict=REFUSED",
+                "reason=provenance-conflict",
+                "identity_a=" + (.pair[0].identity | escaped),
+                "provenance_a=" + (.pair[0].provenance | escaped),
+                "identity_b=" + (.pair[1].identity | escaped),
+                "provenance_b=" + (.pair[1].provenance | escaped),
+                "effect=TRANSITION_BLOCKED"
+              ]
+            elif .reason == "category-invalid" then
+              [
+                "check=43 verdict=REFUSED",
+                "reason=category-invalid",
+                "identity_a=" + (.pair[0].identity | escaped),
+                "category_a=" + (.pair[0].category | escaped),
+                "identity_b=" + (.pair[1].identity | escaped),
+                "category_b=" + (.pair[1].category | escaped),
+                "effect=TRANSITION_BLOCKED"
+              ]
+            elif .reason == "exit-result-mismatch" then
+              [
+                "check=43 verdict=REFUSED",
+                "reason=exit-result-mismatch",
+                "identity_a=" + (.pair[0].identity | escaped),
+                "exit_a=" + (.pair[0].exit | escaped),
+                "identity_b=" + (.pair[1].identity | escaped),
+                "exit_b=" + (.pair[1].exit | escaped),
+                "effect=TRANSITION_BLOCKED"
+              ]
+            else
+              [
+                "check=43 verdict=REFUSED",
+                "reason=classification-error",
+                "effect=TRANSITION_BLOCKED"
+              ]
+            end;
+        (.siblings[]? | accepted_lines[]),
+        (.clones[]? | refused_lines[])
+      ' 2>/dev/null || true)"
+      if [[ -n "$c43_panels" ]]; then
+        while IFS= read -r c43_line; do
+          c43_emit_field "$c43_line"
+        done <<< "$c43_panels"
+      fi
     else
-      pass "No receipt clones (no substantive stdout hash shared across incompatible or unproven receipt identities)"
+      c43_emit_field "check=43 verdict=REFUSED"
+      c43_emit_field "reason=classification-error"
+      c43_emit_field "effect=TRANSITION_BLOCKED"
+      c43_clone_count=1
+    fi
+
+    if [[ "$c43_clone_count" -gt 0 ]]; then
+      failures=$((failures + 1))
+      record_gate_ids_from_message fail "Check 43 receipt collision classification refused"
+    elif [[ "$c43_sibling_count" -gt 0 ]]; then
+      pass "Check 43 accepted $c43_sibling_count deterministic receipt collision group(s)"
+    else
+      pass "Check 43 found no substantive receipt collision requiring compatibility review"
     fi
   fi
 fi
@@ -4794,7 +6354,7 @@ fi
 if [[ -x "$SCRIPT_DIR/claim-source-lint.sh" ]]; then
   echo "--- Check 40: Claim-Source provenance (G072) ---"
   if bash "$SCRIPT_DIR/claim-source-lint.sh" "$feature_dir"; then
-    pass "Claim-Source provenance: execution-evidence blocks carry a valid tag (or advisory)"
+    pass "Claim-Source provenance: execution-evidence blocks carry a valid tag (or advisory) (G072)"
   else
     fail "Claim-Source provenance findings under claimSourceProvenanceGuard: block (G072)"
   fi

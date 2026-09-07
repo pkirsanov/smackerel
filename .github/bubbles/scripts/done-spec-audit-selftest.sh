@@ -134,11 +134,36 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 spec_dir="${1:?spec dir required}"
+printf '%s\n' "$*" >"$spec_dir/trace.argv"
+if [[ "$#" -ne 3 || "$2" != "--all-scopes" || "$3" != "--coverage-policy=authored" ]]; then
+  echo "fixture traceability argv mismatch: $*"
+  exit 64
+fi
+if [[ -f "$spec_dir/trace.exit2" ]]; then
+  echo "fixture traceability usage failure: $spec_dir"
+  exit 2
+fi
+if [[ -f "$spec_dir/trace.exit3" ]]; then
+  echo "fixture traceability contract failure: $spec_dir"
+  exit 3
+fi
+if [[ -f "$spec_dir/authored.packet" ]]; then
+  printf '%s\n' authored >"$spec_dir/trace.result"
+  echo "fixture authored coverage accepts authored packet: $spec_dir"
+  exit 0
+fi
+if [[ -f "$spec_dir/planned-only.packet" ]]; then
+  printf '%s\n' planned >"$spec_dir/trace.result"
+  echo "fixture authored coverage rejects planned-only packet: $spec_dir"
+  exit 1
+fi
 if [[ -f "$spec_dir/trace.fail" ]]; then
   echo "fixture traceability failure: $spec_dir"
   exit 1
 fi
-echo "fixture traceability pass: $spec_dir"
+printf '%s\n' unclassified >"$spec_dir/trace.result"
+echo "fixture authored coverage rejects unclassified packet: $spec_dir"
+exit 1
 EOF
 
   chmod +x "$repo_dir/bubbles/scripts/"*.sh
@@ -202,6 +227,79 @@ changed_status="$(cd "$changed_repo" && run_capture "$changed_log" bash bubbles/
 assert_status "$changed_status" 1 "Changed profile blocks changed done-spec failures" "$changed_log"
 assert_log_contains "$changed_log" "profile: changed" "Changed profile is reported"
 assert_log_contains "$changed_log" "Current-policy failures" "Changed failures are current-policy failures"
+
+planned_only_repo="$tmp_root/planned-only-repo"
+init_fixture_repo "$planned_only_repo"
+write_state "$planned_only_repo" "specs/005-planned-only" "done"
+touch "$planned_only_repo/specs/005-planned-only/planned-only.packet"
+git -C "$planned_only_repo" add .
+git -C "$planned_only_repo" commit -m "fixture" >/dev/null
+planned_only_log="$tmp_root/planned-only.log"
+planned_only_status="$(cd "$planned_only_repo" && run_capture "$planned_only_log" bash bubbles/scripts/done-spec-audit.sh --profile changed specs/005-planned-only)"
+assert_status "$planned_only_status" 1 "Done-spec authored policy rejects a planned-only packet" "$planned_only_log"
+assert_log_contains "$planned_only_log" "fixture authored coverage rejects planned-only packet" "Planned-only marker determines authored-policy rejection"
+assert_file_contains "$planned_only_repo/specs/005-planned-only/trace.argv" "specs/005-planned-only --all-scopes --coverage-policy=authored" "Done-spec audit passes exact all-scope authored-policy argv"
+
+authored_repo="$tmp_root/authored-repo"
+init_fixture_repo "$authored_repo"
+write_state "$authored_repo" "specs/006-authored" "done"
+touch "$authored_repo/specs/006-authored/authored.packet"
+git -C "$authored_repo" add .
+git -C "$authored_repo" commit -m "fixture" >/dev/null
+authored_log="$tmp_root/authored.log"
+authored_status="$(cd "$authored_repo" && run_capture "$authored_log" bash bubbles/scripts/done-spec-audit.sh --profile changed specs/006-authored)"
+assert_status "$authored_status" 0 "Done-spec authored policy accepts an authored packet" "$authored_log"
+assert_file_contains "$authored_repo/specs/006-authored/trace.result" "authored" "Authored marker determines authored-policy acceptance"
+assert_file_contains "$authored_repo/specs/006-authored/trace.argv" "specs/006-authored --all-scopes --coverage-policy=authored" "Authored packet uses the exact traceability argv"
+
+unclassified_repo="$tmp_root/unclassified-repo"
+init_fixture_repo "$unclassified_repo"
+write_state "$unclassified_repo" "specs/008-unclassified" "done"
+git -C "$unclassified_repo" add .
+git -C "$unclassified_repo" commit -m "fixture" >/dev/null
+unclassified_log="$tmp_root/unclassified.log"
+unclassified_status="$(cd "$unclassified_repo" && run_capture "$unclassified_log" bash bubbles/scripts/done-spec-audit.sh --profile changed specs/008-unclassified)"
+assert_status "$unclassified_status" 1 "Done-spec authored policy rejects an unclassified packet" "$unclassified_log"
+assert_log_contains "$unclassified_log" "fixture authored coverage rejects unclassified packet" "Unclassified authored-policy rejection is explicit"
+
+marker_removed_repo="$tmp_root/marker-removed-repo"
+init_fixture_repo "$marker_removed_repo"
+write_state "$marker_removed_repo" "specs/009-marker-removed" "done"
+touch "$marker_removed_repo/specs/009-marker-removed/authored.packet"
+git -C "$marker_removed_repo" add .
+git -C "$marker_removed_repo" commit -m "fixture" >/dev/null
+rm "$marker_removed_repo/specs/009-marker-removed/authored.packet"
+marker_removed_log="$tmp_root/marker-removed.log"
+marker_removed_status="$(cd "$marker_removed_repo" && run_capture "$marker_removed_log" bash bubbles/scripts/done-spec-audit.sh --profile changed specs/009-marker-removed)"
+assert_status "$marker_removed_status" 1 "Removing authored.packet makes authored coverage fail" "$marker_removed_log"
+assert_log_contains "$marker_removed_log" "fixture authored coverage rejects unclassified packet" "Authored marker removal is mutation-sensitive"
+
+policy_reversal_repo="$tmp_root/policy-reversal-repo"
+init_fixture_repo "$policy_reversal_repo"
+write_state "$policy_reversal_repo" "specs/010-policy-reversal" "done"
+touch "$policy_reversal_repo/specs/010-policy-reversal/authored.packet"
+git -C "$policy_reversal_repo" add .
+git -C "$policy_reversal_repo" commit -m "fixture" >/dev/null
+sed 's/--coverage-policy=authored/--coverage-policy=planning/' \
+  "$policy_reversal_repo/bubbles/scripts/done-spec-audit.sh" >"$policy_reversal_repo/bubbles/scripts/done-spec-audit.mutated"
+mv "$policy_reversal_repo/bubbles/scripts/done-spec-audit.mutated" "$policy_reversal_repo/bubbles/scripts/done-spec-audit.sh"
+policy_reversal_log="$tmp_root/policy-reversal.log"
+policy_reversal_status="$(cd "$policy_reversal_repo" && run_capture "$policy_reversal_log" bash bubbles/scripts/done-spec-audit.sh --profile changed specs/010-policy-reversal)"
+assert_status "$policy_reversal_status" 1 "Reversing done-spec coverage policy makes the caller fail" "$policy_reversal_log"
+assert_log_contains "$policy_reversal_log" "fixture traceability argv mismatch" "Authored-policy reversal is mutation-sensitive"
+
+for trace_exit in 2 3; do
+  trace_error_repo="$tmp_root/trace-exit-$trace_exit-repo"
+  init_fixture_repo "$trace_error_repo"
+  write_state "$trace_error_repo" "specs/007-trace-exit-$trace_exit" "done"
+  touch "$trace_error_repo/specs/007-trace-exit-$trace_exit/trace.exit$trace_exit"
+  git -C "$trace_error_repo" add .
+  git -C "$trace_error_repo" commit -m "fixture" >/dev/null
+  trace_error_log="$tmp_root/trace-exit-$trace_exit.log"
+  trace_error_status="$(cd "$trace_error_repo" && run_capture "$trace_error_log" bash bubbles/scripts/done-spec-audit.sh --profile changed "specs/007-trace-exit-$trace_exit")"
+  assert_status "$trace_error_status" 1 "Traceability exit $trace_exit is never treated as done-spec success" "$trace_error_log"
+  assert_log_contains "$trace_error_log" "Traceability: FAILED" "Traceability exit $trace_exit is reported as failed"
+done
 
 fix_guard_log="$tmp_root/fix-guard.log"
 fix_guard_status="$(cd "$changed_repo" && run_capture "$fix_guard_log" bash bubbles/scripts/done-spec-audit.sh --fix specs/002-changed)"

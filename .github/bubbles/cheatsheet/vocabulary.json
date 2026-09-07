@@ -462,5 +462,54 @@
     "meaning": "A VS Code `handoffs:` frontmatter entry — a button shown AFTER the turn ends that the user clicks to SWITCH agents. It is neither subagent dispatch nor routing.",
     "notInsteadOf": ["route", "subagent"],
     "commonMisuse": "Do not describe a subagent dispatch or a `route_required` envelope as a handoff — the runtime meaning differs."
+  },
+  {
+    "term": "research runtime",
+    "meaning": "The IMP-054 provider-neutral lifecycle that validates a question and produces immutable typed evidence through plan, run or resume, inspect, validate, publish or bridge, and cancel stages. It is not a workflow mode or certification authority."
+  },
+  {
+    "term": "dispatch admission",
+    "meaning": "The IMP-055 decision for one measured model, subagent, web, browser, or tool dispatch against an exact goal budget, reservation state, retry identity, and verified session epoch.",
+    "notInsteadOf": ["runtime capacity", "action risk class"]
+  },
+  {
+    "term": "goal budget",
+    "meaning": "The exact goal-scoped ledger that owns reservations, debits, releases, holds, corrections, settlement, and retry accounting across session epochs. It is distinct from an advisory session budget."
+  },
+  {
+    "term": "admission decision",
+    "meaning": "The immutable allow or refuse result for one dispatch intent after risk, model, tool, budget, adapter, and epoch facts are evaluated."
+  },
+  {
+    "term": "dispatch permit",
+    "meaning": "A one-time permit for one admitted resource-consuming dispatch. It never authorizes deployment, transactions, messaging, infrastructure mutation, or another consequential action."
+  },
+  {
+    "term": "budget hold",
+    "meaning": "Reserved budget retained when provider acceptance, cancellation, or terminal usage cannot yet be reconciled. A hold prevents unknown spend from being released or retried as if unused."
+  },
+  {
+    "term": "verified session epoch",
+    "meaning": "A budget and usage-accounting epoch accepted only when its recorded host/session evidence verifies. A caller's fresh-context claim alone does not open a trusted epoch."
+  },
+  {
+    "term": "unmeasured usage",
+    "meaning": "An explicit result that no configured adapter supplied trustworthy usage. It is unknown, never zero, free, estimated, or evidence that a dispatch is within budget."
+  },
+  {
+    "term": "evidence ledger",
+    "meaning": "The immutable, content-addressed ECF record history used by a research run. It preserves evidence identity and lineage; it is not a mutable notebook or certification record."
+  },
+  {
+    "term": "research run",
+    "meaning": "One identified IMP-054 lifecycle execution for an explicit question, from validated inputs through immutable evidence and an optional noncertifying publication or bridge result."
+  },
+  {
+    "term": "reference broker",
+    "meaning": "The repository-controlled IMP-055 broker used to prove permit, receipt, reconciliation, and bypass contracts. It does not prove native editor or host interception."
+  },
+  {
+    "term": "action authorization",
+    "meaning": "The independent tool-trust decision that permits a consequential side effect after risk and policy checks. Budget admission alone never supplies it."
   }
 ]

@@ -84,6 +84,7 @@ changed_lines=""
 spec_dir=""
 session_file=""
 runner=""
+output_format="text"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -93,6 +94,7 @@ while [[ $# -gt 0 ]]; do
     --spec-dir) spec_dir="${2:-}"; shift 2 ;;
     --session-file) session_file="${2:-}"; shift 2 ;;
     --runner) runner="${2:-}"; shift 2 ;;
+    --json|--typed-json) output_format="json"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail_usage "unknown option: $1" ;;
   esac
@@ -101,6 +103,7 @@ done
 [[ -n "$phase" ]] || fail_usage "--phase is required"
 [[ -f "$MODES_FILE" ]] || fail_usage "modes registry not found: $MODES_FILE"
 command -v yq >/dev/null 2>&1 || fail_usage "yq (mikefarah, v4+) is required to read $MODES_FILE"
+[[ "$output_format" != "json" ]] || command -v jq >/dev/null 2>&1 || fail_usage "jq is required for typed JSON"
 
 if [[ -n "$changed_lines" && ! "$changed_lines" =~ ^[0-9]+$ ]]; then
   fail_usage "--changed-lines must be a non-negative integer (got: $changed_lines)"
@@ -111,7 +114,20 @@ decide() {
   if [[ -n "$runner" ]]; then
     reason="$reason (runner: $runner)"
   fi
-  printf 'verdict=%s\nphase=%s\nrule=%s\nreason=%s\n' "$verdict" "$phase" "$rule" "$reason"
+  if [[ "$output_format" == "json" ]]; then
+    local material digest
+    material="$(jq -cnS --arg phase "$phase" --arg reason "$reason" --arg rule "$rule" --arg verdict "$verdict" '{contractType:"phase-relevance-decision",phase:$phase,reason:$reason,rule:$rule,schemaVersion:1,verdict:$verdict}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      digest="$(printf '%s' "$material" | sha256sum | awk '{print $1}')"
+    elif command -v shasum >/dev/null 2>&1; then
+      digest="$(printf '%s' "$material" | shasum -a 256 | awk '{print $1}')"
+    else
+      fail_usage "sha256 utility is required for typed JSON"
+    fi
+    printf '%s' "$material" | jq -cS --arg digest "sha256:$digest" '. + {decisionDigest:$digest}'
+  else
+    printf 'verdict=%s\nphase=%s\nrule=%s\nreason=%s\n' "$verdict" "$phase" "$rule" "$reason"
+  fi
   exit 0
 }
 

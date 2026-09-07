@@ -270,10 +270,33 @@ if [[ -z "$status_ceiling" ]]; then
   exit 2
 fi
 
+changed_path_events=()
 changed_paths=()
 git_path_events=0
 report_path_events=0
 report_code_diff_sections=0
+
+trim_path_punctuation() {
+  local path="$1"
+  local edge=""
+
+  while [[ -n "$path" ]]; do
+    edge="${path:0:1}"
+    case "$edge" in
+      '`'|'"'|'('|\{|\[|,) path="${path#?}" ;;
+      *) break ;;
+    esac
+  done
+  while [[ -n "$path" ]]; do
+    edge="${path:$((${#path} - 1)):1}"
+    case "$edge" in
+      ']'|'`'|'"'|')'|\}|,|.|\;|:) path="${path%?}" ;;
+      *) break ;;
+    esac
+  done
+
+  trimmed_path="$path"
+}
 
 add_changed_path() {
   local raw_path="$1"
@@ -285,7 +308,8 @@ add_changed_path() {
   path="${path%%#*}"
   path="${path%/}"
 
-  path="$(printf '%s' "$path" | sed -E 's/^[`"({[,]+//; s/[]`")},.;:]+$//')"
+  trim_path_punctuation "$path"
+  path="$trimmed_path"
 
   path="${path#path=}"
   path="${path#file=}"
@@ -303,24 +327,22 @@ add_changed_path() {
 
   [[ "$path" == */* || "$path" == README.md || "$path" == CHANGELOG.md || "$path" == Dockerfile* || "$path" == Makefile ]] || return 0
 
-  local existing
-  for existing in "${changed_paths[@]}"; do
-    if [[ "$existing" == "$path" ]]; then
-      if [[ "$source" == "git" ]]; then
-        git_path_events=$((git_path_events + 1))
-      elif [[ "$source" == "report" ]]; then
-        report_path_events=$((report_path_events + 1))
-      fi
-      return 0
-    fi
-  done
-
-  changed_paths+=("$path")
+  changed_path_events+=("$path")
   if [[ "$source" == "git" ]]; then
     git_path_events=$((git_path_events + 1))
   elif [[ "$source" == "report" ]]; then
     report_path_events=$((report_path_events + 1))
   fi
+}
+
+deduplicate_changed_paths() {
+  local path=""
+
+  changed_paths=()
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    changed_paths+=("$path")
+  done < <(printf '%s\n' "${changed_path_events[@]}" | awk '!seen[$0]++')
 }
 
 add_paths_from_lines() {
@@ -416,25 +438,25 @@ path_family() {
 
   case "$path" in
     specs|specs/*|.specify|.specify/*)
-      printf 'planning'
+      classified_family="planning"
       return 0
       ;;
   esac
 
   if [[ "$path" == tests/* || "$path" == */tests/* || "$path" == */__tests__/* || "$base" == test_* || "$base" == *_test.* || "$base" == *-selftest.sh ]]; then
-    printf 'test'
+    classified_family="test"
   elif [[ "$path" == docs/* || "$path" == agents/* || "$path" == README.md || "$path" == CHANGELOG.md || "$base" == *.md ]]; then
-    printf 'docs'
+    classified_family="docs"
   elif [[ "$path" == proto/* || "$base" == *.proto || "$base" == *openapi* || "$base" == *contract* || "$path" == */contract.yaml || "$path" == */contract.yml ]]; then
-    printf 'contract'
+    classified_family="contract"
   elif [[ "$path" == config/* || "$path" == .github/workflows/* || "$path" == bubbles/workflows.yaml || "$base" == docker-compose*.yml || "$base" == docker-compose*.yaml || "$base" == Dockerfile* || "$base" == *.toml || "$base" == *.yaml || "$base" == *.yml || "$base" == *.json || "$base" == *.env ]]; then
-    printf 'config'
+    classified_family="config"
   elif [[ "$path" == bubbles/scripts/* || "$path" == scripts/* || "$path" == bin/* || "$path" == deploy/* || "$base" == *.sh || "$base" == Makefile ]]; then
-    printf 'runtime'
+    classified_family="runtime"
   elif [[ "$base" == *.rs || "$base" == *.go || "$base" == *.py || "$base" == *.ts || "$base" == *.tsx || "$base" == *.js || "$base" == *.jsx || "$base" == *.dart || "$base" == *.java || "$base" == *.scala ]]; then
-    printf 'source'
+    classified_family="source"
   else
-    printf 'other'
+    classified_family="other"
   fi
 }
 
@@ -450,7 +472,8 @@ other_paths=()
 classify_paths() {
   local path family
   for path in "${changed_paths[@]}"; do
-    family="$(path_family "$path")"
+    path_family "$path"
+    family="$classified_family"
     case "$family" in
       planning) planning_paths+=("$path") ;;
       source) source_paths+=("$path") ;;
@@ -506,6 +529,7 @@ emit_classification() {
 
 collect_git_paths
 collect_report_paths
+deduplicate_changed_paths
 classify_paths
 
 delivery_delta_count=$((${#source_paths[@]} + ${#runtime_paths[@]} + ${#config_paths[@]} + ${#contract_paths[@]} + ${#test_paths[@]} + ${#docs_paths[@]}))

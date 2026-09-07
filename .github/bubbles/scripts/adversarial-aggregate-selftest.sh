@@ -696,7 +696,7 @@ no_python_path="$tmp/no-python-path"
 mkdir -p "$no_python_path"
 ln -s "$(command -v grep)" "$no_python_path/grep"
 missing_python_stderr="$tmp/missing-python.stderr"
-if RUN_STDOUT="$(env -i PATH="$no_python_path" "$BASH_BIN" "$AGGREGATE" \
+if RUN_STDOUT="$(command -p env -i PATH="$no_python_path" "$BASH_BIN" "$AGGREGATE" \
   --expected-samples 1 "$tmp/clear-a.json" 2>"$missing_python_stderr")"; then
   RUN_STATUS=0
 else

@@ -37,22 +37,27 @@ ADAPTER_DIR="$FRAMEWORK_ROOT/adapters/usage"
 
 REPO_ROOT="$PWD"
 NAMES_ONLY=0
+CONTRACT_MAJOR=""
 
 usage() {
   cat <<'EOF'
-Usage: usage-resolve.sh [--repo-root PATH] [--names-only]
+Usage: usage-resolve.sh [--repo-root PATH] [--names-only] [--contract-major 1|2]
 
 Resolve the project-configured host-usage adapter. Default is `none`.
 
 Options:
   --repo-root PATH  Repository whose bubbles-project.yaml is read (default: $PWD)
   --names-only      Print only `adapter=<name>` and exit
+  --contract-major  Require the adapter to declare this contract major
   -h, --help        Show this help
 
 Project config (project-owned, never framework-managed):
 
   usage:
-    adapter: none | vscode-copilot
+    adapter: none | vscode-copilot | reference-test
+
+  `reference-test` is disabled unless BUBBLES_USAGE_REFERENCE_TEST=enabled and
+  exists only for hermetic repository-reference lifecycle verification.
 EOF
 }
 
@@ -71,6 +76,11 @@ while [ "$#" -gt 0 ]; do
     --names-only)
       NAMES_ONLY=1
       shift
+      ;;
+    --contract-major)
+      [ "$#" -ge 2 ] || fail "--contract-major requires a value" 2
+      CONTRACT_MAJOR="$2"
+      shift 2
       ;;
     -h | --help)
       usage
@@ -123,10 +133,25 @@ ADAPTER_PATH="$ADAPTER_DIR/$ADAPTER.sh"
 [ -f "$ADAPTER_PATH" ] ||
   fail "configured usage.adapter '$ADAPTER' has no adapter at $ADAPTER_PATH"
 
+case "$CONTRACT_MAJOR" in
+  ""|1) ;;
+  2)
+    command -v jq >/dev/null 2>&1 || fail "jq is required to negotiate usage contract v2" 2
+    DESCRIPTION="$($ADAPTER_PATH v2 describe 2>/dev/null)" ||
+      fail "configured usage.adapter '$ADAPTER' does not support contract major 2"
+    printf '%s' "$DESCRIPTION" | jq -e '.contractType == "usage-adapter-description" and .schemaVersion == 2 and (.supportedMajors | index(2) != null)' >/dev/null 2>&1 ||
+      fail "configured usage.adapter '$ADAPTER' returned an invalid v2 description"
+    ;;
+  *) fail "unsupported contract major '$CONTRACT_MAJOR'" 2 ;;
+esac
+
 echo "adapter=$ADAPTER"
 if [ "$NAMES_ONLY" = "1" ]; then
   exit 0
 fi
 echo "adapterPath=$ADAPTER_PATH"
 echo "repoRoot=$REPO_ROOT"
+if [ -n "$CONTRACT_MAJOR" ]; then
+  echo "contractMajor=$CONTRACT_MAJOR"
+fi
 exit 0

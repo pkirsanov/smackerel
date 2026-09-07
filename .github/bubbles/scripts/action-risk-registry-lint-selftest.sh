@@ -174,16 +174,22 @@ assert_exit "S11 absent registry rejected" 1 "$(run_lint "$WORK/does-not-exist.y
 # --- S12: NO environment variable may suppress a finding --------------------
 # A bypass would make every scenario above decorative.
 #
-# The claim under test is "this variable cannot make the lint PASS", so the
-# assertion is exit != 0, NOT exit == 1. Suppression means exit 0 and nothing
-# else. An earlier form required exactly 1 and therefore reported "bypass
-# present" when the lint died on SIGPIPE (141) under machine load -- a false
-# accusation of a security hole, which is the fastest way to teach an operator
-# to ignore this suite.
+# Use the absolute system env instead of a PATH-resolved `env`: developer hosts
+# may intentionally shadow the bare command with a tool-policy interceptor. The
+# lint's exact finding and terminal summary are execution sentinels. A non-zero
+# status without both sentinels is not accepted as proof because the subject may
+# not have executed at all. The claim remains "this variable cannot make the
+# invalid registry PASS", so any executed finding status is acceptable; only an
+# executed exit 0 proves suppression.
 for escape in BUBBLES_SKIP_ACTION_RISK BUBBLES_RISK_SKIP BUBBLES_ACTION_RISK_ALLOW_INVALID \
   SKIP_ACTION_RISK_LINT BUBBLES_RISK_CONFIRM BUBBLES_RISK_BLOCK; do
-  got="$(env "$escape=1" BUBBLES_ACTION_RISK_REGISTRY="$WORK/s3.yaml" bash "$LINT" >/dev/null 2>&1; printf '%s' "$?")"
-  if [[ "$got" != "0" ]]; then
+  subject_output="$(/usr/bin/env "$escape=1" BUBBLES_ACTION_RISK_REGISTRY="$WORK/s3.yaml" bash "$LINT" 2>&1)"
+  got="$?"
+  if [[ "$subject_output" != *"Invalid defaultRiskClass 'bogus_class' for command: status"* ||
+    "$subject_output" != *"Action risk registry FAILED [G139]"* ]]; then
+    no "S12 $escape did not execute the expected invalid-registry lint path (exit $got)"
+    printf '%s\n' "$subject_output"
+  elif [[ "$got" != "0" ]]; then
     ok "S12 $escape cannot suppress a finding (exit $got)"
   else
     no "S12 $escape SUPPRESSED a finding (exit 0) — bypass present"

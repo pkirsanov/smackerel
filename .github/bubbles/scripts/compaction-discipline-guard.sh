@@ -49,6 +49,7 @@ set -euo pipefail
 #
 # Usage:
 #   bash bubbles/scripts/compaction-discipline-guard.sh <specDir> [--quiet]
+#     [--mbe-posture MODE --mbe-store-root PATH]
 #
 # Inputs:
 #   <specDir>   Path to the spec directory (e.g.
@@ -74,8 +75,11 @@ COUNT_THRESHOLD=3
 SIZE_THRESHOLD=8192
 KEEP_RAW_LATEST=2
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QUIET="false"
 SPEC_DIR=""
+MBE_POSTURE="off"
+MBE_STORE_ROOT=""
 
 usage() {
   cat <<'EOF'
@@ -88,6 +92,10 @@ Required:
 Optional:
   --quiet     Suppress informational stdout; the final PASS or VIOLATION
               line is still emitted (stdout on pass, stderr on fail).
+  --mbe-posture off|shadow|advisory|reference-enforce
+              Verify an MBE epoch only for explicit reference enforcement.
+  --mbe-store-root PATH
+              ECF-backed MBE store used to re-verify the epoch lineage.
   -h, --help  Print this usage and exit.
 
 Exit codes:
@@ -114,6 +122,16 @@ while [[ $# -gt 0 ]]; do
       QUIET="true"
       shift
       ;;
+    --mbe-posture)
+      [[ $# -ge 2 ]] || { echo "compaction-discipline-guard: --mbe-posture requires a value" >&2; exit 2; }
+      MBE_POSTURE="$2"
+      shift 2
+      ;;
+    --mbe-store-root)
+      [[ $# -ge 2 ]] || { echo "compaction-discipline-guard: --mbe-store-root requires a value" >&2; exit 2; }
+      MBE_STORE_ROOT="$2"
+      shift 2
+      ;;
     --*)
       echo "compaction-discipline-guard: unknown flag: $1" >&2
       usage >&2
@@ -135,6 +153,14 @@ done
 if [[ -z "$SPEC_DIR" ]]; then
   echo "compaction-discipline-guard: <specDir> is required" >&2
   usage >&2
+  exit 2
+fi
+case "$MBE_POSTURE" in
+  off | shadow | advisory | reference-enforce) ;;
+  *) echo "compaction-discipline-guard: --mbe-posture must be off, shadow, advisory, or reference-enforce (got: $MBE_POSTURE)" >&2; exit 2 ;;
+esac
+if [[ "$MBE_POSTURE" == "reference-enforce" && ( -z "$MBE_STORE_ROOT" || ! -d "$MBE_STORE_ROOT" ) ]]; then
+  echo "compaction-discipline-guard: reference-enforce requires an existing --mbe-store-root" >&2
   exit 2
 fi
 
@@ -401,6 +427,20 @@ else
   if [[ "$B_KIND" == "host-checkpoint" && -z "$B_ID" ]]; then
     emit_boundary_violation "$BOUNDARY_JSON" "kind host-checkpoint requires a non-empty checkpointId"
     exit 1
+  fi
+
+  # A legacy `fresh-context` or checkpoint declaration remains valid in the
+  # absent/off path for byte and behavior compatibility. Under explicit
+  # reference enforcement it is evidence only when the referenced epoch can be
+  # re-derived from the immutable MBE/ECF graph. Session JSON alone is not an
+  # authority and cannot forge a rollover.
+  if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+    MBE_EPOCH_JSON="$(echo "$BOUNDARY_JSON" | jq -c '.mbeEpoch // null')"
+    if [[ "$MBE_EPOCH_JSON" == "null" ]] || ! python3 "$SCRIPT_DIR/mbe-reference-verify.py" \
+      --store-root "$MBE_STORE_ROOT" --context-json "$MBE_EPOCH_JSON" --purpose epoch >/dev/null 2>&1; then
+      emit_boundary_violation "$BOUNDARY_JSON" "reference-enforce requires an MBE epoch that re-verifies against the immutable store"
+      exit 1
+    fi
   fi
 fi
 

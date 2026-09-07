@@ -126,6 +126,12 @@ For brownfield modes (`improve-existing`, `full-delivery`, `bugfix-fastlane`, `r
 
 This prevents confirmation bias where the model finds patterns that support its intended design instead of reporting what actually exists.
 
+### Research Runtime Is Not A Workflow Mode
+
+The Objective Research Pass above is a workflow phase that records current repository truth in an active delivery packet. The IMP-054 research runtime is a separate reusable evidence lifecycle for an explicit question: validate, plan, run or resume, inspect, validate, publish or bridge, and cancel.
+
+Likewise, IMP-055 dispatch admission is execution control beneath a runner. It may admit one measured resource-consuming action against a budget and verified epoch, but it neither selects a workflow mode nor authorizes consequential side effects. See [Research And Admission Runtime](../recipes/research-and-admission-runtime.md).
+
 ### Horizontal Plan Detection
 
 `bubbles.plan` Phase 4 now mechanically detects horizontal scope sequences (3+ consecutive single-layer scopes like all-DB → all-service → all-API → all-UI) and restructures them into vertical slices. Horizontal plans are the #1 quality failure in AI-generated scope sequences.
@@ -471,6 +477,18 @@ select → audit → finalize
 
 **Use when:** You want one read-only table for every train: phase, slot, flag bundle, retention, PII, and open flag count. Also available as `/bubbles.train status --all-trains`.
 
+### <img src="../../icons/dvs-mic.svg" width="20"> release-train-assign-metadata
+
+```text
+select → validate → audit → finalize
+```
+
+**Tuple:** `ship action:assign target:train-metadata`
+
+**Use when:** One existing spec state needs a train ID already declared in `config/release-trains.yaml`, with an optional explicit `flagsIntroduced` array. The sole direct runner is `bubbles.train`. Dry-run is the default; apply requires the train agent declaration and atomically changes only `releaseTrain` and explicitly supplied flags metadata.
+
+The terminal token is `train_metadata_assigned`. This metadata-only mode is not cut, promote, rollback, retire, build, deployment, pointer-swap, certification, or a spec or scope status transition. It has no effect on train configuration, feature-flag bundles, generated bundles, artifacts, manifests, pointers, or train phase.
+
 ### <img src="../../icons/bill-wrench.svg" width="20"> incident-fastlane
 
 ```
@@ -629,6 +647,7 @@ Run `bash bubbles/scripts/mode-resolver.sh --list-modes` for the selectable set.
 | `propagate-backport` | Select → devops → validate → audit → docs → finalize | Approval-guarded backport across trains |
 | `propagate-audit` | Select → audit → docs → finalize | Read-only propagation drift report |
 | `release-train-status-all` | Select → audit → finalize | Multi-train status rollup |
+| `release-train-assign-metadata` | Select → validate → audit → finalize | Bounded assignment of declared train metadata to one spec state |
 | `incident-fastlane` | Stabilize → train rollback → devops → validate → docs | Production incident response |
 | `framework-health` | Retro target: framework → proposal | Framework self-observation |
 | `resume-only` | Resume state | Picking up work |

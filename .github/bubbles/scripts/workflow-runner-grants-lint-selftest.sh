@@ -62,6 +62,63 @@ fixture="$TMPDIR/repo"
 fresh_fixture "$fixture"
 run_case clean "$fixture" 0 "workflow-runner-grants-lint: PASS"
 
+assignment_owners="$(yq -r '.workflowModeGrants.agents | to_entries[] | select(.value.modes[]? == "release-train-assign-metadata") | .key' "$REPO_ROOT/bubbles/agent-capabilities.yaml")"
+if [[ "$assignment_owners" == "bubbles.train" ]]; then
+  pass "train metadata assignment has the sole bubbles.train grant"
+else
+  fail "train metadata assignment grant owners are '$assignment_owners'"
+fi
+
+assignment_default_allowed="$(yq -r '.workflowModeGrants.defaultAllowed' "$REPO_ROOT/bubbles/agent-capabilities.yaml")"
+if [[ "$assignment_default_allowed" == "false" ]]; then
+  pass "unregistered runners remain denied by default"
+else
+  fail "workflow runner admission is not default-deny"
+fi
+
+run_evaluator_case() {
+  local label="$1"
+  local capabilities="$2"
+  local runner="$3"
+  local expected="$4"
+  local marker="$5"
+  local log="$TMPDIR/${label}.evaluator.log"
+  local exit_code=0
+
+  set +e
+  bash "$LINT" --evaluate-runner-mode "$capabilities" "$runner" release-train-assign-metadata >"$log" 2>&1
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -eq "$expected" ]]; then
+    pass "$label evaluator exit=$expected"
+  else
+    fail "$label evaluator expected exit=$expected got $exit_code"
+  fi
+  if grep -Fq "$marker" "$log"; then
+    pass "$label evaluator emitted marker '$marker'"
+  else
+    fail "$label evaluator missing marker '$marker'"
+  fi
+}
+
+admission_fixture="$TMPDIR/admission-capabilities.yaml"
+cat >"$admission_fixture" <<'EOF'
+workflowModeGrants:
+  defaultAllowed: false
+  agents:
+    bubbles.train:
+      modes: [ release-train-assign-metadata ]
+    bubbles.workflow:
+      modes: [ "*" ]
+    bubbles.goal:
+      modes: [ "*" ]
+      excludedModes: [ release-train-assign-metadata ]
+EOF
+run_evaluator_case exact-admission "$admission_fixture" bubbles.train 0 "admitted by exact grant"
+run_evaluator_case wildcard-admission "$admission_fixture" bubbles.workflow 0 "admitted by wildcard grant"
+run_evaluator_case exclusion-precedence "$admission_fixture" bubbles.goal 1 "explicitly excluded"
+run_evaluator_case default-denial "$admission_fixture" bubbles.unknown 1 "denied by default"
+
 fresh_fixture "$fixture"
 yq -i '.workflowModeGrants.agents."bubbles.bug".modes += ["not-a-real-mode"]' "$fixture/bubbles/agent-capabilities.yaml"
 run_case unknown-mode "$fixture" 1 "references unknown mode 'not-a-real-mode'"

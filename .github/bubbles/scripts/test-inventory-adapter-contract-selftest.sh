@@ -7,7 +7,7 @@
 # BROKEN configuration to `none` makes a typo indistinguishable from a
 # deliberate opt-out — and since `none` disables title-based certification, that
 # silent degrade would turn a misconfiguration into a permanently weaker gate.
-# Cases A1-A9 all assert loud refusal rather than degrade.
+# Cases A1-A10 all assert loud refusal rather than degrade.
 
 set -uo pipefail
 
@@ -78,8 +78,14 @@ mkdir -p "$R/scripts"; printf '#!/bin/sh\necho "{}"\n' >"$R/scripts/inv"; chmod 
 run_resolve "$R"
 if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -qx 'adapter=command' &&
   printf '%s' "$OUT" | grep -qx "command=$R/scripts/inv" &&
+  printf '%s' "$OUT" | grep -Eq '^commandDevice=[0-9]+$' &&
+  printf '%s' "$OUT" | grep -Eq '^commandInode=[0-9]+$' &&
+  printf '%s' "$OUT" | grep -Eq '^commandMode=[0-9]+$' &&
+  printf '%s' "$OUT" | grep -Eq '^commandSize=[0-9]+$' &&
+  printf '%s' "$OUT" | grep -Eq '^commandMtimeNs=[0-9]+$' &&
+  printf '%s' "$OUT" | grep -Eq '^commandSha256=[0-9a-f]{64}$' &&
   printf '%s' "$OUT" | grep -qx 'timeoutSeconds=45'; then
-  ok "P3 command adapter resolves path and timeout"
+  ok "P3 command adapter resolves path, descriptor identity, content digest, and timeout"
 else
   bad "P3 command adapter" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
@@ -91,6 +97,7 @@ run_resolve "$R"
 if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -qx 'timeoutSeconds=120'; then
   ok "P4 timeoutSeconds defaults to 120"
 else
+# portable-ok:diagnostic label describes the configured timeout default; it executes no command
   bad "P4 timeout default" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
@@ -117,6 +124,72 @@ for case_id in a2 a3; do
     bad "${case_id^^} $label refused" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
   fi
 done
+
+# --- A3b/A3c. ADVERSARIAL: every authored symlink is refused ----------------
+OUTSIDE="$WORK/outside-inv"
+printf '#!/bin/sh\necho "{}"\n' >"$OUTSIDE"; chmod +x "$OUTSIDE"
+
+R="$WORK/a3b"; make_repo "$R" 'adapter: command' 'command: scripts/inv'
+mkdir -p "$R/scripts"; ln -s "$OUTSIDE" "$R/scripts/inv"
+run_resolve "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'non-symlink stable path'; then
+  ok "A3B command file symlink is refused"
+else
+  bad "A3B escaping command file symlink refused" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$WORK/a3c"; make_repo "$R" 'adapter: command' 'command: linked/inv'
+OUTSIDE_DIR="$WORK/outside-dir"; mkdir -p "$OUTSIDE_DIR"
+printf '#!/bin/sh\necho "{}"\n' >"$OUTSIDE_DIR/inv"; chmod +x "$OUTSIDE_DIR/inv"
+ln -s "$OUTSIDE_DIR" "$R/linked"
+run_resolve "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'non-symlink stable path'; then
+  ok "A3C command directory symlink is refused"
+else
+  bad "A3C escaping command directory symlink refused" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A contained final symlink is refused too. Approval never canonicalizes it.
+R="$WORK/p3b"; make_repo "$R" 'adapter: command' 'command: scripts/inv-link'
+mkdir -p "$R/scripts/real"
+printf '#!/bin/sh\necho "{}"\n' >"$R/scripts/real/inv"; chmod +x "$R/scripts/real/inv"
+ln -s 'real/inv' "$R/scripts/inv-link"
+run_resolve "$R"
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'non-symlink stable path'; then
+  ok "A3D contained command-file symlink is refused"
+else
+  bad "A3D contained command-file symlink refusal" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- A10. ADVERSARIAL: intermediate substitution during approval -----------
+R="$WORK/a10"; make_repo "$R" 'adapter: command' 'command: scripts/inv'
+mkdir -p "$R/scripts-real"
+printf '#!/bin/sh\necho "{}"\n' >"$R/scripts-real/inv"; chmod +x "$R/scripts-real/inv"
+mv "$R/scripts-real" "$R/scripts"
+APPROVAL_SWAP_BIN="$WORK/.approval-swap-bin"
+mkdir -p "$APPROVAL_SWAP_BIN"
+REAL_PYTHON3="$(command -v python3)"
+cat >"$APPROVAL_SWAP_BIN/python3" <<'SHIM'
+#!/usr/bin/env bash
+set -u
+: "${APPROVAL_SWAP_REAL_PYTHON:?}" "${APPROVAL_SWAP_ROOT:?}"
+if [[ "${1:-}" == "-" && "${2:-}" == "scripts/inv" ]]; then
+  mv "$APPROVAL_SWAP_ROOT/scripts" "$APPROVAL_SWAP_ROOT/scripts-original"
+  ln -s scripts-original "$APPROVAL_SWAP_ROOT/scripts"
+fi
+exec "$APPROVAL_SWAP_REAL_PYTHON" "$@"
+SHIM
+chmod +x "$APPROVAL_SWAP_BIN/python3"
+set +e
+OUT="$(PATH="$APPROVAL_SWAP_BIN:$PATH" APPROVAL_SWAP_REAL_PYTHON="$REAL_PYTHON3" \
+  APPROVAL_SWAP_ROOT="$R" bash "$RESOLVE" --repo-root "$R" 2>&1)"
+RC=$?
+set -e
+if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'non-symlink stable path'; then
+  ok "A10 intermediate directory substitution during approval is refused"
+else
+  bad "A10 approval-time intermediate substitution refusal" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
 
 # --- A4. ADVERSARIAL: missing command file ----------------------------------
 R="$WORK/a4"; make_repo "$R" 'adapter: command' 'command: scripts/absent'

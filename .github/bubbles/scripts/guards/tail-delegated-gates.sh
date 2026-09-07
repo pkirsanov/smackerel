@@ -494,29 +494,36 @@ echo ""
 
 # =============================================================================
 # CHECK 43: Human Acceptance Terminal Gate (Gate G136)  [IMP-040 SCOPE-10, EV-8]
-#           IMP-047 PD-12: automation readiness is not human acceptance.
+#           BUG-037: acceptance is OPT-OUT. Silence is acceptance.
 # =============================================================================
 # BUG-029. `artifact-lint.sh` used to REQUIRE uservalidation.md to carry at
 # least one checked `[x]` entry, and never rejected an unchecked one, so one
 # checked plus five unchecked passed lint and the spec reached a terminal status
-# with five behaviors no human accepted.
+# with five behaviors no user had accepted. That closure is what this check
+# exists for, and BUG-037 leaves it exactly intact.
 #
-# IMP-047 PD-12 found the deeper half of that. The template ALSO shipped its
-# entries checked, because lint demanded it — so a terminal transition could be
-# satisfied by the planning template itself, with no human act anywhere. The
-# check that was supposed to require human acceptance was satisfied by
-# automation writing a file.
+# WHAT BUG-037 CHANGED. IMP-047 PD-12 inverted the model to opt-in: ship
+# unchecked, and demand a separately authored `## Human Acceptance Record` at
+# terminal. That made the owner's NORMAL case unreachable — a user who reviewed
+# the behavior and objected to nothing had to perform two positive acts before
+# the work could be called done. The contract is now OPT-OUT:
 #
-# So the two facts are now separate, with separate writers:
-#   `## Automation Readiness` — automation may check these; they grant nothing.
-#   `## Checklist`            — ships UNCHECKED; a human checks each item.
-#   `## Human Acceptance Record` — who accepted, when, and by which method.
-# A terminal transition needs the last two. Checked boxes alone are no longer
-# enough precisely because checked boxes used to arrive for free.
+#   `## Automation Readiness`    — automation may check these; they grant nothing.
+#   `## Checklist`               — ships CHECKED. The user's only required act is
+#                                  to UNCHECK an item they reject.
+#   `## Human Acceptance Record` — OPTIONAL, and not required here. Still fully
+#                                  validated by the shape verdict when authored.
+#
+# WHAT THIS CHECK PROVES, STATED HONESTLY. Exactly one thing: that no user
+# recorded an objection in this file. It cannot distinguish "the user reviewed
+# the behavior and was satisfied" from "nobody ever opened the file", because
+# opt-out makes those two states byte-identical. This gate is a REJECTION
+# CHANNEL, not a proof that a human acted. That is a deliberate owner trade,
+# recorded in bugs/BUG-037-uservalidation-opt-out-acceptance/spec.md § 5.
 #
 # THE GUARD NEVER EDITS THE FILE. Checking a box on the author's behalf would
-# fabricate the human acceptance this gate exists to require; it prints the
-# unaccepted item and stops.
+# erase the only signal a user has for rejecting delivered behavior; it prints
+# the unchecked item and stops.
 #
 # The reader is bubbles/scripts/acceptance-authority-lib.sh, shared with
 # artifact-lint.sh, so the shape check and the terminal check cannot desync.
@@ -528,26 +535,26 @@ elif [[ ! -f "$uservalidation_terminal_file" ]]; then
   info "No uservalidation.md at $uservalidation_terminal_file; skipping (Gate G136)"
 elif [[ "$transition_target_status" != "done" ]]; then
   # Ceiling-bound modes (validate-only, docs-only, spec-scope-hardening, ...)
-  # are not claiming human acceptance of delivered behavior, so an open
-  # checklist and an absent record are the correct state for them rather than a
-  # violation.
-  pass "Target status '$transition_target_status' is not 'done'; human acceptance is not yet claimed (Gate G136)"
+  # are not claiming delivered behavior is accepted, so an open checklist is the
+  # correct state for them rather than a violation.
+  pass "Target status '$transition_target_status' is not 'done'; user acceptance is not yet claimed (Gate G136)"
 else
   # shellcheck source=../acceptance-authority-lib.sh
   source "$SCRIPT_DIR/acceptance-authority-lib.sh"
   uv_terminal_findings="$(bubbles_acceptance_terminal_verdict "$uservalidation_terminal_file" || true)"
 
   if [[ -n "$uv_terminal_findings" ]]; then
-    fail "uservalidation.md does not establish human acceptance; a terminal transition claims it for every behavior (Gate G136)"
+    fail "uservalidation.md carries a user-reported regression; a terminal transition claims every behavior is accepted (Gate G136)"
     while IFS= read -r uv_line; do
       [[ -n "$uv_line" ]] || continue
       info "  $uv_line"
-    done <<<"$uv_terminal_findings"
-    info "The guard does not check these for you — checking a box on the author's behalf would fabricate the acceptance this gate requires"
-    info "Either a human accepts the behavior and records it, or the item is a real regression and the spec is not done"
-    info "Record shape: bubbles/registry/acceptance-authority.yaml; template: agents/bubbles_shared/feature-templates.md"
+    done <<< "$uv_terminal_findings"
+    info "An unchecked item is the user's rejection of that behavior — the only act the opt-out contract asks of them"
+    info "The guard does not check these for you; checking a box on the author's behalf would erase that rejection"
+    info "Fix the behavior, then the USER re-checks the item. No agent, guard or lint may re-check it for them"
+    info "Contract: bubbles/registry/acceptance-authority.yaml; template: agents/bubbles_shared/feature-templates.md"
   else
-    pass "Every uservalidation.md acceptance item is checked and a human acceptance record is present (Gate G136)"
+    pass "No uservalidation.md acceptance item is unchecked; no user objection is recorded (Gate G136)"
   fi
 fi
 echo ""

@@ -125,7 +125,7 @@ rc=0; bash "$RECONCILE" "$agree" >/dev/null 2>&1 || rc=$?
 owned="$WORKSPACE/owned"
 write_spec "$owned" "done" '{"status":"not_started"}'
 owned_before="$(cat "$owned/state.json")"
-rc=0; env -u BUBBLES_AGENT_NAME bash "$RECONCILE" "$owned" --apply >/dev/null 2>&1 || rc=$?
+rc=0; (unset BUBBLES_AGENT_NAME; bash "$RECONCILE" "$owned" --apply) >/dev/null 2>&1 || rc=$?
 [[ "$rc" -eq 2 ]] && pass "--apply without the validate role exits 2" || fail_test "--apply without ownership should exit 2 (got $rc)"
 [[ "$(cat "$owned/state.json")" == "$owned_before" ]] && pass "--apply without ownership writes nothing" || fail_test "--apply without ownership must not write"
 

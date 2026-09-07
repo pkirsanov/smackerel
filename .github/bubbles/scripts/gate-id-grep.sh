@@ -185,13 +185,31 @@ function looks_binary(s,   i, n, c) {
   return 0
 }
 function is_word(c) { return (c != "" && c ~ /[A-Za-z0-9_]/) }
-FNR == 1 { skipfile = looks_binary($0) }
+FNR == 1 {
+  skipfile = looks_binary($0)
+  # IMP-058 SCOPE-6 (REG-23). A leading "#" is a full-line COMMENT in .sh, but
+  # a markdown HEADING in .md -- "## Analysis-As-Execution Gate (G071)" is the
+  # single strongest signal that a file normatively documents a gate, not
+  # prose to discount. Treating it as a comment is why G071 stayed the
+  # generator-flagged contradiction example in generate-gate-enforcement.sh
+  # own header comment: two of its five real behavioral enforcers
+  # (state-gates.md, evidence-rules.md) name it only in an H2 heading and were
+  # silently dropped. The only real full-line comment syntax markdown has is
+  # <!-- -->; a leading # or // still marks a comment everywhere else scanned
+  # (shell scripts, and any non-.md file under these roots).
+  is_md = (FILENAME ~ /\.md$/)
+}
 skipfile { next }
 {
   line = $0
   # --emit-refs derives a BINDING, so prose about a gate must not count as one.
-  # Full-line comments in the three syntaxes these roots use are skipped.
-  if (nocomment == 1 && line ~ /^[ \t]*(#|\/\/|<!--)/) next
+  # Full-line comments in the three syntaxes these roots use are skipped,
+  # except that a leading "#" in a markdown file is a heading, not a comment.
+  if (nocomment == 1) {
+    if (is_md) {
+      if (line ~ /^[ \t]*<!--/) next
+    } else if (line ~ /^[ \t]*(#|\/\/|<!--)/) next
+  }
   base = 0
   rest = line
   n = 0

@@ -576,19 +576,45 @@ bubbles runtime reclaim-stale
 - `doctor` must surface stale leases and active compose/fingerprint conflicts
 - status and doctor surfaces may summarize the registry, but the registry itself is the runtime source of truth
 
+## 10.1. Research And Measured-Admission Records
+
+IMP-054 and IMP-055 add a provider-neutral execution-control layer on top of immutable evidence-control records. The checked-in schemas and runtime `schema` surfaces are authoritative; this guide does not duplicate their fields.
+
+```bash
+bash bubbles/scripts/cli.sh research schema
+bash bubbles/scripts/cli.sh research capabilities
+bash bubbles/scripts/cli.sh admission adapter
+bash bubbles/scripts/cli.sh admission usage
+```
+
+The contract preserves these distinctions:
+
+- a runtime lease controls shared stack ownership and capacity;
+- an admission decision controls one measured resource-consuming dispatch;
+- a one-time permit is not consequential-action authorization;
+- a session epoch is valid only when its recorded evidence verifies;
+- `unmeasured` usage is unknown and cannot satisfy a zero-cost or within-budget assertion;
+- research publication produces immutable evidence and an envelope, not certification.
+
+Configured adapters are validated and fail loudly when invalid. Missing dispatch and usage adapter configuration resolves to `none`. The repository reference broker and frozen-corpus evaluator exercise the contracts without claiming native host interception or causal savings.
+
 ## 3. Scenario Contract Manifest
 
 Runtime file: `specs/<feature>/scenario-manifest.json`
 
+New producers emit schema version 2 only. Version 1 objects and bare arrays are
+historical compatibility inputs. Reader acceptance of those forms does not
+authorize a producer to emit them.
+
 ```json
 {
-  "version": 1,
-  "featureDir": "specs/042-catalog-assistant",
+  "schemaVersion": 2,
+  "spec": "specs/042-catalog-assistant",
   "generatedAt": "2026-03-26T12:00:00Z",
   "scenarios": [
     {
-      "scenarioId": "SCN-042-001",
-      "scope": "02-search-flow",
+      "id": "SCN-042-001",
+      "scopeRef": "02-search-flow",
       "title": "Guest can open the catalog search screen",
       "gherkin": {
         "given": "a guest is on the landing page",
@@ -604,7 +630,15 @@ Runtime file: `specs/<feature>/scenario-manifest.json`
       "linkedTests": [
         {
           "file": "dashboard/e2e/tests/catalog-search.spec.ts",
+          "type": "e2e-ui",
           "testId": "guest-open-search"
+        }
+      ],
+      "plannedTests": [
+        {
+          "path": "dashboard/e2e/tests/catalog-search-future.spec.ts",
+          "title": "Guest opens a future catalog refinement",
+          "type": "e2e-ui"
         }
       ],
       "evidenceRefs": [
@@ -620,8 +654,105 @@ Runtime file: `specs/<feature>/scenario-manifest.json`
 ### Invariants
 
 - scenario IDs are stable across implementation churn until the behavior contract is explicitly invalidated
+- scenario IDs use `^SCN-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+$`; scoped IDs such as `SCN-IMP-126-SCOPE-7-001` are valid, while lowercase and surrounding whitespace are not
 - every changed user-visible or external behavior must appear here
 - every scenario must point to live-system tests when its behavior class requires it
+- version 2 is the sole new-producer format and uses only canonical `id`, `linkedTests`, and `plannedTests` fields
+- version 2 objects are closed at every level. The envelope, scenario, and nested contract objects reject unknown members
+- the compatibility reader and migrator reject duplicate JSON member names during parsing. This applies to envelope, scenario, and reference objects
+- obligation linting first validates the complete manifest through the canonical reader. A valid manifest with no declared obligations is inert, but an invalid manifest with no obligations still refuses with exit `2`
+- canonical reader projections are transported through a held descriptor for a private, owner-only temporary file rather than the process environment. Analysis reads the held inode, and cleanup removes the pathname only while it still identifies that inode, so a concurrent replacement is neither consumed nor deleted
+- version 2 `scopeRef` is optional; when present it is the sole scope-identity field and must be a trimmed, control-free, nonblank JSON string. Integers, floats, booleans, null, `scope`, and `scopeId` are producer-schema violations. Omit the field when no scope identity is authored; never derive one from state
+- `linkedTests` contains authored coverage only; every entry requires repository-relative `file` and canonical `type`, while `testId` is optional
+- every authored path must resolve to an existing stable non-symlink regular file inside the repository before it can satisfy lifecycle coverage policy; final and intermediate symlinks are refused even when their targets remain inside the repository
+- unauthored plans use strict `plannedTests` objects with nonblank `path`, `title`, and canonical `type`; planned paths need not exist yet
+- a structurally valid planned-only manifest does not establish implementation or completion coverage; the authored coverage policy decides that lifecycle claim
+- version 1 objects, bare arrays, `scenarioId`, string references, aliases, sentinels, and legacy `testState` objects are compatibility inputs only
+- Markdown reconciliation discovers exactly one visible section headed `## Test Plan` or `### Test Plan`
+- the selected table requires one `Test Type` header and one `File/Location` header. Header normalization ignores case and whitespace. Column order does not matter
+- only `File/Location` supplies the concrete test path. `Command` cannot supply that path
+- `File/Location` and `Command` do not contribute semantic text when matching a scenario to a Test Plan row
+- `generatedAt` and lockdown `approvedAt` use a canonical, interoperable RFC
+  3339 subset: `T`/`Z` are case-insensitive, seconds range from `00` through
+  `59`, fractional seconds are valid, and offsets range through `23:59`.
+  Leap seconds are excluded because the standard library and JSON Schema
+  runtime cannot verify authoritative leap insertion dates reliably. Invalid
+  calendar dates, clock fields, or larger offsets are rejected.
+
+### Explicit Migration
+
+Use `bubbles/scripts/scenario-manifest-migrate.py` to inspect or migrate a
+historical manifest. Migration is lossless-or-refuse. The migrator preserves
+every contracted value that has an unambiguous version 2 representation. It
+refuses unknown extensions, conflicting aliases, incomplete planned
+references, unsafe paths, duplicate JSON member names, and any input that would
+require an invented value. Duplicate names refuse before alias reconciliation;
+only distinct compatibility alias names can participate in reconciliation.
+A refusal leaves the source bytes unchanged. An already-valid version 2 input
+also remains byte-identical.
+
+Run the read-only check before any write:
+
+```text
+python3 bubbles/scripts/scenario-manifest-migrate.py --check specs/<feature>/scenario-manifest.json
+```
+
+Exit `0` means the source is already a valid version 2 manifest. Exit `1` means
+the source is a losslessly migratable legacy array or explicit integer version
+1 envelope. Exit `2` means migration is refused. Missing versions and explicit
+boolean, floating-point, string, null, or unknown versions are refused rather
+than inferred.
+
+Only after exit `1`, write the migration:
+
+```text
+python3 bubbles/scripts/scenario-manifest-migrate.py --write specs/<feature>/scenario-manifest.json
+```
+
+The migrator parses one immutable byte snapshot, preserves source permissions,
+and rechecks both file identity and bytes immediately before atomic replacement.
+If another process changes or replaces the source, migration refuses and leaves
+the concurrent writer's bytes untouched.
+
+Migration does not promote planning metadata into authored evidence. Legacy
+planned representations move to `plannedTests`. Authored references move to
+`linkedTests` only when their required canonical test type can be retained.
+Version 1 authored strings use the reader's first-`#` semantics: the prefix is
+the canonical `file`, the suffix is `testId`, and later `#` characters remain in
+that identifier. Bare paths remain file-only references. Blank paths or blank
+fragments refuse because no lossless canonical meaning can be derived.
+Compatible `scopeId` and `linkedTestContracts` aliases canonicalize to
+`scopeRef` and `linkedTests` only when all concurrently present aliases agree
+after insignificant leading and trailing whitespace is removed. This rule also
+applies to `id`/`scenarioId`, `file`/`path`, and
+`title`/`testId`/`name`. Identical `linkedTests` and `linkedTestContracts`
+lists become one canonical `linkedTests` projection. Migration
+accepts a version 1 `scopeRef`, `scope`, or `scopeId` value only when it is a
+control-free nonblank string or a positive exact JSON integer. Strings are
+trimmed without changing their remaining bytes. Positive integers normalize to
+decimal strings, so integer `7` agrees with string `"7"` but conflicts with
+string `"07"`. Zero, negative integers, floats, booleans, null, arrays, objects,
+blank strings, and control-bearing strings refuse. Readers project every
+accepted scope identity as a string. Migration stores normalized `scopeRef`, `file`/`path`, and `title`/`testId`/`name`
+semantic values. Genuine post-normalization conflicts refuse. Strict version 2
+`scopeRef` and repository paths reject leading or trailing whitespace instead
+of normalizing it. Migration never consults state or invents an absent scope
+identity.
+
+The migrator holds a non-blocking advisory lock, keyed by canonical destination
+path, from before snapshot through validation, destination recheck, and atomic
+replace. It prefers a current-user-owned, non-symlink, private
+`XDG_RUNTIME_DIR`. If that directory is absent or untrustworthy, it creates and
+verifies a private per-user fallback under the platform temporary directory.
+The lock directory must be a real directory owned by the current uid with no
+group or other permissions. The lock itself must be a regular file owned by the
+current uid with private permissions and is opened no-follow and close-on-exec
+where those flags exist, relative to an opened and reverified directory
+descriptor. The lock serializes cooperating migrators. The
+immediate pre-replace identity-and-byte recheck detects observed non-cooperating
+changes and preserves their bytes by refusing. This is not kernel
+compare-and-swap against arbitrary writers: a non-cooperating writer can still
+race after the final recheck and before `replace`.
 
 ### Adoption Example: Selective Scenario Lift For An Active Existing Scope
 
@@ -629,13 +760,13 @@ Existing features do not need an all-or-nothing manifest migration. If only one 
 
 ```json
 {
-  "version": 1,
-  "featureDir": "specs/019-visual-page-builder",
+  "schemaVersion": 2,
+  "spec": "specs/019-visual-page-builder",
   "generatedAt": "2026-03-27T10:30:00Z",
   "scenarios": [
     {
-      "scenarioId": "SCN-019-014",
-      "scope": "03-layout-persistence",
+      "id": "SCN-019-014",
+      "scopeRef": "03-layout-persistence",
       "title": "Host sees the updated section order after reload",
       "gherkin": {
         "given": "a host has reordered page sections",
@@ -651,6 +782,7 @@ Existing features do not need an all-or-nothing manifest migration. If only one 
       "linkedTests": [
         {
           "file": "dashboard/e2e/tests/page-builder.spec.ts",
+          "type": "e2e-ui",
           "testId": "host-reload-persists-section-order"
         }
       ],

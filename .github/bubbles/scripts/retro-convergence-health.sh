@@ -128,6 +128,20 @@ resolve_repo_root() {
 repo_root="$(resolve_repo_root)"
 if [[ -z "$session_file" ]]; then
   session_file="$repo_root/.specify/memory/bubbles.session.json"
+  # The session JSON is git-ignored, so a linked worktree never materialises one
+  # even though the primary checkout has it. Measure that file instead of
+  # reporting the metric unmeasurable, which Check 33 would read as a G090 breach.
+  if [[ ! -f "$session_file" ]]; then
+    primary_root="$(
+      cd "$repo_root" 2>/dev/null &&
+        [[ "$(git rev-parse --git-dir 2>/dev/null)" != "$(git rev-parse --git-common-dir 2>/dev/null)" ]] &&
+        cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null &&
+        pwd
+    )" || primary_root=""
+    if [[ -n "$primary_root" && -f "$primary_root/.specify/memory/bubbles.session.json" ]]; then
+      session_file="$primary_root/.specify/memory/bubbles.session.json"
+    fi
+  fi
 fi
 
 if [[ ! -f "$session_file" ]]; then

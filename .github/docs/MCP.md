@@ -129,9 +129,11 @@ The MCP server exposes the same prompt shims Bubbles installs for VS Code and ot
 | MCP method | Backing files | Result |
 |------------|---------------|--------|
 | `prompts/list` | `prompts/*.prompt.md` in the source repo, `.github/prompts/*.prompt.md` downstream | Lists every Bubbles prompt shim by name and description. |
-| `prompts/get` | One selected `.prompt.md` file | Returns a single user message containing the prompt body plus the target `agent:` from frontmatter. |
+| `prompts/get` | One selected `.prompt.md` file, plus the `agents/*.agent.md` (source) / `.github/agents/*.agent.md` (downstream) file its `agent:` frontmatter names | Returns a single user message with the named agent's persona inlined ahead of the prompt body. |
 
-Prompt exposure is read-only and does not synthesize new prompt logic. The server parses the existing frontmatter (`agent`, `description`) and body, so MCP clients that surface prompt catalogs can invoke the same Bubbles entrypoints as slash-prompt users. Unknown prompt names return a real `-32005` (`ERR_PROMPT_NOT_FOUND`) error.
+Prompt exposure is read-only and does not synthesize new prompt logic — the server parses existing frontmatter and bodies, it invents nothing. What it *does* do is close a real gap between VS Code and every other MCP client: when a `.prompt.md`'s `agent:` field names a persona, **VS Code Copilot Chat's native agent mode resolves that switch on its own** (it never calls this server's `prompts/get` — Copilot reads `.github/prompts` + `.github/agents` straight off disk). No other MCP client (Claude Code, Claude Desktop, Cursor, Cline) has that native switch, so `prompts/get` inlines the target agent's full body — role, behavior, skill pointers — plus its frontmatter verbatim (as a fenced YAML block, so nested `handoffs:` entries survive intact) ahead of the prompt's own task text. A prompt whose `agent:` name has no matching `agents/*.agent.md` file falls back to the old bare-name form (`Use agent: <name>`).
+
+This does not make the persona binding enforced the way Copilot's agent mode makes it: the agent's `tools:` scope is not applied as an actual tool restriction, and its `handoffs:` are not automatically dispatched — both are included as inlined guidance text only, and the response says so explicitly. Unknown prompt names return a real `-32005` (`ERR_PROMPT_NOT_FOUND`) error; a prompt with no `agent:` field at all (rare) returns just its body, unchanged.
 
 ---
 

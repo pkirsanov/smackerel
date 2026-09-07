@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **41 Agents · 121 Gates · 61 Workflow Modes · 30 Phases**
+> **41 Agents · 121 Gates · 62 Workflow Modes · 32 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -367,6 +367,18 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `owner` | The agent named in `workflows.yaml` `phases[<phase>].owner`, or the agent that owns an artifact per the ownership table. Ownership is a declaration; specialist is a role. |
 | `route` | To hand work to its declared owner by emitting a `route_required` result envelope naming `nextRequiredOwner`. Routing is a machine-readable outcome. |
 | `handoff` | A VS Code `handoffs:` frontmatter entry — a button shown AFTER the turn ends that the user clicks to SWITCH agents. It is neither subagent dispatch nor routing. |
+| `research runtime` | The IMP-054 provider-neutral lifecycle that validates a question and produces immutable typed evidence through plan, run or resume, inspect, validate, publish or bridge, and cancel stages. It is not a workflow mode or certification authority. |
+| `dispatch admission` | The IMP-055 decision for one measured model, subagent, web, browser, or tool dispatch against an exact goal budget, reservation state, retry identity, and verified session epoch. |
+| `goal budget` | The exact goal-scoped ledger that owns reservations, debits, releases, holds, corrections, settlement, and retry accounting across session epochs. It is distinct from an advisory session budget. |
+| `admission decision` | The immutable allow or refuse result for one dispatch intent after risk, model, tool, budget, adapter, and epoch facts are evaluated. |
+| `dispatch permit` | A one-time permit for one admitted resource-consuming dispatch. It never authorizes deployment, transactions, messaging, infrastructure mutation, or another consequential action. |
+| `budget hold` | Reserved budget retained when provider acceptance, cancellation, or terminal usage cannot yet be reconciled. A hold prevents unknown spend from being released or retried as if unused. |
+| `verified session epoch` | A budget and usage-accounting epoch accepted only when its recorded host/session evidence verifies. A caller's fresh-context claim alone does not open a trusted epoch. |
+| `unmeasured usage` | An explicit result that no configured adapter supplied trustworthy usage. It is unknown, never zero, free, estimated, or evidence that a dispatch is within budget. |
+| `evidence ledger` | The immutable, content-addressed ECF record history used by a research run. It preserves evidence identity and lineage; it is not a mutable notebook or certification record. |
+| `research run` | One identified IMP-054 lifecycle execution for an explicit question, from validated inputs through immutable evidence and an optional noncertifying publication or bridge result. |
+| `reference broker` | The repository-controlled IMP-055 broker used to prove permit, receipt, reconciliation, and bypass contracts. It does not prove native editor or host interception. |
+| `action authorization` | The independent tool-trust decision that permits a consequential side effect after risk and policy checks. Budget admission alone never supplies it. |
 <!-- GENERATED:CHEATSHEET_VOCABULARY_END -->
 
 ---

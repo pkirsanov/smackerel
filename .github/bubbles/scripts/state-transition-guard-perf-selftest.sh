@@ -34,13 +34,12 @@ pass() { echo "  PASS: $1"; pass_count=$((pass_count + 1)); }
 fail() { echo "  FAIL: $1"; fail_count=$((fail_count + 1)); }
 
 guard_perf_budget_milliseconds=30000
+guard_perf_timeout_seconds=30
 
 guard_perf_sample_pass() {
   local wall_milliseconds="$1"
-  local cpu_milliseconds="$2"
 
-  [[ "$wall_milliseconds" -lt "$guard_perf_budget_milliseconds" ]] ||
-    [[ "$cpu_milliseconds" -lt "$guard_perf_budget_milliseconds" ]]
+  [[ "$wall_milliseconds" -lt "$guard_perf_budget_milliseconds" ]]
 }
 
 guard_perf_samples_pass() {
@@ -56,10 +55,10 @@ guard_perf_samples_pass() {
   guard_perf_sample_pass "$retry_wall_milliseconds" "$retry_cpu_milliseconds"
 }
 
-if guard_perf_samples_pass 51000 51000 51000 12000; then
-  pass "one CPU-healthy retry distinguishes transient contention (wall=51s CPU=51s -> wall=51s CPU=12s)"
+if guard_perf_samples_pass 51000 1 51000 1; then
+  fail "low-CPU wall stalls must not satisfy the performance contract"
 else
-  fail "one healthy retry should distinguish transient contention"
+  pass "low-CPU wall stalls fail closed (wall=51s CPU=1ms on both attempts)"
 fi
 
 if guard_perf_samples_pass 51000 51000 51000 51000; then
@@ -68,10 +67,10 @@ else
   pass "two wall-and-CPU over-budget samples preserve the performance failure (51s/51s, 51s/51s)"
 fi
 
-if guard_perf_samples_pass 51000 12000; then
-  pass "one CPU-healthy sample identifies host contention without an unnecessary retry"
+if guard_perf_samples_pass 12000 51000; then
+  pass "sub-budget wall time passes even when CPU diagnostics exceed budget"
 else
-  fail "a CPU-healthy sample should distinguish host contention"
+  fail "CPU diagnostics must not reject a sub-budget wall sample"
 fi
 
 if guard_perf_samples_pass 51000 51000; then
@@ -259,12 +258,13 @@ EOF
   run_guard_perf_sample() {
     local sample_log="$1"
     local timing_log="$2"
-    local real_seconds user_seconds system_seconds
+    local real_seconds user_seconds system_seconds sample_exit=0
 
     TIMEFORMAT='%3R %3U %3S'
     {
-      time env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 \
-        bash "$GUARD" "$b5_feature" > "$sample_log" 2>&1 || true
+      time BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 \
+        bubbles_run_with_timeout "$guard_perf_timeout_seconds" \
+        bash "$GUARD" "$b5_feature" > "$sample_log" 2>&1 || sample_exit=$?
     } 2> "$timing_log"
     if ! read -r real_seconds user_seconds system_seconds < "$timing_log"; then
       fail "guard timing output is unreadable"
@@ -283,6 +283,10 @@ EOF
     fi
     sample_wall_milliseconds="$(duration_milliseconds "$sample_wall_seconds")"
     sample_cpu_milliseconds="$(duration_milliseconds "$sample_cpu_seconds")"
+    if [[ "$sample_exit" -eq 124 ]]; then
+      sample_wall_milliseconds=999000
+      sample_cpu_milliseconds=999000
+    fi
   }
 
   b5_log="$TMPDIR/bug005-guard.log"
@@ -297,11 +301,8 @@ EOF
   b5_retry_wall_milliseconds=""
   b5_retry_cpu_milliseconds=""
 
-  # A shared developer host can be CPU-contended by an unrelated build. One
-  # wall-clock outlier with sub-budget process-tree CPU is contention, not
-  # evidence that the frozen guard bytes regressed. Confirm once only when both
-  # signals breach the budget. The historical fork-storm consumed per-line
-  # process work, so it breaches both signals repeatedly.
+  # Retry one wall-clock breach to distinguish a transient host outlier. CPU is
+  # diagnostic only and can never turn an over-budget wall sample into a pass.
   if ! guard_perf_sample_pass "$b5_first_wall_milliseconds" "$b5_first_cpu_milliseconds"; then
     b5_retry_log="$TMPDIR/bug005-guard-retry.log"
     b5_retry_time_log="$TMPDIR/bug005-guard-retry.time"
@@ -321,9 +322,9 @@ EOF
   if guard_perf_samples_pass \
     "$b5_first_wall_milliseconds" "$b5_first_cpu_milliseconds" \
     "$b5_retry_wall_milliseconds" "$b5_retry_cpu_milliseconds"; then
-    pass "guard over ${b5_lines}-line report.md stays within the 30s wall-or-CPU budget (first wall=${b5_first_wall_seconds}s CPU=${b5_first_cpu_seconds}s; retry wall=${b5_retry_wall_seconds:-not-run} CPU=${b5_retry_cpu_seconds:-not-run}; fork-storm was ~126s)"
+    pass "guard over ${b5_lines}-line report.md stays within the 30s wall budget (first wall=${b5_first_wall_seconds}s CPU=${b5_first_cpu_seconds}s; retry wall=${b5_retry_wall_seconds:-not-run} CPU=${b5_retry_cpu_seconds:-not-run}; fork-storm was ~126s)"
   else
-    fail "guard over ${b5_lines}-line report.md stayed over both wall and CPU budgets (first wall=${b5_first_wall_seconds}s CPU=${b5_first_cpu_seconds}s; retry wall=${b5_retry_wall_seconds:-not-run} CPU=${b5_retry_cpu_seconds:-not-run}) — Check 11 fork-storm may have regressed"
+    fail "guard over ${b5_lines}-line report.md exceeded the wall budget (first wall=${b5_first_wall_seconds}s CPU=${b5_first_cpu_seconds}s; retry wall=${b5_retry_wall_seconds:-not-run} CPU=${b5_retry_cpu_seconds:-not-run}) — Check 11 fork-storm may have regressed"
     sed -n '1,40p' "$b5_log"
   fi
 
@@ -339,6 +340,78 @@ EOF
   else
     fail "Check 11 verdict changed — expected exactly 1 illegitimate block (Block B)"
     grep -nE 'evidence blocks|--- Check 11' "$b5_log" || true
+  fi
+
+  # G093 changed-path collection must remain linear for a dirty repository.
+  # Four hundred tracked paths deliberately appear in all four git evidence
+  # streams (HEAD diff, cached diff, worktree diff, status), while 1,200 paths
+  # appear only as untracked status entries. Event counts retain duplicates;
+  # classification stores each normalized path once in first-seen order.
+  g093_root="$TMPDIR/g093-path-scale"
+  g093_feature="$g093_root/specs/093-path-scale"
+  mkdir -p "$g093_root/bubbles/workflows" "$g093_feature" \
+    "$g093_root/scripts/duplicate-events" "$g093_root/services/unique-events"
+  cp "$SCRIPT_DIR/../workflows.yaml" "$g093_root/bubbles/workflows.yaml"
+  cp "$SCRIPT_DIR/../workflows/modes.yaml" "$g093_root/bubbles/workflows/modes.yaml"
+  cat > "$g093_feature/state.json" <<'EOF'
+{
+  "version": 3,
+  "status": "in_progress",
+  "workflowMode": "autonomous-goal"
+}
+EOF
+  for i in $(seq 1 400); do
+    printf '#!/usr/bin/env bash\nprintf "baseline-%s\\n"\n' "$i" \
+      > "$g093_root/scripts/duplicate-events/path-$i.sh"
+  done
+  git -C "$g093_root" init -q
+  git -C "$g093_root" add bubbles specs scripts
+  git -C "$g093_root" -c user.name='Bubbles Selftest' \
+    -c user.email='bubbles-selftest@example.invalid' commit -q -m 'seed G093 path fixture'
+  for i in $(seq 1 400); do
+    printf '# staged-%s\n' "$i" >> "$g093_root/scripts/duplicate-events/path-$i.sh"
+  done
+  git -C "$g093_root" add scripts
+  for i in $(seq 1 400); do
+    printf '# unstaged-%s\n' "$i" >> "$g093_root/scripts/duplicate-events/path-$i.sh"
+  done
+  for i in $(seq 1 1200); do
+    printf 'pub const PATH_%s: usize = %s;\n' "$i" "$i" \
+      > "$g093_root/services/unique-events/path-$i.rs"
+  done
+
+  g093_log="$TMPDIR/g093-path-scale.log"
+  g093_time_log="$TMPDIR/g093-path-scale.time"
+  g093_exit=0
+  TIMEFORMAT='%3R %3U %3S'
+  {
+    time BUBBLES_REPO_ROOT="$g093_root" \
+      bubbles_run_with_timeout "$guard_perf_timeout_seconds" \
+      bash "$SCRIPT_DIR/delivery-implementation-delta-guard.sh" "$g093_feature" \
+      > "$g093_log" 2>&1 || g093_exit=$?
+  } 2> "$g093_time_log"
+  if read -r g093_wall_seconds g093_user_seconds g093_system_seconds < "$g093_time_log"; then
+    g093_wall_milliseconds="$(duration_milliseconds "$g093_wall_seconds")"
+    g093_cpu_seconds="$(awk -v user_value="$g093_user_seconds" -v system_value="$g093_system_seconds" \
+      'BEGIN { printf "%.3f\n", user_value + system_value }')"
+    g093_cpu_milliseconds="$(duration_milliseconds "$g093_cpu_seconds")"
+    if [[ "$g093_exit" -ne 124 ]] && guard_perf_sample_pass "$g093_wall_milliseconds" "$g093_cpu_milliseconds"; then
+      pass "G093 classifies 2,800 path events within the 30s wall budget (wall=${g093_wall_seconds}s CPU=${g093_cpu_seconds}s)"
+    else
+      fail "G093 path collection exceeded or timed out at the wall budget (wall=${g093_wall_seconds}s CPU=${g093_cpu_seconds}s exit=${g093_exit})"
+    fi
+  else
+    fail "G093 path-scale timing output is unreadable"
+  fi
+  if grep -Fq 'evidenceSources: git=2800 report=0 reportCodeDiffSections=0' "$g093_log"; then
+    pass "G093 preserves all 2,800 git events, including 1,200 duplicate observations"
+  else
+    fail "G093 changed the duplicate-inclusive git event count"
+  fi
+  if grep -Fq 'source (1200):' "$g093_log" && grep -Fq 'runtime (400):' "$g093_log"; then
+    pass "G093 deduplicates to exact source/runtime family totals (1,200 source, 400 runtime)"
+  else
+    fail "G093 unique path totals or family assignments changed"
   fi
 fi
 

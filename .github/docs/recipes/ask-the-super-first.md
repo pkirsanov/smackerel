@@ -45,6 +45,12 @@ Use this recipe when any of these are true:
 
 /bubbles.super  give me the safest tdd-first workflow for this bug
 → /bubbles.bug  mode: fix <bug> tdd: true
+
+/bubbles.super  how do I build an immutable evidence-backed research result?
+→ `bash bubbles/scripts/cli.sh research capabilities`, then the staged `research` lifecycle
+
+/bubbles.super  can this measured dispatch consume the goal budget?
+→ `bash bubbles/scripts/cli.sh admission evaluate --store-root <absolute-store> --input <absolute-input.json>`
 ```
 
 ## Ask For A Prompt Sequence

@@ -122,6 +122,22 @@ else
   bad "P4 micro-fix keys retained"
 fi
 
+# --- A5. ADVERSARIAL: the registry has a NON-SELFTEST reader ---------------
+# BUG-041. Every check above asserts the registry's SHAPE. None of them noticed
+# that no enforcement surface READ it, so artifact-lint.sh and
+# state-transition-guard.sh each applied a private hard-coded copy of the full
+# form's list to every packet — including the compact form IMP-047 S-D made the
+# default route. A contract nobody reads cannot govern anything, and a selftest
+# that only reads it itself cannot detect that.
+nonselftest_readers="$(grep -l 'bug-packet-resolve\.sh\|bug-packet\.yaml' "$SCRIPT_DIR"/*.sh 2>/dev/null |
+  grep -v 'selftest' | grep -cv '/bug-packet-resolve\.sh$')"
+if [[ "$nonselftest_readers" -ge 1 ]]; then
+  ok "A5 $nonselftest_readers non-selftest surface(s) consume the bug-artifact contract"
+else
+  bad "A5 the registry has a production reader" \
+    "only selftests read bug-packet.yaml, which is exactly how BUG-041 survived"
+fi
+
 printf '%s: %s check(s), %s failure(s)\n' "$NAME" "$checks" "$failures"
 [[ "$failures" -eq 0 ]] || exit 1
 exit 0

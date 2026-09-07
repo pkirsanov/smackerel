@@ -14,7 +14,7 @@
 #       `convergenceLoops` key is present with its value.
 #
 #       Non-tautology proof: the SAME parallel workload run against the
-#       pre-fix state-snapshot.sh (`git show 650639b:...`, which has no lock)
+#       pre-fix state-snapshot.sh (`git show 1c2cef4:...`, which has no lock)
 #       LOSES updates in at least one round, while the fixed version NEVER
 #       loses across the same rounds — demonstrating the race is real and the
 #       lock closes it.
@@ -30,7 +30,7 @@
 #
 # Graceful-skip: jq absent -> SKIP (exit 0). The non-tautology old-baseline
 # sub-proof additionally SKIPs (without failing the harness) if git or the
-# 650639b blob is unavailable.
+# 1c2cef4 blob is unavailable.
 #
 set -uo pipefail
 
@@ -39,7 +39,8 @@ SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SNAPSHOT="$SCRIPT_DIR/state-snapshot.sh"
 BINDING="$SCRIPT_DIR/repository-binding.sh"
 RUNTIME_SCRIPT="$SCRIPT_DIR/runtime-leases.sh"
-OLD_REF="650639b"
+SESSION_CAP_GUARD="$SCRIPT_DIR/session-cap-guard.sh"
+OLD_REF="1c2cef4"
 
 pass_count=0
 fail_count=0
@@ -151,6 +152,39 @@ run_parallel_snapshots() {
   done
 }
 
+# BUG-037: launch the same producer key from distinct host sessions. The only
+# differentiator is --session-id; omitting it from the convergence key merges
+# all completed writers into one row.
+run_parallel_same_key_snapshots() {
+  local snapshot_bin="$1"
+  local pids=()
+  local i
+  for (( i = 0; i < N; i++ )); do
+    BUBBLES_AGENT_NAME="same-agent" bash "$snapshot_bin" \
+      --phase "phase-same-key-$i" --mode start \
+      --session-id "conc-$i" \
+      --session-control-file "${CTRLS[$i]}" \
+      --binding-packet-file "${PKTS[$i]}" \
+      --convergence-iteration "$((100 + i))" \
+      --spec-dir "bugs/BUG-037-session-cap-cross-session-attribution" \
+      >/dev/null 2>&1 &
+    pids+=("$!")
+  done
+  local pid
+  for pid in "${pids[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
+}
+
+same_key_sessions_intact() {
+  jq -e --argjson expected "$N" '
+    (.turnSnapshots | length) == $expected
+    and (.convergenceLoops | length) == $expected
+    and ([.convergenceLoops[].hostSessionId] | unique | length) == $expected
+    and ([.convergenceLoops[] | select(.specDir == "bugs/BUG-037-session-cap-cross-session-attribution" and .agent == "same-agent")] | length) == $expected
+  ' "$SESSION_FILE" >/dev/null 2>&1
+}
+
 # turnSnapshots length in the current session file (0 if missing/invalid).
 session_turn_count() {
   jq '(.turnSnapshots // []) | length' "$SESSION_FILE" 2>/dev/null || echo 0
@@ -172,8 +206,8 @@ session_intact() {
   return 0
 }
 
-# Prepare the pre-fix (650639b) baseline for the non-tautology proof. Its sibling
-# repository-binding.sh (unchanged at 650639b) is copied alongside it so the old
+# Prepare the pre-fix (1c2cef4) baseline for the non-tautology proof. Its sibling
+# repository-binding.sh (unchanged at 1c2cef4) is copied alongside it so the old
 # state-snapshot resolves the same validator.
 OLD_SNAPSHOT=""
 if command -v git >/dev/null 2>&1 \
@@ -218,7 +252,7 @@ else
       fi
     fi
 
-    echo "  round $round: fixed=$fixed_msg  pre-fix(650639b) turnSnapshots=$old_turns/$N"
+    echo "  round $round: fixed=$fixed_msg  pre-fix(1c2cef4) turnSnapshots=$old_turns/$N"
     round=$((round + 1))
   done
 
@@ -230,12 +264,41 @@ else
 
   if [[ "$old_ran" -eq 1 ]]; then
     if [[ "$old_losses" -ge 1 ]]; then
-      pass "NON-TAUTOLOGY: pre-fix state-snapshot (650639b, lock-free) lost updates in $old_losses/$ROUNDS rounds — the race is real and the lock closes it"
+      pass "NON-TAUTOLOGY: pre-fix state-snapshot (1c2cef4, lock-free) lost updates in $old_losses/$ROUNDS rounds — the race is real and the lock closes it"
     else
       fail "NON-TAUTOLOGY expected the pre-fix state-snapshot to lose at least once across $ROUNDS rounds but it never did (test may be insufficiently contended)"
     fi
   else
     echo "SKIP: non-tautology old-baseline proof (git or $OLD_REF blob unavailable)"
+  fi
+
+  reset_session
+  run_parallel_same_key_snapshots "$SNAPSHOT"
+  if same_key_sessions_intact; then
+    pass "BUG-037 same-spec same-agent convergence writers retain one exact key per host session through flock"
+  else
+    fail "BUG-037 same-spec same-agent convergence writers were merged or lost through flock"
+  fi
+
+  if [[ -x "$SESSION_CAP_GUARD" ]] && same_key_sessions_intact; then
+    session_with_budget="$TMP_ROOT/same-key-session-with-budget.json"
+    jq '.sessionBudget = {maxTotalConvergenceIterations: 103}' "$SESSION_FILE" > "$session_with_budget"
+    mv "$session_with_budget" "$SESSION_FILE"
+    set +e
+    BUBBLES_REPO_ROOT="$REPO" bash "$SESSION_CAP_GUARD" --session-id conc-0 --quiet > "$TMP_ROOT/conc-0.out" 2>&1
+    conc_a_rc=$?
+    BUBBLES_REPO_ROOT="$REPO" bash "$SESSION_CAP_GUARD" --session-id conc-7 --quiet > "$TMP_ROOT/conc-7.out" 2>&1
+    conc_b_rc=$?
+    set -e
+    if [[ "$conc_a_rc" -eq 0 && "$conc_b_rc" -eq 1 ]] &&
+      grep -Eq 'G128 (PASS|SOFT-BOUNDARY) session=conc-0' "$TMP_ROOT/conc-0.out" &&
+      grep -Fq 'G128 BREACH session=conc-7' "$TMP_ROOT/conc-7.out"; then
+      pass "BUG-037 concurrent sessions receive independent non-breach and breach verdicts from shared retained history"
+    else
+      fail "BUG-037 independent G128 verdicts expected conc-0=non-breach/0 and conc-7=BREACH/1 (got $conc_a_rc/$conc_b_rc)"
+    fi
+  elif [[ ! -x "$SESSION_CAP_GUARD" ]]; then
+    fail "BUG-037 session-cap-guard.sh is required for independent concurrent verdict coverage"
   fi
   reset_session
 fi
@@ -414,6 +477,14 @@ else
   kill "$snap_live_pid" 2>/dev/null || true
   wait "$snap_live_pid" 2>/dev/null || true
   rm -rf "$SESSION_FILE.lock" 2>/dev/null || true
+  reset_session
+
+  PATH="$NOFLOCK_BIN" run_parallel_same_key_snapshots "$SNAPSHOT"
+  if same_key_sessions_intact; then
+    pass "BUG-037 same-spec same-agent convergence writers retain one exact key per host session through mkdir fallback"
+  else
+    fail "BUG-037 same-spec same-agent convergence writers were merged or lost through mkdir fallback"
+  fi
   reset_session
 fi
 

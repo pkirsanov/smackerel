@@ -132,6 +132,14 @@ bubbles_mcp_server_token() {
     return 0
   fi
   project_root="${lib_dir%/.github/bubbles/scripts}"
+  # A linked worktree would otherwise name the token after a throwaway directory,
+  # diverging from the id install.sh registers in .vscode/mcp.json.
+  local common primary
+  if common="$(cd "$project_root" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null)" && [[ -n "$common" ]]; then
+    if primary="$(cd "$project_root" 2>/dev/null && cd "$common/.." 2>/dev/null && pwd)" && [[ -n "$primary" ]]; then
+      project_root="$primary"
+    fi
+  fi
   base="$(basename "$project_root")"
   slug="$(printf '%s' "$base" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed -e 's/[^a-z0-9]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
   [[ -n "$slug" ]] || slug="repo"

@@ -39,6 +39,11 @@ AUTONOMY_FLAG_SEEN=0
 DIRECTIVE_FLAG_SEEN=0
 FORMAT="env"
 SESSION_BUDGET_ARG=""
+SESSION_ID=""
+SESSION_CONTROL_FILE=""
+BINDING_PACKET_FILE=""
+SCENARIO_FILE=""
+NODE_ID=""
 
 usage() {
   cat <<'EOF'
@@ -58,7 +63,15 @@ Options:
                             (default: the repo containing this script).
   --session-budget <bounded|unbounded>
                             Override the detected session-budget state. Without
-                            it the state is read from the session file.
+                            it the state is read from the exact session policy
+                            head after packet validation.
+  --session-id <id>         Exact host session for policy selection.
+  --session-control-file <path>
+                            Host-private authoritative session control record.
+  --binding-packet-file <path>
+                            Actionable packet whose session and root are used.
+  --scenario-file <path>    Optional compiled scenario for a scoped packet.
+  --node-id <id>            Optional scenario node. Supply both optional values.
   --format env|json         Output shape (default: env).
   -h, --help                Print this usage and exit 0.
 
@@ -127,6 +140,36 @@ while [[ $# -gt 0 ]]; do
       SESSION_BUDGET_ARG="$1"
       shift
       ;;
+    --session-id)
+      shift
+      [[ $# -gt 0 ]] || die_usage "--session-id requires a value"
+      SESSION_ID="$1"
+      shift
+      ;;
+    --session-control-file)
+      shift
+      [[ $# -gt 0 ]] || die_usage "--session-control-file requires a value"
+      SESSION_CONTROL_FILE="$1"
+      shift
+      ;;
+    --binding-packet-file)
+      shift
+      [[ $# -gt 0 ]] || die_usage "--binding-packet-file requires a value"
+      BINDING_PACKET_FILE="$1"
+      shift
+      ;;
+    --scenario-file)
+      shift
+      [[ $# -gt 0 ]] || die_usage "--scenario-file requires a value"
+      SCENARIO_FILE="$1"
+      shift
+      ;;
+    --node-id)
+      shift
+      [[ $# -gt 0 ]] || die_usage "--node-id requires a value"
+      NODE_ID="$1"
+      shift
+      ;;
     --format)
       shift
       [[ $# -gt 0 ]] || die_usage "--format requires a value"
@@ -152,6 +195,13 @@ case "$SESSION_BUDGET_ARG" in
   "" | bounded | unbounded) ;;
   *) die_usage "--session-budget must be bounded or unbounded" ;;
 esac
+
+if [[ -n "$SCENARIO_FILE" && -z "$NODE_ID" ]]; then
+  die_usage "--scenario-file requires --node-id"
+fi
+if [[ -n "$NODE_ID" && -z "$SCENARIO_FILE" ]]; then
+  die_usage "--node-id requires --scenario-file"
+fi
 
 SCRIPT_SOURCE="${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(cd "${SCRIPT_SOURCE%/*}" 2>/dev/null && pwd)"
@@ -233,16 +283,127 @@ fi
 if [[ "$RESOLVED" == "unattended" ]]; then
   budget_state="$SESSION_BUDGET_ARG"
   if [[ -z "$budget_state" ]]; then
-    session_file="$REPO_ROOT/.specify/memory/bubbles.session.json"
-    if [[ -f "$session_file" ]] &&
-      grep -qE '"(maxTotalConvergenceIterations|maxWallClockMinutes|maxToolCalls)"[[:space:]]*:[[:space:]]*[0-9]+' "$session_file"; then
-      budget_state="bounded"
-    else
+    [[ -n "$SESSION_ID" ]] || die_usage "--session-id is required when unattended boundedness reads session policy"
+    [[ -n "$SESSION_CONTROL_FILE" ]] || die_usage "--session-control-file is required when unattended boundedness reads session policy"
+    [[ -n "$BINDING_PACKET_FILE" ]] || die_usage "--binding-packet-file is required when unattended boundedness reads session policy"
+    REPOSITORY_BINDING="$SCRIPT_DIR/repository-binding.sh"
+    [[ -f "$REPOSITORY_BINDING" ]] || {
+      echo "autonomy-resolve: repository binding validator is unavailable" >&2
+      exit 3
+    }
+    command -v jq >/dev/null 2>&1 || {
+      echo "autonomy-resolve: jq is required for exact-session policy selection" >&2
+      exit 3
+    }
+    VALIDATE_ARGS=(
+      validate-packet
+      --session-id "$SESSION_ID"
+      --session-control-file "$SESSION_CONTROL_FILE"
+      --packet-file "$BINDING_PACKET_FILE"
+    )
+    if [[ -n "$SCENARIO_FILE" ]]; then
+      VALIDATE_ARGS+=(--scenario-file "$SCENARIO_FILE" --node-id "$NODE_ID")
+    fi
+    if ! bash "$REPOSITORY_BINDING" ${VALIDATE_ARGS[@]+"${VALIDATE_ARGS[@]}"} >/dev/null 2>&1; then
+      echo "autonomy-resolve: exact-session packet authority is invalid" >&2
+      exit 3
+    fi
+    PACKET_SESSION_ID="$(jq -r '.repositoryResolution.sessionId' "$BINDING_PACKET_FILE" 2>/dev/null || true)"
+    PACKET_ROOT="$(jq -r '.repositoryRoot' "$BINDING_PACKET_FILE" 2>/dev/null || true)"
+    if [[ "$PACKET_SESSION_ID" != "$SESSION_ID" || "$PACKET_ROOT" != "$REPO_ROOT" ]]; then
+      echo "autonomy-resolve: exact-session packet authority does not match the requested root and session" >&2
+      exit 3
+    fi
+    SESSION_STATE_IO="$SCRIPT_DIR/session-state-io.py"
+    [[ -f "$SESSION_STATE_IO" ]] || {
+      echo "autonomy-resolve: session state I/O helper is unavailable" >&2
+      exit 3
+    }
+    command -v python3 >/dev/null 2>&1 || {
+      echo "autonomy-resolve: python3 is required for exact-session policy capture" >&2
+      exit 3
+    }
+    policy_capture_dir="$(mktemp -d)"
+    policy_capture="$policy_capture_dir/bubbles.session.json"
+    set +e
+    python3 "$SESSION_STATE_IO" capture \
+      --root "$REPO_ROOT" \
+      --relative-path '.specify/memory/bubbles.session.json' \
+      --destination "$policy_capture" >/dev/null 2>&1
+    capture_rc=$?
+    set -e
+    if [[ "$capture_rc" -eq 4 ]]; then
+      rm -rf "$policy_capture_dir"
       budget_state="unbounded"
+    elif [[ "$capture_rc" -ne 0 ]]; then
+      rm -rf "$policy_capture_dir"
+      echo "autonomy-resolve: E039-SESSION-POLICY-INVALID — exact-session state capture is unsafe or unstable." >&2
+      exit 3
+    else
+      set +e
+      policy_state="$(jq -r --arg session "$SESSION_ID" '
+        def cap_keys:
+          ["schemaVersion", "maxTotalConvergenceIterations", "maxWallClockMinutes",
+           "maxToolCalls", "maxSingleToolResultBytes", "maxCumulativeToolResultBytes",
+           "maxPromptTokensPerRequest", "maxCumulativePromptTokens"];
+        def outer_keys:
+          ["recordSchemaVersion", "hostSessionId", "revision", "supersedesRevision",
+           "recordedAt", "budget"];
+        def valid_timestamp:
+          type == "string"
+          and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+          and (try (fromdateiso8601 | type == "number") catch false);
+        def valid_budget:
+          type == "object"
+          and ((keys - cap_keys) | length) == 0
+          and .schemaVersion == 1
+          and ([cap_keys[1:][] as $key
+            | ((has($key) | not) or .[$key] == null
+               or ((.[$key] | type) == "number" and (.[$key] | floor) == .[$key] and .[$key] >= 0))]
+            | all);
+        def valid_record:
+          type == "object"
+          and ((keys | sort) == (outer_keys | sort))
+          and .recordSchemaVersion == 1
+          and (.hostSessionId | type) == "string" and (.hostSessionId | length) > 0
+          and (.revision | type) == "number" and (.revision | floor) == .revision and .revision > 0
+          and (.supersedesRevision == null
+               or ((.supersedesRevision | type) == "number"
+                   and (.supersedesRevision | floor) == .supersedesRevision
+                   and .supersedesRevision > 0
+                   and .supersedesRevision < .revision))
+          and (.recordedAt | valid_timestamp)
+          and (.budget | valid_budget);
+        if (.sessionBudgetHistory? == null) then "unbounded"
+        elif (.sessionBudgetHistory | type) != "array" then error("invalid-policy-history")
+        else
+          ([.sessionBudgetHistory[] | select(.hostSessionId == $session)]) as $records
+          | if ($records | length) == 0 then "unbounded"
+            elif (all($records[]; valid_record) | not) then error("invalid-policy-record")
+            elif (($records | map(.revision) | unique | length) != ($records | length)) then error("duplicate-policy-revision")
+            elif (($records | map(select(.revision == 1 and .supersedesRevision == null)) | length) != 1) then error("missing-policy-root")
+            elif ([$records[] | select(.revision > 1) as $record
+                     | (([$records[] | select(.revision == ($record.revision - 1))] | length) != 1
+                        or $record.supersedesRevision != ($record.revision - 1))]
+                    | any) then error("branching-policy-chain")
+            else
+              ($records | max_by(.revision) | .budget) as $head
+              | if ([cap_keys[1:][] as $key | $head[$key] != null] | any) then "bounded" else "unbounded" end
+            end
+        end
+      ' "$policy_capture" 2>/dev/null)"
+      policy_rc=$?
+      set -e
+      rm -rf "$policy_capture_dir"
+      if [[ "$policy_rc" -ne 0 || ( "$policy_state" != "bounded" && "$policy_state" != "unbounded" ) ]]; then
+        echo "autonomy-resolve: E039-SESSION-POLICY-INVALID — exact-session policy history is malformed, duplicated, or branched." >&2
+        exit 3
+      fi
+      budget_state="$policy_state"
     fi
   fi
   if [[ "$budget_state" != "bounded" ]]; then
-    echo "autonomy-resolve: E039-UNATTENDED-UNBOUNDED — autonomy 'unattended' requires a non-null sessionBudget (maxTotalConvergenceIterations, maxWallClockMinutes, or maxToolCalls) in .specify/memory/bubbles.session.json. A run that will not stop on its own must be bounded." >&2
+    echo "autonomy-resolve: E039-UNATTENDED-UNBOUNDED — autonomy 'unattended' requires one validated exact-session policy head with a non-null cap. A run that will not stop on its own must be bounded." >&2
     exit 3
   fi
 fi

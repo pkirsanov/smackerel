@@ -67,7 +67,7 @@ run() {
   if [[ -n "${MODEL:-}" ]]; then
     BUBBLES_ACTIVE_MODEL="$MODEL" bash "$TARGET" "$@" >/dev/null 2>&1 || rc=$?
   else
-    env -u BUBBLES_ACTIVE_MODEL bash "$TARGET" "$@" >/dev/null 2>&1 || rc=$?
+    (unset BUBBLES_ACTIVE_MODEL; bash "$TARGET" "$@") >/dev/null 2>&1 || rc=$?
   fi
   if [[ "$rc" -eq "$expected" ]]; then
     pass "$desc (exit $rc)"
@@ -134,12 +134,16 @@ gates:
 YAML
 
 retire_out() {
-  # retire_out <tier>  — prints the retirement report for a declared tier
+  # retire_out <tier>  — prints the retirement report for a declared tier.
+  # IMP-058 SCOPE-1 / REG-22: `retirement` reads the GATE registry, not
+  # workflows.yaml, so the fixture is fed via BUBBLES_GATES_FILE. The fixture
+  # file itself is unchanged — it already carries a top-level `gates:` key in
+  # the real registry's shape.
   if [[ -n "${1:-}" ]]; then
-    BUBBLES_WORKFLOWS_FILE="$RETIRE_FIXTURE" bash "$TARGET" retirement --tier "$1" 2>&1
+    BUBBLES_GATES_FILE="$RETIRE_FIXTURE" bash "$TARGET" retirement --tier "$1" 2>&1
   else
-    BUBBLES_WORKFLOWS_FILE="$RETIRE_FIXTURE" env -u BUBBLES_ACTIVE_MODEL \
-      bash "$TARGET" retirement 2>&1
+    (unset BUBBLES_ACTIVE_MODEL
+      BUBBLES_GATES_FILE="$RETIRE_FIXTURE" bash "$TARGET" retirement) 2>&1
   fi
 }
 
@@ -183,6 +187,94 @@ for tier_out_label in "opus:$OPUS_OUT" "haiku:$HAIKU_OUT" "unknown:$UNKNOWN_OUT"
 done
 
 MODEL="opus-4.7" run 0 "retirement is advisory and never blocks" -- retirement
+
+# ---------------------------------------------------------------------------
+# IMP-058 SCOPE-2 / COV-24 — `preventionEvidence`, the satisfiable evidence
+# half. G002 declares it; G003 does not (keeps exactly today's rate-only
+# behavior). BUBBLES_GATE_HIT_ROOT points gate-hit-log.sh at a synthetic
+# fixture repo instead of this repo's own real telemetry, so the three
+# classes below are exact and reproducible rather than a live snapshot.
+# ---------------------------------------------------------------------------
+EVIDENCE_FIXTURE="$TMPDIR/evidence-workflows.yaml"
+cat > "$EVIDENCE_FIXTURE" <<'YAML'
+gates:
+  G002:
+    name: strict_model_gate
+    classification: modelCompensation
+    retireWhen: { minTier: opus-class, metric: fabricated-evidence-rate, threshold: 0.005, window: 50 }
+    preventionEvidence: { minRuns: 10, prevented: 0, sourceClass: product }
+    description: Raw execution evidence is captured per policy.
+  G003:
+    name: lenient_model_gate
+    classification: modelCompensation
+    retireWhen: { minTier: sonnet-class, metric: routing-omission-rate, threshold: 0.02, window: 20 }
+    description: Each specialist agent's output MUST be verified by the orchestrator.
+YAML
+
+EVIDENCE_REPO="$TMPDIR/evidence-repo"
+mkdir -p "$EVIDENCE_REPO/.specify/runtime"
+EVIDENCE_LOG="$EVIDENCE_REPO/.specify/runtime/gate-hits.jsonl"
+# G002: fired 10 times (meets its declared minRuns), never prevented -> CANDIDATE.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  printf '{"schemaVersion":"gate-hit/v1","kind":"gate","ts":"2026-09-04T00:00:0%dZ","sourceClass":"product","gate":"G002","outcome":"pass","fired":true,"prevented":false,"spec":"specs/fixture","mode":"full-delivery","targetStatus":"done","guardVerdict":"PASS","exitStatus":"0"}\n' \
+    "$((i % 10))" >> "$EVIDENCE_LOG"
+done
+# G003: fired once and prevented once -> EARNING, despite no preventionEvidence
+# declared. Earning needs no threshold; it is a fact, not a judgment call.
+printf '{"schemaVersion":"gate-hit/v1","kind":"gate","ts":"2026-09-04T00:01:00Z","sourceClass":"product","gate":"G003","outcome":"fail","fired":true,"prevented":true,"spec":"specs/fixture","mode":"full-delivery","targetStatus":"done","guardVerdict":"FAIL","exitStatus":"1"}\n' \
+  >> "$EVIDENCE_LOG"
+
+EVIDENCE_OUT="$(BUBBLES_GATES_FILE="$EVIDENCE_FIXTURE" BUBBLES_GATE_HIT_ROOT="$EVIDENCE_REPO" \
+  bash "$TARGET" retirement --tier opus-class 2>&1)"
+
+expect_in "preventionEvidence: G003 is EARNING on prevention alone, no minRuns needed" \
+  "EARNING (1)" "$EVIDENCE_OUT"
+expect_in "preventionEvidence: G003 named in the EARNING line" \
+  "G003(prevented=1/1)" "$EVIDENCE_OUT"
+expect_in "preventionEvidence: G002 is CANDIDATE at fired == declared minRuns, never prevented" \
+  "CANDIDATE (1)" "$EVIDENCE_OUT"
+expect_in "preventionEvidence: G002 named in the CANDIDATE line" \
+  "G002(fired=10)" "$EVIDENCE_OUT"
+expect_in "preventionEvidence: nothing left unmeasured once both gates have telemetry" \
+  "UNMEASURED (0)" "$EVIDENCE_OUT"
+expect_in "preventionEvidence: a CANDIDATE gate does not read as retirement" \
+  "CANDIDATE is not retirement" "$EVIDENCE_OUT"
+
+# Adversarial bound: fired BELOW the declared minRuns must stay UNMEASURED,
+# not be promoted to CANDIDATE by an off-by-one in the comparison.
+UNDER_LOG="$TMPDIR/under-repo/.specify/runtime/gate-hits.jsonl"
+mkdir -p "$(dirname "$UNDER_LOG")"
+for i in 1 2 3 4 5 6 7 8 9; do
+  printf '{"schemaVersion":"gate-hit/v1","kind":"gate","ts":"2026-09-04T00:00:0%dZ","sourceClass":"product","gate":"G002","outcome":"pass","fired":true,"prevented":false,"spec":"specs/fixture","mode":"full-delivery","targetStatus":"done","guardVerdict":"PASS","exitStatus":"0"}\n' \
+    "$i" >> "$UNDER_LOG"
+done
+UNDER_OUT="$(BUBBLES_GATES_FILE="$EVIDENCE_FIXTURE" BUBBLES_GATE_HIT_ROOT="$TMPDIR/under-repo" \
+  bash "$TARGET" retirement --tier opus-class 2>&1)"
+expect_in "preventionEvidence adversarial: fired == minRuns - 1 stays UNMEASURED, not CANDIDATE" \
+  "CANDIDATE (0)" "$UNDER_OUT"
+
+# Adversarial bound: a fixture repo with no gate-hits.jsonl at all (no
+# telemetry store) must degrade to UNMEASURED for everything, never crash and
+# never silently promote to CANDIDATE/EARNING.
+NOLOG_OUT="$(BUBBLES_GATES_FILE="$EVIDENCE_FIXTURE" BUBBLES_GATE_HIT_ROOT="$TMPDIR/nolog-repo" \
+  bash "$TARGET" retirement --tier opus-class 2>&1)"
+expect_in "preventionEvidence adversarial: an absent telemetry store reports UNMEASURED, not a crash" \
+  "UNMEASURED (2)" "$NOLOG_OUT"
+
+# ---------------------------------------------------------------------------
+# IMP-058 SCOPE-1 / REG-22 regression pin: `retirement` against the REAL,
+# unoverridden gate registry must report a non-zero modelCompensation gate
+# count. This is the exact defect that shipped — the reader was bound to
+# workflows.yaml, which has no top-level `gates:` key, so the count was
+# always zero and the empty result rendered as a clean report rather than a
+# failure. Deliberately runs with no BUBBLES_GATES_FILE override.
+# ---------------------------------------------------------------------------
+REAL_OUT="$(bash "$TARGET" retirement --tier opus-class 2>&1)"
+if grep -qE "modelCompensation gates: 0$" <<<"$REAL_OUT"; then
+  fail "retirement against the real registry reports zero modelCompensation gates (REG-22 regression): $REAL_OUT"
+else
+  pass "retirement against the real registry reports a non-zero modelCompensation gate count"
+fi
 
 echo ""
 echo "[model-tier-advisory-selftest] $pass_count passed, $fail_count failed"

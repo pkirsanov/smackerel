@@ -214,6 +214,18 @@ This file allows projects to extend or override selected framework behavior with
 ```yaml
 # .github/bubbles-project.yaml — Project-specific Bubbles extensions
 
+# Optional measured-budget dispatch admission. Absence is exactly equivalent to
+# `adapter: none`; no dispatch child is admitted. `reference-broker` is the
+# repository reference implementation, not host-native enforcement.
+dispatchAdmission:
+  adapter: none # none | reference-broker
+
+# Optional bounded research runtime. Both fields are required when this block
+# exists. Absence and explicit false are disabled; malformed values fail loud.
+researchRuntime:
+  schemaVersion: 1
+  enabled: false
+
 # Custom quality gates (G900+ range; framework reserves G001-G199)
 gates:
   license-compliance:
@@ -396,6 +408,35 @@ mcp:
   grants:
     bubbles.goal: [github]
     restricted-orchestrators: [context7]   # applies to all five
+```
+
+### Optional Admission And Research Runtime Contracts
+
+`dispatchAdmission` and `researchRuntime` are project-owned opt-ins. The Bubbles
+installer never writes either block. Their absence preserves the dependency-free,
+default-off posture.
+
+| Section | Exact contract | Absent behavior | Configured failure behavior |
+|---------|----------------|-----------------|-----------------------------|
+| `dispatchAdmission` | One `adapter` scalar: `none` or `reference-broker` | Resolves to `none`; permit issuance and child dispatch remain unavailable | Unknown, unsafe, or missing adapters fail loud; there is no fallback to `none` |
+| `researchRuntime` | `schemaVersion: 1` plus explicit boolean `enabled` | Reports disabled and exposes no adapters | Duplicate, empty, unknown-version, or non-boolean activation fields fail loud |
+
+These blocks contain routing and activation policy only. They MUST NOT contain
+credentials, tokens, endpoint secrets, command input, or provider-specific
+fallback values. Enabling `researchRuntime` does not select a default model or
+provider. A research request must still carry its complete typed adapter and
+policy inputs. Enabling `reference-broker` does not claim host-native
+interception or enforcement; it exposes only the repository reference path.
+
+The neutral forms are:
+
+```yaml
+dispatchAdmission:
+  adapter: none
+
+researchRuntime:
+  schemaVersion: 1
+  enabled: false
 ```
 
 ### Design Principles

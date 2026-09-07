@@ -42,6 +42,18 @@ This installs:
 
 > **Source-only media is not shipped.** The downstream install payload is exactly the set of files tracked in `bubbles/release-manifest.json` (agents, prompts, shared docs, instructions, skills, workflow config, registries, and governance scripts — copied under `.github/` above). Repo-root media such as `pictures/` (~411 MiB of README/branding art) is **source-only**: it has zero release-manifest entries and is never copied by `install.sh`, so it does not ride along in a downstream install even though it lives in the source-archive tarball.
 
+### Claude Code Output
+
+Every install/upgrade also renders the same 41 agents into Claude Code's native format, alongside the `.github/` Copilot output above (never replacing it):
+
+- `.claude/agents/bubbles-*.md` — one subagent per agent definition (invoke via the Agent tool, or let Claude delegate automatically)
+- `.claude/commands/bubbles-*.md` — matching `/bubbles-*` slash commands
+- `.claude/skills/bubbles-*/`, `.claude/instructions/bubbles-*.instructions.md` — mirrored so relative links from agent bodies resolve
+
+Top-level runners (`bubbles-goal`, `bubbles-workflow`, `bubbles-sprint`, and the narrower domain runners like `bubbles-train`/`bubbles-stabilize`) get a computed `Agent(...)` allowlist naming exactly the specialist agents their granted workflow modes require (derived from `bubbles/agent-capabilities.yaml` + `bubbles/registry/required-specialists.yaml`), so a runner dispatches the right phase-owner subagent directly — the same phase-by-phase execution Copilot Chat's agent handoffs give you, via Claude Code's native nested subagent dispatch. Specialist agents (`bubbles-implement`, `bubbles-test`, etc.) cannot dispatch further agents, matching the framework rule that only the active top-level runner dispatches.
+
+New agents/commands are picked up on the next Claude Code session in the repo (subagents are registered at session start). Requires `yq` (mikefarah v4+) and `python3` at install/refresh time — if either is missing, this step is skipped with a warning and the Copilot install is unaffected. Rendering logic lives in `bubbles/scripts/render-claude-code.sh` / `render_claude_code.py`; re-run it directly with `--source <checkout> --dest .` to refresh `.claude/` without a full reinstall.
+
 And with `--bootstrap`, also creates:
 - `.github/copilot-instructions.md` — project policies and commands
 - `.github/instructions/terminal-discipline.instructions.md` — CLI discipline rules

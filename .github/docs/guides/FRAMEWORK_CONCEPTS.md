@@ -166,7 +166,7 @@ Users describe what they want in natural language. A single orchestrator resolve
 ### 5.2 Workflow Modes
 
 <!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_MODES_START -->
-61 modes cover the spectrum from full delivery to narrow operations:
+62 modes cover the spectrum from full delivery to narrow operations:
 <!-- GENERATED:FRAMEWORK_STATS_CONCEPTS_MODES_END -->
 
 | Category | Examples |

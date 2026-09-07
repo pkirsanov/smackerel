@@ -50,7 +50,7 @@ run_resolver() {
   # Grandfather the bare-mode-name path so v7's input rejection does not mask
   # the resolution behavior under test. The v6-form validation rejections
   # (unknown primitive/tag/duplicate tuple) are unaffected by grandfather.
-  bubbles_run_with_timeout "$selftest_timeout_seconds" env BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$fixture" "$RESOLVER" "$@" > "$out_file" 2> "$err_file"
+  bubbles_run_with_timeout "$selftest_timeout_seconds" /usr/bin/env BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$fixture" "$RESOLVER" "$@" > "$out_file" 2> "$err_file"
   RC=$?
   set -e
   OUT="$(cat "$out_file")"

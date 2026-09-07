@@ -86,17 +86,78 @@ fi
 
 command -v python3 >/dev/null 2>&1 || die_usage "python3 is required"
 
-MANIFEST="$MANIFEST" QUIET="$QUIET" python3 - <<'PY'
+REFERENCE_READER="$SCRIPT_DIR/scenario-reference-reader.py"
+[[ -f "$REFERENCE_READER" ]] || die_usage "scenario-reference-reader.py is required"
+manifest_state() {
+    python3 - "$1" <<'PY'
+import hashlib
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+try:
+        before = os.lstat(path)
+        if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+                raise OSError("pathname is not a regular non-symlink file")
+        with open(path, "rb") as fh:
+                data = fh.read()
+                opened = os.fstat(fh.fileno())
+        after = os.lstat(path)
+except OSError as exc:
+        print(f"test-mechanism-lint: cannot establish manifest identity: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+identity = (before.st_dev, before.st_ino)
+if identity != (opened.st_dev, opened.st_ino) or identity != (after.st_dev, after.st_ino):
+        print("test-mechanism-lint: manifest pathname identity changed while it was read", file=sys.stderr)
+        sys.exit(2)
+print(f"{before.st_dev}:{before.st_ino}:{hashlib.sha256(data).hexdigest()}")
+PY
+}
+
+refuse_manifest_change() {
+    local phase="$1" observed="$2" required="$3"
+    printf '[test-mechanism-lint] REFUSED — scenario manifest changed during validation\n' >&2
+    printf '  phase: %s\n' "$phase" >&2
+    printf '  observed: %s\n' "$observed" >&2
+    printf '  required: %s\n' "$required" >&2
+    exit 2
+}
+
+require_manifest_state() {
+    local path="$1" expected="$2" phase="$3" observed
+    observed="$(manifest_state "$path" 2>&1)" || refuse_manifest_change "$phase" "$observed" "$expected"
+    [[ "$observed" == "$expected" ]] || refuse_manifest_change "$phase" "$observed" "$expected"
+}
+
+BASELINE_STATE="$(manifest_state "$MANIFEST")" || exit 2
+SNAPSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/test-mechanism-manifest.XXXXXXXX")" || die_usage "cannot create stable manifest snapshot"
+SNAPSHOT_MANIFEST="$SNAPSHOT_DIR/scenario-manifest.json"
+cp "$MANIFEST" "$SNAPSHOT_MANIFEST" || die_usage "cannot copy scenario manifest into stable snapshot"
+SNAPSHOT_STATE="$(manifest_state "$SNAPSHOT_MANIFEST")" || exit 2
+[[ "${SNAPSHOT_STATE##*:}" == "${BASELINE_STATE##*:}" ]] || refuse_manifest_change "snapshot-capture" "$SNAPSHOT_STATE" "$BASELINE_STATE"
+require_manifest_state "$MANIFEST" "$BASELINE_STATE" "snapshot-capture"
+PROJECTION_FILE="$(mktemp "${TMPDIR:-/tmp}/test-mechanism-lint.XXXXXXXX")" || die_usage "cannot create scenario projection"
+cleanup() { rm -f "$PROJECTION_FILE"; rm -rf "$SNAPSHOT_DIR"; }
+trap cleanup EXIT INT TERM
+if ! python3 "$REFERENCE_READER" --stdin --repo-root "$REPO_ROOT" <"$SNAPSHOT_MANIFEST" >"$PROJECTION_FILE"; then
+  exit 2
+fi
+require_manifest_state "$SNAPSHOT_MANIFEST" "$SNAPSHOT_STATE" "after-canonical-projection"
+require_manifest_state "$MANIFEST" "$BASELINE_STATE" "after-canonical-projection"
+
+PROJECTION_FILE="$PROJECTION_FILE" QUIET="$QUIET" python3 - <<'PY'
 import json, os, sys
 
-manifest_path = os.environ["MANIFEST"]
+projection_path = os.environ["PROJECTION_FILE"]
 quiet = os.environ.get("QUIET") == "1"
 
 try:
-    with open(manifest_path, encoding="utf-8") as fh:
-        manifest = json.load(fh)
+    with open(projection_path, encoding="utf-8") as fh:
+        projection = json.load(fh)
 except (OSError, ValueError) as exc:
-    print(f"test-mechanism-lint: cannot parse {manifest_path}: {exc}", file=sys.stderr)
+    print(f"test-mechanism-lint: cannot parse scenario reference projection: {exc}", file=sys.stderr)
     sys.exit(2)
 
 VOCAB = {
@@ -119,24 +180,26 @@ LIVE_PATHS = {"external-live", "live-provider"}
 findings = []
 declared = 0
 
-# Two manifest envelopes exist in the wild: {"scenarios": [...]} and a BARE
-# top-level list of the same scenario objects. Reading only the object form
-# crashes on the bare list; refusing it would false-reject real certified specs.
-# Normalise and validate both.
-scenarios = manifest.get("scenarios") if isinstance(manifest, dict) else manifest
+scenarios = projection.get("scenarios") if isinstance(projection, dict) else None
 if not isinstance(scenarios, list):
-    scenarios = []
+    print("test-mechanism-lint: scenario reference projection has no scenarios array", file=sys.stderr)
+    sys.exit(2)
 
 for scenario in scenarios:
     if not isinstance(scenario, dict):
-        continue
-    sid = scenario.get("id") or scenario.get("scenarioId") or "<unidentified-scenario>"
+        print("test-mechanism-lint: scenario reference projection contains a non-object scenario", file=sys.stderr)
+        sys.exit(2)
+    sid = scenario.get("scenarioId") or "<unidentified-scenario>"
+    metadata = scenario.get("metadata")
+    if not isinstance(metadata, dict):
+        print(f"test-mechanism-lint: scenario {sid} projection has no metadata object", file=sys.stderr)
+        sys.exit(2)
     mech = scenario.get("testMechanism")
     if not isinstance(mech, dict) or not mech:
         continue
     declared += 1
 
-    traits = scenario.get("behaviorTraits")
+    traits = metadata.get("behaviorTraits")
     trait_set = {t for t in traits if isinstance(t, str)} if isinstance(traits, list) else set()
 
     # --- A. vocabulary ------------------------------------------------------
@@ -215,7 +278,7 @@ for scenario in scenarios:
     RANK = {"adversarial-input": 1, "perturbed-input": 2, "mutation": 3}
     TIER_MINIMUM = {"low": 1, "medium": 2, "high": 3}
 
-    tier = scenario.get("riskTier")
+    tier = metadata.get("riskTier")
     ncm = mech.get("negativeControlMechanism")
     fallback = mech.get("negativeControlFallbackReason")
 
@@ -280,10 +343,16 @@ PY
 # today's behaviour rather than to a broken tool.
 COMPANION="$SCRIPT_DIR/mutation-receipt.sh"
 if [[ -f "$COMPANION" ]]; then
+    companion_rc=0
+    require_manifest_state "$SNAPSHOT_MANIFEST" "$SNAPSHOT_STATE" "before-mutation-receipt"
+    require_manifest_state "$MANIFEST" "$BASELINE_STATE" "before-mutation-receipt"
   if [[ "$QUIET" -eq 1 ]]; then
-    bash "$COMPANION" check --spec-dir "$SPEC_DIR" --repo-root "$REPO_ROOT" --quiet
+        bash "$COMPANION" check --spec-dir "$SNAPSHOT_DIR" --repo-root "$REPO_ROOT" --quiet || companion_rc=$?
   else
-    bash "$COMPANION" check --spec-dir "$SPEC_DIR" --repo-root "$REPO_ROOT"
+        bash "$COMPANION" check --spec-dir "$SNAPSHOT_DIR" --repo-root "$REPO_ROOT" || companion_rc=$?
   fi
+    require_manifest_state "$SNAPSHOT_MANIFEST" "$SNAPSHOT_STATE" "after-mutation-receipt"
+    require_manifest_state "$MANIFEST" "$BASELINE_STATE" "after-mutation-receipt"
+    [[ "$companion_rc" -eq 0 ]] || exit "$companion_rc"
 fi
 exit 0

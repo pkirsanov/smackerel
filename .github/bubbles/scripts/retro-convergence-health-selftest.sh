@@ -285,6 +285,59 @@ else
 fi
 
 echo ""
+echo "--- S4: a linked worktree resolves the primary checkout's session JSON ---"
+# The session JSON is git-ignored, so it never materialises in a linked worktree.
+# Unresolved, the metric reads as unmeasurable and Check 33 reports a G090 breach,
+# so a worktree census overstates the blocking gates for every spec it visits.
+repo="$(stage_repo s4-worktree-primary)"
+write_healthy_session "$repo"
+stage_git_fixture() {
+  local root="$1" linked="$2"
+  (
+    cd "$root" || exit 1
+    git init -q .
+    git config user.email selftest@example.com
+    git config user.name selftest
+    printf '.specify/memory/bubbles.session.json\n' > .gitignore
+    mkdir -p specs/900-retro-fixture
+    printf 'fixture\n' > specs/900-retro-fixture/spec.md
+    git add -A
+    git commit -q -m "retro-health worktree fixture"
+    git worktree add -q --detach "$linked" HEAD
+  ) > /dev/null 2>&1 || true
+}
+
+s4_linked="$WORKSPACE/s4-worktree-linked"
+stage_git_fixture "$repo" "$s4_linked"
+
+if [[ ! -d "$s4_linked" ]]; then
+  ko "S4 could not create a linked worktree fixture"
+elif [[ -f "$s4_linked/.specify/memory/bubbles.session.json" ]]; then
+  ko "S4 fixture invalid: the linked worktree already carries a session JSON"
+else
+  ok "S4 fixture: linked worktree carries no session JSON of its own"
+  run_health "$s4_linked"
+  assert_exit "S4 linked worktree" 0
+  assert_json "S4 linked worktree"
+fi
+
+echo ""
+echo "--- S4b: a worktree whose primary has no session still fails ---"
+# Resolution must not become an escape hatch. The session JSON is git-ignored, so
+# deleting it leaves no trace in git status; if absence were tolerated, removing
+# the file would silently skip G090. Absent in the primary too must still exit 2.
+repo="$(stage_repo s4b-worktree-nosession)"
+s4b_linked="$WORKSPACE/s4b-worktree-linked"
+stage_git_fixture "$repo" "$s4b_linked"
+
+if [[ ! -d "$s4b_linked" ]]; then
+  ko "S4b could not create a linked worktree fixture"
+else
+  run_health "$s4b_linked"
+  assert_exit "S4b linked worktree with no session anywhere" 2
+fi
+
+echo ""
 echo "=== Selftest verdict ==="
 printf '  Total assertions: %d\n' "$((PASS_COUNT + FAIL_COUNT))"
 printf '  Passed:           %d\n' "$PASS_COUNT"

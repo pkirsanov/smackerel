@@ -39,6 +39,29 @@ commands:
       heartbeat: owned_mutation
       release: runtime_teardown
       reclaim-stale: runtime_teardown
+  research:
+    defaultRiskClass: read_only
+    overrides:
+      plan: owned_mutation
+      run: owned_mutation
+      resume: owned_mutation
+      validate: owned_mutation
+      publish: owned_mutation
+      cancel: owned_mutation
+      adapter-local-command: external_side_effect
+    notes:
+    - Status, capabilities, schema, question validation, inspection, bridges, and the disabled adapter are read-only.
+    - Local-command adapter execution is an external side effect even when its candidate result is read-only.
+  admission:
+    defaultRiskClass: owned_mutation
+    overrides:
+      adapter: read_only
+      usage: read_only
+      budget-snapshot: read_only
+    notes:
+    - Adapter and usage resolution are default-off reads.
+    - The CLI refines `budget snapshot` to the registry's budget-snapshot read classification.
+    - Host-native enforcement is unsupported and refused by the CLI.
   session:
     defaultRiskClass: read_only
   lint:

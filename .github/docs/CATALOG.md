@@ -89,6 +89,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 73 | [Upgrade To v7](recipes/upgrade-to-v7.md) | `install.sh` | Move an installed repository to Bubbles v7 |
 | 74 | [Upkeep Monthly](recipes/upkeep-monthly.md) | `bubbles.upkeep` | Run the monthly operator upkeep checklist |
 | 75 | [UX Single-File Sweep](recipes/ux-single-file-sweep.md) | `bubbles.simplify` | Sweep a single-file UI surface for UX defects |
+| 76 | [Research And Admission Runtime](recipes/research-and-admission-runtime.md) | `cli.sh research` / `cli.sh admission` | Build immutable research evidence and admit measured dispatches under an exact goal budget |
 
 ---
 

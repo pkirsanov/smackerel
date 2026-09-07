@@ -13,6 +13,8 @@
 #   model-tier-advisory.sh check [--enforce] --mode <mode> --phase <phase>
 #   model-tier-advisory.sh resolve --mode <mode> --phase <phase>   # prints floor
 #   model-tier-advisory.sh retirement [--tier <tier>]              # IMP-027/S11
+#   model-tier-advisory.sh typed --mode <mode> --phase <phase>
+#     --model-class <class> [--model-identity <id> --model-verified]
 #
 # `retirement` reports which `modelCompensation` gates have met the TIER half
 # of their registry `retireWhen` criterion at the given (or active) model tier.
@@ -37,6 +39,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # BUBBLES_WORKFLOWS_FILE override exists for hermetic selftests and downstream
 # repos that relocate workflows.yaml; defaults to the in-tree path.
 WORKFLOWS="${BUBBLES_WORKFLOWS_FILE:-$REPO_ROOT/bubbles/workflows.yaml}"
+# IMP-058 SCOPE-1 / REG-22: the gate registry, not workflows.yaml, is where
+# `classification` and `retireWhen` live. `retirement` reads this file; every
+# other operation (check/resolve/typed) keeps reading WORKFLOWS above.
+GATES="${BUBBLES_GATES_FILE:-$REPO_ROOT/bubbles/registry/gates.yaml}"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -63,18 +69,50 @@ MODE=""
 PHASE=""
 ENFORCE="0"
 TIER=""
+MODEL_CLASS="none"
+MODEL_IDENTITY=""
+MODEL_VERIFIED="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) MODE="$2"; shift 2;;
     --phase) PHASE="$2"; shift 2;;
     --tier) TIER="$2"; shift 2;;
     --enforce) ENFORCE="1"; shift;;
+    --model-class) MODEL_CLASS="$2"; shift 2;;
+    --model-identity) MODEL_IDENTITY="$2"; shift 2;;
+    --model-verified) MODEL_VERIFIED="true"; shift;;
     -h|--help) usage; exit 0;;
     *) usage; exit 2;;
   esac
 done
 
 [[ -f "$WORKFLOWS" ]] || { echo "model-tier-advisory: workflows.yaml missing" >&2; exit 2; }
+
+if [[ "$OP" == "typed" ]]; then
+    [[ -n "$MODE" && -n "$PHASE" ]] || { usage; exit 2; }
+    case "$MODEL_CLASS" in
+        none|economy-reasoning|standard-reasoning|high-assurance-reasoning) ;;
+        *) echo "model-tier-advisory: unknown model class" >&2; exit 2 ;;
+    esac
+    if [[ "$MODEL_VERIFIED" == "true" && -z "$MODEL_IDENTITY" ]]; then
+        echo "model-tier-advisory: verified identity requires --model-identity" >&2
+        exit 2
+    fi
+    command -v jq >/dev/null 2>&1 || { echo "model-tier-advisory: jq is required for typed output" >&2; exit 2; }
+    identity_state="unverified"
+    [[ "$MODEL_VERIFIED" == "true" ]] && identity_state="verified"
+    material="$(jq -cnS --arg class "$MODEL_CLASS" --arg identity "$MODEL_IDENTITY" --arg state "$identity_state" --arg mode "$MODE" --arg phase "$PHASE" '{contractType:"model-class-decision",mode:$mode,modelClass:$class,modelIdentity:(if $identity == "" then null else $identity end),modelIdentityState:$state,phase:$phase,schemaVersion:1}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+        digest="$(printf '%s' "$material" | sha256sum | awk '{print $1}')"
+    elif command -v shasum >/dev/null 2>&1; then
+        digest="$(printf '%s' "$material" | shasum -a 256 | awk '{print $1}')"
+    else
+        echo "model-tier-advisory: sha256 utility is required" >&2
+        exit 2
+    fi
+    printf '%s' "$material" | jq -cS --arg digest "sha256:$digest" '. + {decisionDigest:$digest}'
+    exit 0
+fi
 
 # Resolve the managed interpreter before probing, so a provisioned environment
 # satisfies the import even when PATH's python3 does not. See
@@ -93,8 +131,17 @@ fi
 # requirement below because retirement candidacy is a property of the gate
 # registry and the model tier, not of any single mode/phase.
 if [[ "$OP" == "retirement" ]]; then
-  WORKFLOWS="$WORKFLOWS" TIER="${TIER:-${BUBBLES_ACTIVE_MODEL:-}}" python3 - <<'PY'
-import os, sys
+  # BUBBLES_GATE_HIT_ROOT override exists for hermetic selftests, mirroring
+  # BUBBLES_GATES_FILE/BUBBLES_WORKFLOWS_FILE above: it lets a fixture point
+  # gate-hit-log.sh at synthetic telemetry instead of the real repo's
+  # .specify/runtime/gate-hits.jsonl.
+  GATES="$GATES" TIER="${TIER:-${BUBBLES_ACTIVE_MODEL:-}}" \
+    REPO_ROOT="${BUBBLES_GATE_HIT_ROOT:-$REPO_ROOT}" \
+    GATE_HIT_LOG="$SCRIPT_DIR/gate-hit-log.sh" python3 - <<'PY'
+import json
+import os
+import subprocess
+import sys
 
 try:
     import yaml
@@ -102,7 +149,7 @@ except ImportError:
     print("model-tier-advisory: SKIP (PyYAML not installed)")
     sys.exit(0)
 
-with open(os.environ['WORKFLOWS']) as f:
+with open(os.environ['GATES']) as f:
     data = yaml.safe_load(f) or {}
 
 TIER_RANK = {'haiku-class': 1, 'sonnet-class': 2, 'opus-class': 3}
@@ -164,15 +211,74 @@ if declared:
              if blocked else "none"))
 
 print("")
-print("  NOTHING IS RETIRED BY THIS REPORT. Each criterion has two halves and")
-print("  only the TIER half is evaluated above. The EVIDENCE half is UNMET for")
-print("  every gate without exception: retiring a gate requires the named rate")
-print("  measured below its threshold across its window of real model runs, and")
-print("  no harness produces those rates yet. The golden-task corpus scores a")
-print("  delivered artifact; it does not drive a model, so it cannot report how")
-print("  often a tier produces a dishonest one. Turning a gate off on tier")
-print("  eligibility alone would substitute 'the model is probably better now'")
-print("  for a measurement — the exact move the gate exists to prevent.")
+print("  NOTHING IS RETIRED BY THIS REPORT. Each RATE criterion above has two")
+print("  halves and only the TIER half is evaluated here.")
+print("  The EVIDENCE half is UNMET for every rate criterion without exception:")
+print("  retiring a gate on a rate requires that rate measured below its")
+print("  threshold across its window of real model runs, and no harness")
+print("  produces those rates yet. The golden-task corpus scores a delivered")
+print("  artifact; it does not drive a model, so it cannot report how often a")
+print("  tier produces a dishonest one. Turning a gate off on tier eligibility")
+print("  alone would substitute 'the model is probably better now' for a")
+print("  measurement — the exact move the rate criterion exists to prevent.")
+print("  See the preventionEvidence section below for the one evidence form")
+print("  this report CAN evaluate today.")
+
+# IMP-058 SCOPE-2 / COV-24 — the second criterion form. A gate may declare
+# `preventionEvidence: { minRuns, prevented, sourceClass }` alongside (never
+# instead of) its rate criterion. Unlike the rate, this is satisfied directly
+# from gate-hit-log.sh's own product-run telemetry, so it is decidable today.
+# A gate's PREVENTION history alone (no minRuns needed) proves it is earning
+# its cost; only the "never prevented" case needs a run-count floor to tell
+# "not yet observed enough" apart from "observed plenty, never mattered".
+earning, candidate, unmeasured = [], [], []
+hit_by_gate = {}
+gate_hit_log = os.environ.get('GATE_HIT_LOG', '')
+if gate_hit_log and os.path.isfile(gate_hit_log):
+    try:
+        proc = subprocess.run(
+            [gate_hit_log, 'report', '--json', '--repo-root',
+             os.environ.get('REPO_ROOT', '')],
+            capture_output=True, text=True, timeout=30,
+        )
+        hits = json.loads(proc.stdout or '{}')
+        for row in hits.get('gates') or []:
+            gid = row.get('gate')
+            if gid:
+                hit_by_gate[gid] = row
+    except (OSError, subprocess.SubprocessError, ValueError):
+        hit_by_gate = {}
+
+for gid in sorted(gates):
+    row = hit_by_gate.get(gid)
+    prevented = int(row.get('prevented', 0)) if row else 0
+    fired = int(row.get('fired', 0)) if row else 0
+    pe = gates[gid].get('preventionEvidence')
+    if prevented >= 1:
+        earning.append((gid, fired, prevented))
+    elif isinstance(pe, dict) and 'minRuns' in pe and fired >= int(pe['minRuns']):
+        candidate.append((gid, fired, prevented))
+    else:
+        unmeasured.append((gid, fired, prevented))
+
+print("")
+print("  preventionEvidence report (IMP-058 SCOPE-2 / COV-24) — decidable from")
+print("  gate-hit-log.sh product telemetry, no model run required:")
+print(f"  EARNING ({len(earning)}) — prevented at least once, cost is proven: "
+      + (', '.join(f"{g}(prevented={p}/{f})" for g, f, p in earning)
+         if earning else "none"))
+print(f"  CANDIDATE ({len(candidate)}) — fired >= declared minRuns, never "
+      "prevented: "
+      + (', '.join(f"{g}(fired={f})" for g, f, p in candidate)
+         if candidate else "none"))
+print(f"  UNMEASURED ({len(unmeasured)}) — no telemetry, or below the "
+      "declared minRuns, or no preventionEvidence declared: "
+      + (', '.join(g for g, f, p in unmeasured) if unmeasured else "none"))
+print("")
+print("  CANDIDATE is not retirement. It means the owner can now make an")
+print("  informed call instead of waiting on an unmeasurable rate — a gate")
+print("  judged load-bearing for reasons the hit log cannot see stays,")
+print("  regardless of its record count.")
 sys.exit(0)
 PY
   exit 0

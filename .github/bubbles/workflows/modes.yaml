@@ -1509,6 +1509,26 @@ modes:
       specReviewDefault: off
       specReviewOptOutReason: release-train-status-all is read-only multi-train rollup
 
+  release-train-assign-metadata:
+    description: "Assign an existing release train and optional explicit feature-flag metadata to one spec state. Changes only state.json releaseTrain and explicitly supplied flagsIntroduced. Never cuts, builds, promotes, rolls back, retires, deploys, changes lifecycle state, or mutates configuration, bundles, artifacts, or manifests."
+    statusCeiling: train_metadata_assigned
+    transitionAudit: { profile: operational-completion-v1, target: statusCeiling }
+    terminalAliases: [ train_metadata_assigned ]
+    phaseOrder: [ select, validate, audit, finalize ]
+    requiredGates: [ G001, G006, G007, G011, G012, G073, G110 ]
+    constraints:
+      modeClass: release-train
+      mutationClass: metadata-only
+      requireDeclaredTrainInRegistry: true
+      ownedStateFields: [ releaseTrain, flagsIntroduced ]
+      forbidLifecycleMutation: true
+      forbidBuild: true
+      forbidDeployment: true
+      forbidManifestMutation: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: release-train-assign-metadata writes only train-owned state metadata; it does not modify planning truth
+
   # ─────────────────────────────────────────────────────────────────────────
   # UPKEEP MODES (Treena Lahey — bubbles.upkeep)
   # Recurring operational hygiene: backup, restore drill, BCDR drill,

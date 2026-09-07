@@ -19,6 +19,22 @@ selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$selftest_tmp_base"
 tmp_root="$(mktemp -d "$selftest_tmp_base/bubbles-transition-guard-selftest.XXXXXX")"
 failures=0
+assertions=0
+
+# PATH is an input to this harness, not a trust root. Keep a silent adversarial
+# env executable first for the entire suite so any executable dependency on
+# PATH-resolved `env` turns the affected capture log empty and fails its
+# existing content assertions. Trusted launchers below apply assignments
+# directly in Bash and invoke the guard with an explicit bash command.
+fake_env_dir="$tmp_root/fake-env-path"
+mkdir -p "$fake_env_dir"
+cat <<'EOF' > "$fake_env_dir/env"
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$fake_env_dir/env"
+PATH="$fake_env_dir:$PATH"
+export PATH
 
 cleanup() {
   if [[ "$failures" -eq 0 ]] && [[ "${KEEP_SELFTEST_TMP:-0}" != "1" ]]; then
@@ -31,10 +47,12 @@ cleanup() {
 trap cleanup EXIT
 
 pass() {
+  assertions=$((assertions + 1))
   echo "PASS: $1"
 }
 
 fail() {
+  assertions=$((assertions + 1))
   echo "FAIL: $1"
   failures=$((failures + 1))
 }
@@ -49,6 +67,57 @@ run_capture() {
   set -e
 
   echo "$status"
+}
+
+run_capture_from() {
+  local working_directory="$1"
+  local log_file="$2"
+  shift 2
+
+  set +e
+  (cd "$working_directory" && "$@") >"$log_file" 2>&1
+  local status=$?
+  set -e
+
+  echo "$status"
+}
+
+run_guard_fast_disabled() {
+  local guard_script="$1"
+  local feature_dir="$2"
+
+  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    bash "$guard_script" "$feature_dir"
+}
+
+run_guard_with_repo_root_and_lint_timeout() {
+  local repository_root="$1"
+  local lint_timeout="$2"
+  local guard_script="$3"
+  local feature_dir="$4"
+
+  BUBBLES_REPO_ROOT="$repository_root" \
+    BUBBLES_ARTIFACT_LINT_TIMEOUT="$lint_timeout" \
+    bash "$guard_script" "$feature_dir"
+}
+
+run_guard_with_resolver_count() {
+  local count_file="$1"
+  local guard_script="$2"
+  local feature_dir="$3"
+
+  BUBBLES_TRANSITION_RESOLVER_COUNT_FILE="$count_file" \
+    bash "$guard_script" "$feature_dir"
+}
+
+run_guard_with_repo_root_fast_disabled() {
+  local repository_root="$1"
+  local guard_script="$2"
+  local feature_dir="$3"
+
+  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    BUBBLES_REPO_ROOT="$repository_root" \
+    bash "$guard_script" "$feature_dir"
 }
 
 sha256_text() {
@@ -68,6 +137,107 @@ clone_framework_surface() {
   mkdir -p "$destination_root"
   cp -R "$SCRIPT_DIR/.." "$destination_root/bubbles"
   cp -R "$SCRIPT_DIR/../../agents" "$destination_root/agents"
+}
+
+run_strict_manifest_containment_regressions() {
+  local focused_root="$tmp_root/strict-containment-focused"
+  local g064_root="$focused_root/g064"
+  local planning_root="$focused_root/planning-gates"
+  local basename_root="$focused_root/basename"
+  local g064_dir="$g064_root/specs/001-g064-negative"
+  local g087_dir="$planning_root/specs/001-g087-negative"
+  local g091_dir="$planning_root/specs/002-g091-negative"
+  local basename_planning_dir="$basename_root/specs/001-basename-planning"
+  local basename_delivery_dir="$basename_root/specs/002-basename-delivery"
+  local feature_dir log_file status
+
+  echo "Running focused strict manifest-containment regressions..."
+
+  clone_framework_surface "$g064_root"
+  emit_base_fixture "$g064_dir"
+  mutate_delivery_contract "$g064_dir/state.json"
+  inject_unauthorized_workflow_runner "$g064_root/bubbles/agent-capabilities.yaml"
+  git -C "$g064_root" init -q
+  log_file="$focused_root/g064.log"
+  status="$(BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    run_capture_from "$g064_root" "$log_file" \
+    bash "$g064_root/bubbles/scripts/state-transition-guard.sh" "$g064_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "Focused containment: G064 adversary exits exactly 1"
+  else
+    fail "Focused containment: G064 adversary must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" "enables workflow execution without a grant" \
+    "Focused containment: G064 diagnostic remains isolated"
+
+  clone_framework_surface "$planning_root"
+  emit_honest_planning_fixture "$g087_dir"
+  emit_honest_planning_fixture "$g091_dir"
+  remove_planning_only_linkage "$g087_dir/state.json"
+  git -C "$planning_root" init -q
+  git -C "$planning_root" add -f bubbles agents specs
+  git -C "$planning_root" -c user.name='Bubbles Selftest' -c user.email='bubbles-selftest@example.invalid' \
+    commit -q -m 'test: seed focused planning gate fixtures'
+
+  log_file="$focused_root/g087.log"
+  status="$(BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    run_capture_from "$planning_root" "$log_file" \
+    bash "$planning_root/bubbles/scripts/state-transition-guard.sh" "$g087_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "Focused containment: G087 adversary exits exactly 1"
+  else
+    fail "Focused containment: G087 adversary must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" "Planning packet implementation linkage failed — Gate G087" \
+    "Focused containment: G087 diagnostic remains isolated"
+
+  printf '%s\n' 'Fallback route: invoke bubbles.design -> bubbles.plan when planning artifacts are missing.' \
+    >> "$planning_root/agents/bubbles.workflow.agent.md"
+  git -C "$planning_root" add -f agents/bubbles.workflow.agent.md
+  git -C "$planning_root" -c user.name='Bubbles Selftest' -c user.email='bubbles-selftest@example.invalid' \
+    commit -q -m 'test: inject focused G091 planning-chain adversary'
+  log_file="$focused_root/g091.log"
+  status="$(BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    run_capture_from "$planning_root" "$log_file" \
+    bash "$planning_root/bubbles/scripts/state-transition-guard.sh" "$g091_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "Focused containment: G091 adversary exits exactly 1"
+  else
+    fail "Focused containment: G091 adversary must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" "Planning workflow chain guard failed — Gate G091" \
+    "Focused containment: G091 diagnostic remains isolated"
+
+  clone_framework_surface "$basename_root"
+  emit_honest_planning_fixture "$basename_planning_dir"
+  emit_honest_planning_fixture "$basename_delivery_dir"
+  for feature_dir in "$basename_planning_dir" "$basename_delivery_dir"; do
+    bubbles_sed_inplace \
+      's;^| Broader regression |.*$;| Broader regression | `regression` | `rlbasenameonlyfixture.js` | Preserve planning and delivery profile isolation. | `bash rlbasenameonlyfixture.js` | No |;' \
+      "$feature_dir/scopes.md"
+  done
+  set_fixture_contract "$basename_delivery_dir/state.json" "autonomous-goal" "done"
+  git -C "$basename_root" init -q
+
+  log_file="$focused_root/basename-planning.log"
+  status="$(run_capture_from "$basename_root" "$log_file" bash "$basename_root/bubbles/scripts/state-transition-guard.sh" "$basename_planning_dir")"
+  if [[ "$status" -eq 0 ]]; then
+    pass "Focused containment: basename-only planning fixture exits 0"
+  else
+    fail "Focused containment: basename-only planning fixture must exit 0 (observed $status)"
+  fi
+  assert_log_contains "$log_file" "planning maturity: rlbasenameonlyfixture.js" \
+    "Focused containment: basename-only planning exemption is reached"
+
+  log_file="$focused_root/basename-delivery.log"
+  status="$(run_capture_from "$basename_root" "$log_file" bash "$basename_root/bubbles/scripts/state-transition-guard.sh" "$basename_delivery_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "Focused containment: basename-only delivery adversary exits exactly 1"
+  else
+    fail "Focused containment: basename-only delivery adversary must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" "non-existent or non-resolvable file: rlbasenameonlyfixture.js" \
+    "Focused containment: basename-only delivery enforcement remains active"
 }
 
 inject_unauthorized_workflow_runner() {
@@ -244,6 +414,54 @@ assert_log_not_contains() {
   fi
 }
 
+check43_panel_text() {
+  local log_file="$1"
+  awk '
+    /^check=43 verdict=/ { active=1 }
+    active { print }
+    active && /^effect=(COLLISION_ACCEPTED|TRANSITION_BLOCKED)$/ { active=0 }
+  ' "$log_file"
+}
+
+assert_check43_contains() {
+  local log_file="$1"
+  local needle="$2"
+  local label="$3"
+  local panel
+  panel="$(check43_panel_text "$log_file")"
+
+  if printf '%s\n' "$panel" | grep -Fq -- "$needle"; then
+    pass "$label"
+  else
+    fail "$label"
+    printf '%s\n' "--- Check 43 panel: $log_file ---" "${panel:-<missing>}" "--- end Check 43 panel ---"
+  fi
+}
+
+assert_check43_fields_in_order() {
+  local log_file="$1"
+  local label="$2"
+  shift 2
+  local panel_file="$tmp_root/check43-order.$$.log"
+  local previous=0
+  local needle line
+
+  check43_panel_text "$log_file" > "$panel_file"
+  for needle in "$@"; do
+    line="$(awk -v after="$previous" -v needle="$needle" '
+      NR > after && index($0, needle) { print NR; exit }
+    ' "$panel_file")"
+    if [[ -z "$line" ]]; then
+      fail "$label (missing or out of order: $needle)"
+      rm -f "$panel_file"
+      return
+    fi
+    previous="$line"
+  done
+  rm -f "$panel_file"
+  pass "$label"
+}
+
 # Canonical expectation of the guard's TRANSITION_GUARD_RESULT_V1 field order.
 # This is the ONLY copy of that order in this file: assert_transition_result
 # walks it positionally, and assert_transition_result_contract_matches_emitter
@@ -400,7 +618,7 @@ emit_base_fixture() {
   mkdir -p "$feature_dir/tests"
 
   cat <<'EOF' > "$scenario_test"
-export const docsScenarioRegression = true;
+test('docsScenarioRegression', () => {});
 EOF
 
   cat <<'EOF' > "$broader_test"
@@ -857,7 +1075,12 @@ if [[ "${BUBBLES_STATE_TRANSITION_GUARD_G061_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
-run_g061_regression_cases
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FOCUS:-}" \
+  != "TP-01-04-security-boundary-group" ]] \
+  && [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FOCUS:-}" \
+    != "BUG032-REG-C5A-TYPE-COLUMN-001" ]]; then
+  run_g061_regression_cases
+fi
 
 emit_honest_planning_fixture() {
   local feature_dir="$1"
@@ -993,22 +1216,24 @@ EOF
 
   cat <<'EOF' > "$feature_dir/scenario-manifest.json"
 {
-  "version": 1,
+  "schemaVersion": 1,
   "scenarios": [
     {
-      "scenarioId": "SCN-009-S03-001",
+      "id": "SCN-009-S03-001",
       "title": "Planning maturity preserves honest incomplete delivery",
       "status": "planned",
       "scope": "Scope 01",
       "requirements": ["FR-009-S03-001"],
-      "requiredTestType": "e2e",
+      "requiredTestType": "e2e-ui",
       "linkedTests": ["__FUTURE_TEST__"],
       "evidenceRefs": []
     }
   ]
 }
 EOF
-  bubbles_sed_inplace "s|__FUTURE_TEST__|$future_test|g" "$feature_dir/scenario-manifest.json"
+  # Keep the manifest sentinel intact. It is the v1 compatibility spelling for
+  # a classified planned reference; replacing it with an absolute fixture path
+  # would violate the reader's repository-relative path contract.
 
   cat <<'EOF' > "$feature_dir/state.json"
 {
@@ -1174,6 +1399,288 @@ break_gherkin_dod_fidelity() {
   bubbles_sed_inplace \
     's/^Scenario: Planning maturity preserves honest incomplete delivery$/Scenario: Rotating archived credentials deletes obsolete transport records/' \
     "$scope_file"
+}
+
+write_g057_manifest() {
+  local feature_dir="$1"
+  local document="$2"
+  printf '%s\n' "$document" > "$feature_dir/scenario-manifest.json"
+}
+
+append_g057_scenario() {
+  local feature_dir="$1"
+  local scenario_id="$2"
+
+  cat <<EOF >> "$feature_dir/spec.md"
+
+## G057 Scenario
+
+### $scenario_id - G057 profile classification
+
+\`\`\`gherkin
+Scenario: G057 classifies each scenario independently
+Given one transition-profile-bound scenario
+When Check 3C evaluates its normalized references
+Then the scenario is classified without borrowing another scenario's counts
+\`\`\`
+EOF
+
+  cat <<EOF >> "$feature_dir/scopes.md"
+
+## G057 Scenario
+
+### $scenario_id - G057 profile classification
+
+\`\`\`gherkin
+Scenario: G057 classifies each scenario independently
+Given one transition-profile-bound scenario
+When Check 3C evaluates its normalized references
+Then the scenario is classified without borrowing another scenario's counts
+\`\`\`
+EOF
+
+  bubbles_sed_inplace \
+    's/Documentation route metadata is recorded consistently across artifacts/G057 classifies each scenario independently without borrowing another scenario count/' \
+    "$feature_dir/scopes.md"
+}
+
+append_g057_delivery_receipts() {
+  local scenario_id="$1"
+  local receipt_log="$tmp_root/.specify/runtime/tool-calls.jsonl"
+  local source_revision="0000000000000000000000000000000000000001"
+  local test_identity="tests/docs-scenario-regression.e2e.spec.ts::docsScenarioRegression"
+  local negative_control="remove the scenario-specific assertion; the regression no longer discriminates G057 behavior"
+  local phase exit_code timestamp
+
+  mkdir -p "$(dirname "$receipt_log")"
+  for phase in red implement green regression; do
+    exit_code=0
+    case "$phase" in
+      red)
+        exit_code=1
+        timestamp="2026-08-31T20:00:00Z"
+        ;;
+      implement) timestamp="2026-08-31T20:01:00Z" ;;
+      green) timestamp="2026-08-31T20:02:00Z" ;;
+      regression) timestamp="2026-08-31T20:03:00Z" ;;
+    esac
+    printf '{"schemaVersion":2,"ts":"%s","sessionId":"g057-%s-%s","cmd":"bash bubbles/scripts/state-transition-guard-selftest.sh","exitCode":%s,"stdoutHash":"9f2c1a77b3e45d6081ca2be7f4d0913ac5e8b26df1074a3c9e5b0d8f6a271c43","scenarioBinding":{"scenarioId":"%s","phase":"%s","testIdentity":"%s","sourceRevision":"%s","negativeControl":"%s","claim":"G057 classifies each scenario independently","implementationRefs":["bubbles/scripts/guards/control-plane-checks.sh"]}}\n' \
+      "$timestamp" "$scenario_id" "$phase" "$exit_code" "$scenario_id" "$phase" \
+      "$test_identity" "$source_revision" "$negative_control" >> "$receipt_log"
+  done
+}
+
+assert_g057_valid_case() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local expected_message="$3"
+  local require_clean_exit="${4:-true}"
+  local log_file="$tmp_root/g057-$case_name.log"
+  local status
+
+  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$require_clean_exit" == "false" ]]; then
+    pass "G057 $case_name fixture completed for G057 assertions"
+  elif [[ "$status" -eq 0 ]]; then
+    pass "G057 $case_name fixture exits 0"
+  else
+    fail "G057 $case_name fixture must exit 0 (observed $status)"
+  fi
+  assert_log_contains "$log_file" \
+    "$expected_message" \
+    "G057 $case_name satisfies its per-scenario profile contract"
+  assert_log_not_contains "$log_file" "scenario-manifest.json violates the per-scenario" \
+    "G057 $case_name emits no G057 policy failure"
+  assert_log_not_contains "$log_file" "scenario-manifest.json is malformed or has an unsupported projection (Gate G057)" \
+    "G057 $case_name emits no G057 projection failure"
+  assert_log_contains "$log_file" "every linked test resolves to a real file and title (Gate G057)" \
+    "G057 $case_name reaches linked-test resolution"
+  assert_log_contains "$log_file" "scenario obligation matrix is coherent (Gate G057)" \
+    "G057 $case_name reaches obligation checks"
+  assert_log_contains "$log_file" "declared test mechanisms support their claims (Gate G057)" \
+    "G057 $case_name reaches mechanism checks"
+}
+
+assert_g057_policy_failure() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local log_file="$tmp_root/g057-$case_name.log"
+  local status
+
+  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "G057 $case_name fixture exits exactly 1"
+  else
+    fail "G057 $case_name fixture must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" \
+    "scenario-manifest.json violates the per-scenario" \
+    "G057 $case_name fails its per-scenario profile contract"
+  assert_log_contains "$log_file" "failureCount: 1" \
+    "G057 $case_name records exactly one failure"
+  assert_log_contains "$log_file" "failedGateIds: [G057]" \
+    "G057 $case_name isolates the failed gate list to G057"
+  assert_log_not_contains "$log_file" "every linked test resolves to a real file and title (Gate G057)" \
+    "G057 $case_name suppresses child resolution after policy failure"
+  assert_log_not_contains "$log_file" "scenario obligation matrix is coherent (Gate G057)" \
+    "G057 $case_name suppresses child obligation checks after policy failure"
+  assert_log_not_contains "$log_file" "declared test mechanisms support their claims (Gate G057)" \
+    "G057 $case_name suppresses child mechanism checks after policy failure"
+}
+
+assert_g057_malformed_once() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local log_file="$tmp_root/g057-$case_name.log"
+  local status
+
+  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "G057 $case_name fixture exits exactly 1"
+  else
+    fail "G057 $case_name fixture must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" \
+    "scenario-manifest.json is malformed or has an unsupported projection (Gate G057)" \
+    "G057 $case_name reports the isolated projection failure"
+  assert_log_contains "$log_file" "failureCount: 1" \
+    "G057 $case_name records exactly one failure"
+  assert_log_contains "$log_file" "failedGateIds: [G057]" \
+    "G057 $case_name isolates the failed gate list to G057"
+  assert_log_not_contains "$log_file" "scenario-manifest.json violates the per-scenario" \
+    "G057 $case_name does not cascade into policy validation"
+  assert_log_not_contains "$log_file" "every linked test resolves to a real file and title (Gate G057)" \
+    "G057 $case_name suppresses child resolution after malformed projection"
+  assert_log_not_contains "$log_file" "scenario obligation matrix is coherent (Gate G057)" \
+    "G057 $case_name suppresses child obligation checks after malformed projection"
+  assert_log_not_contains "$log_file" "declared test mechanisms support their claims (Gate G057)" \
+    "G057 $case_name suppresses child mechanism checks after malformed projection"
+}
+
+assert_g057_known_id_reconciliation_failure() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local missing_id="$3"
+  local log_file="$tmp_root/g057-$case_name.log"
+  local status
+
+  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "G057 $case_name fixture exits exactly 1"
+  else
+    fail "G057 $case_name fixture must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" \
+    "identified-subset exact matching failed: scenario-manifest.json does not contain every known resolved Gherkin scenario ID (Gate G057)" \
+    "G057 $case_name rejects the missing known stable ID"
+  assert_log_contains "$log_file" "Missing known scenario ID(s): $missing_id" \
+    "G057 $case_name identifies the missing known stable ID"
+  assert_log_contains "$log_file" "failureCount: 1" \
+    "G057 $case_name records exactly one failure"
+  assert_log_contains "$log_file" "failedGateIds: [G057]" \
+    "G057 $case_name isolates the failed gate list to G057"
+  assert_log_not_contains "$log_file" "every linked test resolves to a real file and title (Gate G057)" \
+    "G057 $case_name suppresses child resolution after reconciliation failure"
+  assert_log_not_contains "$log_file" "scenario obligation matrix is coherent (Gate G057)" \
+    "G057 $case_name suppresses child obligation checks after reconciliation failure"
+  assert_log_not_contains "$log_file" "declared test mechanisms support their claims (Gate G057)" \
+    "G057 $case_name suppresses child mechanism checks after reconciliation failure"
+}
+
+assert_g057_count_mismatch() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local manifest_count="$3"
+  local scope_count="$4"
+  local log_file="$tmp_root/g057-$case_name.log"
+  local status
+
+  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "G057 $case_name fixture exits exactly 1"
+  else
+    fail "G057 $case_name fixture must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" \
+    "legacy residual cardinality cannot match because scenario-manifest.json tracks $manifest_count scenarios but resolved scopes define exactly $scope_count Gherkin scenarios (Gate G057)" \
+    "G057 $case_name rejects unequal total scenario counts"
+  assert_log_contains "$log_file" "failureCount: 1" \
+    "G057 $case_name records exactly one failure"
+  assert_log_contains "$log_file" "failedGateIds: [G057]" \
+    "G057 $case_name isolates the failed gate list to G057"
+  assert_log_not_contains "$log_file" "every linked test resolves to a real file and title (Gate G057)" \
+    "G057 $case_name suppresses child resolution after count mismatch"
+  assert_log_not_contains "$log_file" "scenario obligation matrix is coherent (Gate G057)" \
+    "G057 $case_name suppresses child obligation checks after count mismatch"
+  assert_log_not_contains "$log_file" "declared test mechanisms support their claims (Gate G057)" \
+    "G057 $case_name suppresses child mechanism checks after count mismatch"
+}
+
+assert_g057_duplicate_scope_id_failure() {
+  local feature_dir="$1"
+  local case_name="$2"
+  local log_file="$tmp_root/g057-$case_name.log"
+  local status
+
+  status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -eq 1 ]]; then
+    pass "G057 $case_name fixture exits exactly 1"
+  else
+    fail "G057 $case_name fixture must exit exactly 1 (observed $status)"
+  fi
+  assert_log_contains "$log_file" \
+    "resolved scope artifacts contain duplicate Gherkin scenario IDs (Gate G057)" \
+    "G057 $case_name rejects duplicate identified scope multiplicity"
+  assert_log_contains "$log_file" "failureCount: 1" \
+    "G057 $case_name records exactly one failure"
+  assert_log_contains "$log_file" "failedGateIds: [G057]" \
+    "G057 $case_name isolates the failed gate list to G057"
+}
+
+run_focused_g057_assertions() {
+  local assertion_start="$assertions"
+
+  echo "Running focused G057 profile-aware scenario manifest regressions..."
+  assert_g057_valid_case "$g057_planning_planned_dir" "planning planned-only" "PLANNED/NA: SCN-G057-101"
+  assert_g057_valid_case "$g057_planning_authored_dir" "planning authored" "SCN-G057-102 has authored scenario coverage"
+  assert_g057_policy_failure "$g057_planning_neither_dir" "planning neither"
+  assert_g057_valid_case "$g057_delivery_valid_dir" "delivery authored plus evidence" "SCN-G057-104 has authored scenario coverage"
+  assert_g057_policy_failure "$g057_delivery_planned_dir" "delivery planned-only"
+  assert_g057_policy_failure "$g057_delivery_no_evidence_dir" "delivery authored without evidence"
+  assert_g057_policy_failure "$g057_delivery_mixed_dir" "delivery mixed planned and authored"
+  assert_g057_malformed_once "$g057_delivery_missing_file_dir" "delivery missing authored file"
+  assert_g057_policy_failure "$g057_delivery_wrong_type_dir" "delivery incompatible type"
+  assert_g057_policy_failure "$g057_delivery_string_untyped_dir" "delivery authored string without type"
+  assert_g057_policy_failure "$g057_delivery_object_untyped_dir" "delivery authored object without type"
+  assert_g057_policy_failure "$g057_delivery_null_evidence_member_dir" "delivery null evidence member"
+  assert_g057_policy_failure "$g057_delivery_numeric_evidence_member_dir" "delivery numeric evidence member"
+  assert_g057_policy_failure "$g057_delivery_blank_evidence_member_dir" "delivery blank evidence member"
+  assert_g057_policy_failure "$g057_delivery_whitespace_evidence_member_dir" "delivery whitespace evidence member"
+  assert_g057_valid_case "$g057_v2_dir" "strict v2 positive" "identified-subset exact matching covers every resolved Gherkin scenario ID; legacy residual cardinality is 0 = 0"
+  assert_g057_valid_case "$g057_scoped_id_dir" "arbitrary-segment cross-surface ID positive" "identified-subset exact matching covers every resolved Gherkin scenario ID; legacy residual cardinality is 0 = 0"
+  assert_g057_malformed_once "$g057_unknown_version_dir" "unknown version"
+  assert_g057_policy_failure "$g057_missing_title_dir" "missing title"
+  assert_g057_malformed_once "$g057_null_links_dir" "null linked tests"
+  assert_g057_policy_failure "$g057_scalar_evidence_dir" "scalar evidence refs"
+  assert_g057_malformed_once "$g057_null_planned_dir" "null planned tests"
+  assert_g057_malformed_once "$g057_invalid_link_member_dir" "invalid linked-test member object"
+  assert_g057_malformed_once "$g057_invalid_planned_member_dir" "invalid planned-test member object"
+  assert_g057_malformed_once "$g057_malformed_scoped_id_dir" "malformed scoped ID"
+  assert_g057_malformed_once "$g057_duplicate_effective_id_dir" "duplicate effective ID"
+  assert_g057_valid_case "$g057_legacy_count_only_dir" "all-unidentified equal count" "identified-subset exact matching covers all 0 known Gherkin scenario ID(s); legacy residual cardinality matches 1 unidentified scope heading(s) without inferring identity (1 total = 1 total)"
+  assert_g057_valid_case "$g057_mixed_heading_valid_dir" "positive mixed stable and legacy" "identified-subset exact matching covers all 1 known Gherkin scenario ID(s); legacy residual cardinality matches 1 unidentified scope heading(s) without inferring identity (2 total = 2 total)"
+  assert_g057_known_id_reconciliation_failure "$g057_mixed_heading_wrong_id_dir" \
+    "mixed stable and legacy heading with wrong known ID" "SCN-009-S03-001"
+  assert_g057_duplicate_scope_id_failure "$g057_duplicate_scope_known_id_dir" \
+    "duplicate scope known ID"
+  assert_g057_malformed_once "$g057_duplicate_effective_id_dir" "duplicate manifest known ID"
+
+  assert_g057_count_mismatch "$g057_undercount_dir" "undercount" 1 2
+  assert_g057_count_mismatch "$g057_mixed_heading_overcount_dir" \
+    "mixed stable and legacy heading overcount" 3 2
+  assert_g057_count_mismatch "$g057_all_identified_surplus_dir" \
+    "all-identified surplus" 2 1
+  echo "Focused G057 selector completed $((assertions - assertion_start)) assertion(s)."
 }
 
 remove_planning_only_linkage() {
@@ -1807,6 +2314,115 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+run_bug033_timeout_guard_assertions() {
+  local fixture_root="$tmp_root/bug033-timeout-receipt-repo"
+  local feature_dir="$fixture_root/specs/951-bug033-timeout-identity"
+  local receipt_log="$fixture_root/.specify/runtime/tool-calls.jsonl"
+  local output_hash case_log status
+
+  echo "Running focused BUG-033 timeout wrapper regressions..."
+  clone_framework_surface "$fixture_root"
+  emit_base_fixture "$feature_dir"
+  mutate_delivery_contract "$feature_dir/state.json"
+  git -C "$fixture_root" init -q
+  mkdir -p "$(dirname "$receipt_log")"
+  output_hash="$(sha256_text 'bug033-timeout-nonempty-output')"
+
+  cat > "$receipt_log" <<EOF
+{"ts":"2026-09-02T09:00:01Z","sessionId":"bug033-timeout-bare","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/scenario-test-resolve-selftest.sh alpha","exitCode":0,"durationMs":101,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:00:03Z","sessionId":"bug033-timeout-short-v","spec":"specs/alpha","scope":"SCOPE-1","cmd":"timeout -v 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh alpha","exitCode":0,"durationMs":103,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:00:05Z","sessionId":"bug033-timeout-nested","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash -c env CHECK=1 gtimeout --verbose 150 sh bubbles/scripts/scenario-test-resolve-selftest.sh alpha","exitCode":0,"durationMs":105,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:00:07Z","sessionId":"bug033-gtimeout-options","spec":"specs/alpha","scope":"SCOPE-1","cmd":"gtimeout --signal TERM --kill-after=5 --foreground --preserve-status 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh alpha","exitCode":0,"durationMs":107,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+  case_log="$tmp_root/bug033-timeout-transparent.log"
+  status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -eq 0 ]]; then
+    pass "BUG-033 timeout: Check 43 accepts -v and nested timeout/gtimeout wrappers as transparent"
+  else
+    fail "BUG-033 timeout: transparent wrappers must pass the whole guard (observed $status)"
+  fi
+  assert_log_not_contains "$case_log" "reason=command-identity-mismatch" \
+    "BUG-033 timeout: transparent timeout spellings do not produce a clone allegation"
+
+  cat > "$receipt_log" <<EOF
+{"ts":"2026-09-02T09:05:01Z","sessionId":"bug033-timeout-path-child","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash bubbles/scripts/scenario-test-resolve-selftest.sh alpha","exitCode":0,"durationMs":151,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:05:03Z","sessionId":"bug033-timeout-path-attacker","spec":"specs/beta","scope":"SCOPE-1","cmd":"/tmp/timeout 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh beta","exitCode":0,"durationMs":153,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:05:05Z","sessionId":"bug033-timeout-path-system","spec":"specs/gamma","scope":"SCOPE-1","cmd":"/usr/bin/timeout 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh gamma","exitCode":0,"durationMs":155,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+  case_log="$tmp_root/bug033-timeout-path-qualified.log"
+  status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -ne 0 ]]; then
+    pass "BUG-033 timeout trust bound: path-qualified timeout tokens remain opaque"
+  else
+    fail "BUG-033 timeout trust bound: unverified timeout paths must not collapse to the nested child"
+  fi
+  # The BUG-033 Check-43 merge replaced this section's plain "family=X"
+  # diagnostic line with a richer identity_a/identity_b REFUSED panel
+  # (command-identity-mismatch), so the assertions below check that panel's
+  # actual field names instead of the superseded format.
+  assert_log_contains "$case_log" "reason=command-identity-mismatch" \
+    "BUG-033 timeout trust bound: path-qualified impersonation remains a clone allegation"
+  assert_log_contains "$case_log" "identity_b=/tmp/timeout 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh beta" \
+    "BUG-033 timeout trust bound: path-qualified system and attacker wrappers retain timeout family"
+  assert_log_contains "$case_log" "identity_a=bubbles/scripts/scenario-test-resolve-selftest.sh alpha" \
+    "BUG-033 timeout trust bound: nested child remains distinct from opaque wrappers"
+
+  cat > "$receipt_log" <<EOF
+{"ts":"2026-09-02T09:10:01Z","sessionId":"bug033-timeout-malformed-k","spec":"specs/alpha","scope":"SCOPE-1","cmd":"timeout -k --verbose 150 cargo test","exitCode":0,"durationMs":201,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:03Z","sessionId":"bug033-timeout-malformed-s","spec":"specs/beta","scope":"SCOPE-1","cmd":"timeout -s --verbose 150 cargo test","exitCode":0,"durationMs":203,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:05Z","sessionId":"bug033-timeout-unknown","spec":"specs/gamma","scope":"SCOPE-1","cmd":"timeout --unknown 150 cargo test","exitCode":0,"durationMs":205,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:07Z","sessionId":"bug033-timeout-no-duration","spec":"specs/delta","scope":"SCOPE-1","cmd":"timeout -v cargo test","exitCode":0,"durationMs":207,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:09Z","sessionId":"bug033-timeout-near-miss","spec":"specs/epsilon","scope":"SCOPE-1","cmd":"mytimeout 150 cargo test","exitCode":0,"durationMs":209,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:11Z","sessionId":"bug033-timeout-real-child","spec":"specs/zeta","scope":"SCOPE-1","cmd":"cargo test","exitCode":0,"durationMs":211,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:13Z","sessionId":"bug033-timeout-unknown-signal","spec":"specs/eta","scope":"SCOPE-1","cmd":"timeout -s BOGUS 150 cargo test","exitCode":0,"durationMs":213,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:15Z","sessionId":"bug033-timeout-terminal-option","spec":"specs/theta","scope":"SCOPE-1","cmd":"timeout --help 150 cargo test","exitCode":0,"durationMs":215,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:17Z","sessionId":"bug033-timeout-cluster","spec":"specs/iota","scope":"SCOPE-1","cmd":"timeout -vfp 150 cargo test","exitCode":0,"durationMs":217,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:19Z","sessionId":"bug033-timeout-attached-k","spec":"specs/kappa","scope":"SCOPE-1","cmd":"timeout -k.5 150 cargo test","exitCode":0,"durationMs":219,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:10:21Z","sessionId":"bug033-timeout-attached-s","spec":"specs/lambda","scope":"SCOPE-1","cmd":"timeout -sTERM 150 cargo test","exitCode":0,"durationMs":221,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+  case_log="$tmp_root/bug033-timeout-opaque.log"
+  status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -ne 0 ]]; then
+    pass "BUG-033 timeout bound: malformed, unknown, attached, clustered, missing-duration, and near-miss wrappers remain opaque"
+  else
+    fail "BUG-033 timeout bound: opaque timeout syntax must not be attributed to cargo"
+  fi
+  assert_log_contains "$case_log" "reason=command-identity-mismatch" \
+    "BUG-033 timeout bound: opaque syntax sharing substantive stdout remains a clone allegation"
+  assert_log_contains "$case_log" "identity_a=timeout -k --verbose 150 cargo test" \
+    "BUG-033 timeout bound: malformed timeout syntax retains timeout as its family"
+
+  cat > "$receipt_log" <<EOF
+{"ts":"2026-09-02T09:15:01Z","sessionId":"bug033-timeout-near-miss","spec":"specs/alpha","scope":"SCOPE-1","cmd":"mytimeout 150 cargo test","exitCode":0,"durationMs":251,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:15:03Z","sessionId":"bug033-timeout-real-child","spec":"specs/beta","scope":"SCOPE-1","cmd":"cargo test","exitCode":0,"durationMs":253,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+  case_log="$tmp_root/bug033-timeout-near-miss.log"
+  status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -ne 0 ]]; then
+    pass "BUG-033 timeout bound: an exact-basename near miss remains opaque"
+  else
+    fail "BUG-033 timeout bound: mytimeout must not be normalized as timeout"
+  fi
+  assert_log_contains "$case_log" "identity_a=mytimeout 150 cargo test" \
+    "BUG-033 timeout bound: an exact-basename near miss retains its own family"
+
+  cat > "$receipt_log" <<EOF
+{"ts":"2026-09-02T09:20:01Z","sessionId":"bug033-timeout-cargo","spec":"specs/alpha","scope":"SCOPE-1","cmd":"timeout -v 150 cargo test","exitCode":0,"durationMs":301,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+{"ts":"2026-09-02T09:20:03Z","sessionId":"bug033-timeout-npm","spec":"specs/beta","scope":"SCOPE-1","cmd":"gtimeout --preserve-status 150 npm run test","exitCode":0,"durationMs":303,"stdoutHash":"$output_hash","stdoutBytes":128,"tags":["test"]}
+EOF
+  case_log="$tmp_root/bug033-timeout-different-child.log"
+  status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$feature_dir")"
+  if [[ "$status" -ne 0 ]]; then
+    pass "BUG-033 timeout bound: transparent wrappers do not hide different child programs"
+  else
+    fail "BUG-033 timeout bound: cargo and npm children sharing stdout must still refuse"
+  fi
+  assert_log_contains "$case_log" "identity_a=cargo test" \
+    "BUG-033 timeout bound: the whole guard names the cargo child"
+  assert_log_contains "$case_log" "identity_b=npm run test" \
+    "BUG-033 timeout bound: the whole guard names the npm child"
+}
+
 emit_g040_fixture() {
   # G040 / Check 18 selftest fixture builder.
   #
@@ -1878,6 +2494,37 @@ PY
       echo "    owner: bubbles.bug"
     fi
   } >> "$feature_dir/report.md"
+}
+
+emit_g040_exposure_fixture() {
+  local feature_dir="$1"
+  local reason="$2"
+
+  emit_base_fixture "$feature_dir"
+  mutate_delivery_contract "$feature_dir/state.json"
+
+  python3 - "$feature_dir/state.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+data["status"] = "done"
+data.setdefault("certification", {})["status"] = "done"
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+
+  {
+    echo ""
+    echo "### Exposure"
+    echo ""
+    echo "- **Exposure-Deferred:** $reason -> spec.md#exposure"
+  } >> "$feature_dir/scopes.md"
 }
 
 emit_g040_cw_fixture() {
@@ -2257,8 +2904,406 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+run_bug032_c5a_type_column_regression() {
+  local base_fixture="$1"
+  local fixture_root="$2"
+  local type_first_dir="$fixture_root/bug032-c5a-type-first-control"
+  local type_third_dir="$fixture_root/bug032-c5a-type-third-adversarial"
+  local type_first_log="$fixture_root/bug032-c5a-type-first-control.log"
+  local type_third_log="$fixture_root/bug032-c5a-type-third-adversarial.log"
+  local type_first_status=0
+  local type_third_status=0
+  local type_first_mismatches=0
+  local type_third_mismatches=0
+
+  printf '%s\n' \
+    'BUG032_C5A_SCENARIO_BINDING finding=BUG032-REG-C5A-TYPE-COLUMN-001 scenario=SCN-032-022 negativeControl=Type-first-equivalent'
+
+  cp -R "$base_fixture" "$type_first_dir"
+  cat <<EOF >> "$type_first_dir/scopes.md"
+
+### Performance Contract
+
+The p95 latency budget is 200 ms.
+
+### Test Plan
+
+| Type | Test ID | Description | File/Location | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Stress | TP-C5A-TYPE-COLUMN | Exercise the active p95 latency budget of 200 ms under pressure. | $type_first_dir/tests/docs-scenario-regression.e2e.spec.ts | selftest:stress-regression | No |
+
+### Definition of Done
+
+- [x] SCN-032-022 stress test verifies the active p95 latency budget of 200 ms. -> Evidence: report.md#test-evidence
+EOF
+  type_first_status="$(run_capture "$type_first_log" \
+    bash "$GUARD_SCRIPT" "$type_first_dir")"
+  [[ "$type_first_status" -eq 0 ]] \
+    || type_first_mismatches=$((type_first_mismatches + 1))
+  grep -Fq -- 'SLA-sensitive scope includes stress coverage: scopes.md' \
+    "$type_first_log" \
+    || type_first_mismatches=$((type_first_mismatches + 1))
+  if [[ "$type_first_mismatches" -eq 0 ]]; then
+    pass "BUG-032 SCN-032-022 Type-first canonical Stress row remains accepted"
+  else
+    printf 'BUG032_C5A_TYPE_FIRST_CONTROL_MISMATCH status=%s mismatches=%s\n' \
+      "$type_first_status" "$type_first_mismatches"
+    fail "BUG-032 SCN-032-022 Type-first canonical Stress row remains accepted"
+  fi
+
+  cp -R "$base_fixture" "$type_third_dir"
+  cat <<EOF >> "$type_third_dir/scopes.md"
+
+### Performance Contract
+
+The p95 latency budget is 200 ms.
+
+### Test Plan
+
+| Test ID | Description | Type | File/Location | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| TP-C5A-TYPE-COLUMN | Exercise the active p95 latency budget of 200 ms under pressure. | Stress | $type_third_dir/tests/docs-scenario-regression.e2e.spec.ts | selftest:stress-regression | No |
+
+### Definition of Done
+
+- [x] SCN-032-022 stress test verifies the active p95 latency budget of 200 ms. -> Evidence: report.md#test-evidence
+EOF
+  type_third_status="$(run_capture "$type_third_log" \
+    bash "$GUARD_SCRIPT" "$type_third_dir")"
+  [[ "$type_third_status" -eq 0 ]] \
+    || type_third_mismatches=$((type_third_mismatches + 1))
+  grep -Fq -- 'SLA-sensitive scope includes stress coverage: scopes.md' \
+    "$type_third_log" \
+    || type_third_mismatches=$((type_third_mismatches + 1))
+  if [[ "$type_third_mismatches" -eq 0 ]]; then
+    pass "BUG032-REG-C5A-TYPE-COLUMN-001 / SCN-032-022 accepts Stress when Type is the third column"
+  else
+    printf 'BUG032_C5A_TYPE_THIRD_MISMATCH scenario=SCN-032-022 status=%s mismatches=%s missingStressRow=%s missingStressDod=%s\n' \
+      "$type_third_status" "$type_third_mismatches" \
+      "$(grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$type_third_log" && printf 1 || printf 0)" \
+      "$(grep -Fq -- 'SLA-sensitive scope is missing faithful stress DoD item' "$type_third_log" && printf 1 || printf 0)"
+    fail "BUG032-REG-C5A-TYPE-COLUMN-001 / SCN-032-022 accepts Stress when Type is the third column"
+  fi
+}
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FOCUS:-}" \
+  == "BUG032-REG-C5A-TYPE-COLUMN-001" ]]; then
+  bug032_c5a_focus_base="$tmp_root/bug032-c5a-focus-base"
+  bug032_c5a_initial_failures="$failures"
+  emit_base_fixture "$bug032_c5a_focus_base"
+  mutate_delivery_contract "$bug032_c5a_focus_base/state.json"
+  run_bug032_c5a_type_column_regression "$bug032_c5a_focus_base" "$tmp_root"
+  if [[ "$failures" -eq "$bug032_c5a_initial_failures" ]]; then
+    printf 'BUG032_C5A_FOCUSED_VERDICT=PASS\n'
+    exit 0
+  fi
+  printf 'BUG032_C5A_FOCUSED_VERDICT=RED failures=%s\n' \
+    "$((failures - bug032_c5a_initial_failures))"
+  exit 1
+fi
+
+run_bug032_iteration10_security_assertions() {
+  local focus_root="$tmp_root/bug032-iteration10-security"
+  local focus_repo="$focus_root/repo"
+  local focus_shadow_bin="$focus_root/shadow-bin"
+  local focus_real_cat=""
+  local previous_repo_root="${BUBBLES_REPO_ROOT:-}"
+  local had_previous_repo_root=0
+  local case_dir=""
+  local case_log=""
+  local case_status=0
+  local source_path=""
+  local swap_target=""
+  local counter_file=""
+  local first_scope=""
+  local second_scope=""
+  local sec001_failures=0
+  local sec003_failures=0
+
+  BUG032_ITER10_ASSERTION_PASSES=0
+  BUG032_ITER10_ASSERTION_FAILURES=0
+  BUG032_ITER10_SEC001_FAILURES=0
+  BUG032_ITER10_SEC003_FAILURES=0
+  [[ -v BUBBLES_REPO_ROOT ]] && had_previous_repo_root=1
+
+  bug032_iter10_assertion() {
+    local finding_id="$1"
+    local polarity="$2"
+    local assertion_status="$3"
+
+    if [[ "$assertion_status" -eq 0 ]]; then
+      BUG032_ITER10_ASSERTION_PASSES=$((BUG032_ITER10_ASSERTION_PASSES + 1))
+      printf 'BUG032_ITER10_ASSERTION_PASS finding=%s polarity=%s\n' \
+        "$finding_id" "$polarity"
+    else
+      BUG032_ITER10_ASSERTION_FAILURES=$((BUG032_ITER10_ASSERTION_FAILURES + 1))
+      printf 'BUG032_ITER10_ASSERTION_FAIL finding=%s polarity=%s\n' \
+        "$finding_id" "$polarity"
+      case "$finding_id" in
+        BUG032-SEC-001*) sec001_failures=$((sec001_failures + 1)) ;;
+        BUG032-SEC-003*) sec003_failures=$((sec003_failures + 1)) ;;
+      esac
+    fi
+  }
+
+  bug032_iter10_emit_two_scope_fixture() {
+    local destination="$1"
+    local first_scope_contract="$2"
+
+    emit_per_scope_fixture "$destination" "Done" "scope-1-index-parity-proof"
+    mutate_delivery_contract "$destination/state.json"
+    first_scope="$destination/scopes/01-index-parity-proof"
+    second_scope="$destination/scopes/02-secondary-control"
+    cp -R "$first_scope" "$second_scope"
+    bubbles_sed_inplace \
+      's/Scope 01: Index Parity Proof/Scope 02: Secondary Control/' \
+      "$second_scope/scope.md"
+    printf '%s\n' '| 02 | Secondary control | 01 | Done |' \
+      >> "$destination/scopes/_index.md"
+    python3 - "$destination/state.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+certification = data["certification"]
+certification["completedScopes"] = [
+    "scope-1-index-parity-proof",
+    "scope-2-secondary-control",
+]
+certification["scopeProgress"] = [
+    {"scopeDir": "scopes/01-index-parity-proof"},
+    {"scopeDir": "scopes/02-secondary-control"},
+]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+    if [[ "$first_scope_contract" == "yes" ]]; then
+      printf '\n%s\n' 'The p95 latency budget is 200 ms.' \
+        >> "$first_scope/scope.md"
+    fi
+  }
+
+  mkdir -p "$focus_root" "$focus_shadow_bin"
+  clone_framework_surface "$focus_repo"
+  git -C "$focus_repo" init -q
+  export BUBBLES_REPO_ROOT="$focus_repo"
+
+  case_dir="$focus_repo/specs/980-bug032-sec001a-stale-index"
+  bug032_iter10_emit_two_scope_fixture "$case_dir" yes
+  case_log="$focus_root/sec001a-stale-index.log"
+  case_status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$case_dir")"
+  if [[ "$case_status" -ne 0 ]] \
+    && grep -Fq -- \
+      'SLA-sensitive scope is missing canonical Stress Test Plan row: scopes/01-index-parity-proof/scope.md' \
+      "$case_log" \
+    && grep -Fq -- \
+      'SLA-sensitive scope is missing faithful stress DoD item: scopes/01-index-parity-proof/scope.md' \
+      "$case_log" \
+    && ! grep -Fq -- 'No SLA-sensitive scopes detected for Gate G026' "$case_log"; then
+    bug032_iter10_assertion BUG032-SEC-001A-CHECK5A-STALE-INDEX adversarial 0
+  else
+    printf 'BUG032_SEC001A_STALE_INDEX_MISMATCH status=%s\n' "$case_status"
+    bug032_iter10_assertion BUG032-SEC-001A-CHECK5A-STALE-INDEX adversarial 1
+  fi
+
+  case_dir="$focus_repo/specs/981-bug032-sec001a-neutral-control"
+  bug032_iter10_emit_two_scope_fixture "$case_dir" no
+  case_log="$focus_root/sec001a-neutral-control.log"
+  case_status="$(run_capture "$case_log" bash "$GUARD_SCRIPT" "$case_dir")"
+  if [[ "$case_status" -eq 0 ]] \
+    && grep -Fq -- 'No SLA-sensitive scopes detected for Gate G026' "$case_log" \
+    && ! grep -Fq -- 'SLA-sensitive scope is missing' "$case_log" \
+    && ! grep -Fq -- 'context projection failed' "$case_log"; then
+    bug032_iter10_assertion BUG032-SEC-001A-CHECK5A-STALE-INDEX control 0
+  else
+    printf 'BUG032_SEC001A_NEUTRAL_CONTROL_MISMATCH status=%s\n' "$case_status"
+    bug032_iter10_assertion BUG032-SEC-001A-CHECK5A-STALE-INDEX control 1
+  fi
+
+  focus_real_cat="$(command -v cat)"
+  cat <<'EOF' > "$focus_shadow_bin/cat"
+#!/usr/bin/env bash
+set -u
+
+for argument in "$@"; do
+  if [[ -n "${BUG032_ITER10_SOURCE_PATH:-}" ]] \
+    && [[ "$argument" == "$BUG032_ITER10_SOURCE_PATH" ]]; then
+    printf '%s\n' call >> "${BUG032_ITER10_CAT_COUNTER:?}"
+    if [[ "${BUG032_ITER10_CAT_MODE:-delegate}" == "swap-to-symlink" ]] \
+      && [[ ! -L "$argument" ]]; then
+      rm -f -- "$argument"
+      ln -s -- "${BUG032_ITER10_SWAP_TARGET:?}" "$argument"
+    fi
+  fi
+done
+exec "${BUG032_ITER10_REAL_CAT:?}" "$@"
+EOF
+  chmod +x "$focus_shadow_bin/cat"
+
+  case_dir="$focus_repo/specs/982-bug032-sec001b-source-toctou"
+  emit_base_fixture "$case_dir"
+  mutate_delivery_contract "$case_dir/state.json"
+  source_path="$case_dir/scopes.md"
+  swap_target="$case_dir/scopes-swap-target.md"
+  cp "$source_path" "$swap_target"
+  printf '\n%s\n' 'Remove the public route.' >> "$swap_target"
+  counter_file="$focus_root/sec001b-source-toctou.count"
+  : > "$counter_file"
+  case_log="$focus_root/sec001b-source-toctou.log"
+  case_status="$(run_capture "$case_log" env \
+    PATH="$focus_shadow_bin:$PATH" \
+    BUG032_ITER10_REAL_CAT="$focus_real_cat" \
+    BUG032_ITER10_SOURCE_PATH="$source_path" \
+    BUG032_ITER10_CAT_COUNTER="$counter_file" \
+    BUG032_ITER10_CAT_MODE=swap-to-symlink \
+    BUG032_ITER10_SWAP_TARGET="$swap_target" \
+    bash "$GUARD_SCRIPT" "$case_dir")"
+  if [[ "$case_status" -ne 0 ]] \
+    && grep -Fq -- 'check: Context projection' "$case_log" \
+    && grep -Fq -- 'reason: context-read-error' "$case_log" \
+    && grep -Fq -- 'boundary: input-read' "$case_log" \
+    && ! grep -Fq -- 'classification: direct-positive' "$case_log"; then
+    bug032_iter10_assertion BUG032-SEC-001B-SOURCE-TOCTOU adversarial 0
+  else
+    printf 'BUG032_SEC001B_SOURCE_TOCTOU_MISMATCH status=%s catCalls=%s\n' \
+      "$case_status" "$(wc -l < "$counter_file" | tr -d '[:space:]')"
+    bug032_iter10_assertion BUG032-SEC-001B-SOURCE-TOCTOU adversarial 1
+  fi
+
+  case_dir="$focus_repo/specs/983-bug032-sec001b-regular-control"
+  emit_base_fixture "$case_dir"
+  mutate_delivery_contract "$case_dir/state.json"
+  source_path="$case_dir/scopes.md"
+  counter_file="$focus_root/sec001b-regular-control.count"
+  : > "$counter_file"
+  case_log="$focus_root/sec001b-regular-control.log"
+  case_status="$(run_capture "$case_log" env \
+    PATH="$focus_shadow_bin:$PATH" \
+    BUG032_ITER10_REAL_CAT="$focus_real_cat" \
+    BUG032_ITER10_SOURCE_PATH="$source_path" \
+    BUG032_ITER10_CAT_COUNTER="$counter_file" \
+    BUG032_ITER10_CAT_MODE=delegate \
+    bash "$GUARD_SCRIPT" "$case_dir")"
+  if [[ "$case_status" -eq 0 ]] \
+    && [[ "$(wc -l < "$counter_file" | tr -d '[:space:]')" -ge 1 ]] \
+    && ! grep -Fq -- 'context projection failed' "$case_log" \
+    && ! grep -Fq -- 'check: Check 8B' "$case_log"; then
+    bug032_iter10_assertion BUG032-SEC-001B-SOURCE-TOCTOU control 0
+  else
+    printf 'BUG032_SEC001B_REGULAR_CONTROL_MISMATCH status=%s catCalls=%s\n' \
+      "$case_status" "$(wc -l < "$counter_file" | tr -d '[:space:]')"
+    bug032_iter10_assertion BUG032-SEC-001B-SOURCE-TOCTOU control 1
+  fi
+
+  local line_exclusion_mismatches=0
+  local -a line_exclusion_slugs=(case-a case-b)
+  local -a line_exclusion_prose=(
+    'followUpOwner: bubbles.plan; Move this work to a separate ticket.'
+    'No deferred work is accepted; implement this in a future scope.'
+  )
+  local -a line_exclusion_phrases=('separate ticket' 'future scope')
+  local -a line_exclusion_forms=('separate ticket' 'future scope')
+  local line_exclusion_index=0
+  for line_exclusion_index in "${!line_exclusion_slugs[@]}"; do
+    case_dir="$focus_repo/specs/984-bug032-sec003a-${line_exclusion_slugs[$line_exclusion_index]}"
+    emit_g040_fixture "$case_dir" "done" \
+      "${line_exclusion_prose[$line_exclusion_index]}" no no
+    case_log="$focus_root/sec003a-${line_exclusion_slugs[$line_exclusion_index]}.log"
+    run_capture "$case_log" bash "$GUARD_SCRIPT" "$case_dir" >/dev/null
+    if ! grep -Fq -- 'deferral language hit' "$case_log" \
+      || ! grep -Fqi -- "canonical-phrase: ${line_exclusion_phrases[$line_exclusion_index]}" "$case_log" \
+      || ! grep -Fq -- "matched-form: ${line_exclusion_forms[$line_exclusion_index]}" "$case_log"; then
+      line_exclusion_mismatches=$((line_exclusion_mismatches + 1))
+    fi
+  done
+  if [[ "$line_exclusion_mismatches" -eq 0 ]]; then
+    bug032_iter10_assertion BUG032-SEC-003A-LINE-WIDE-EXCLUSION adversarial 0
+  else
+    printf 'BUG032_SEC003A_LINE_WIDE_EXCLUSION_MISMATCH cases=%s\n' \
+      "$line_exclusion_mismatches"
+    bug032_iter10_assertion BUG032-SEC-003A-LINE-WIDE-EXCLUSION adversarial 1
+  fi
+
+  local line_control_mismatches=0
+  local -a line_control_slugs=(case-a case-b)
+  local -a line_control_prose=(
+    'followUpOwner: bubbles.plan'
+    'No deferred work remains.'
+  )
+  local line_control_index=0
+  for line_control_index in "${!line_control_slugs[@]}"; do
+    case_dir="$focus_repo/specs/986-bug032-sec003a-control-${line_control_slugs[$line_control_index]}"
+    emit_g040_fixture "$case_dir" "done" \
+      "${line_control_prose[$line_control_index]}" no no
+    case_log="$focus_root/sec003a-control-${line_control_slugs[$line_control_index]}.log"
+    run_capture "$case_log" bash "$GUARD_SCRIPT" "$case_dir" >/dev/null
+    if grep -Fq -- 'deferral language hit' "$case_log" \
+      || ! grep -Fq -- \
+        'Zero deferral language found in scope and report artifacts (Gate G040)' \
+        "$case_log"; then
+      line_control_mismatches=$((line_control_mismatches + 1))
+    fi
+  done
+  if [[ "$line_control_mismatches" -eq 0 ]]; then
+    bug032_iter10_assertion BUG032-SEC-003A-LINE-WIDE-EXCLUSION control 0
+  else
+    printf 'BUG032_SEC003A_LINE_CONTROL_MISMATCH cases=%s\n' \
+      "$line_control_mismatches"
+    bug032_iter10_assertion BUG032-SEC-003A-LINE-WIDE-EXCLUSION control 1
+  fi
+
+  BUG032_ITER10_SEC001_FAILURES="$sec001_failures"
+  BUG032_ITER10_SEC003_FAILURES="$sec003_failures"
+  printf 'BUG032_ITER10_ASSERTION_SUMMARY pass=%s fail=%s sec001=%s sec003=%s\n' \
+    "$BUG032_ITER10_ASSERTION_PASSES" "$BUG032_ITER10_ASSERTION_FAILURES" \
+    "$BUG032_ITER10_SEC001_FAILURES" "$BUG032_ITER10_SEC003_FAILURES"
+
+  unset -f bug032_iter10_assertion bug032_iter10_emit_two_scope_fixture
+  if [[ "$had_previous_repo_root" -eq 1 ]]; then
+    export BUBBLES_REPO_ROOT="$previous_repo_root"
+  else
+    unset BUBBLES_REPO_ROOT
+  fi
+}
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FOCUS:-}" \
+  == "TP-01-04-security-boundary-group" ]]; then
+  run_bug032_iteration10_security_assertions
+  if [[ "$BUG032_ITER10_ASSERTION_FAILURES" -eq 0 ]]; then
+    printf 'BUG032_ITER10_FOCUSED_VERDICT=PASS\n'
+    exit 0
+  fi
+  failures="$BUG032_ITER10_ASSERTION_FAILURES"
+  printf 'BUG032_ITER10_FOCUSED_VERDICT=RED failures=%s\n' \
+    "$BUG032_ITER10_ASSERTION_FAILURES"
+  exit 1
+fi
+
 assert_transition_result_contract_matches_emitter \
   "TRANSITION_GUARD_RESULT_V1 emitter field order matches this suite's expectation"
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_BUG033_TIMEOUT_ONLY:-0}" == "1" ]]; then
+  run_bug033_timeout_guard_assertions
+  if [[ "$failures" -gt 0 ]]; then
+    echo "state-transition-guard BUG-033 timeout selftest failed with $failures issue(s)."
+    exit 1
+  fi
+  echo "state-transition-guard BUG-033 timeout selftest passed."
+  exit 0
+fi
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_CONTAINMENT_ONLY:-0}" == "1" ]]; then
+  run_strict_manifest_containment_regressions
+  if [[ "$failures" -gt 0 ]]; then
+    echo "state-transition-guard strict-containment selftest failed with $failures issue(s)."
+    exit 1
+  fi
+  echo "state-transition-guard strict-containment selftest passed."
+  exit 0
+fi
 
 positive_feature_dir="$tmp_root/specs/900-transition-guard-selftest-pass"
 repo_root_isolation_feature_dir="$tmp_root/specs/900b-transition-guard-repo-root-isolation"
@@ -2283,6 +3328,68 @@ s03_checked_evidence_dir="$tmp_root/specs/916-bug009-s03-checked-evidence"
 s03_done_honesty_dir="$tmp_root/specs/917-bug009-s03-done-honesty"
 s03_g068_dir="$tmp_root/specs/918-bug009-s03-g068-negative"
 s03_delivery_checked_dir="$tmp_root/specs/919-bug009-s03-delivery-checked-evidence"
+g057_id_only_dir="$tmp_root/specs/960-g057-id-only"
+g057_scenario_id_only_dir="$tmp_root/specs/961-g057-scenario-id-only"
+g057_mixed_aliases_dir="$tmp_root/specs/962-g057-mixed-aliases"
+g057_both_aliases_dir="$tmp_root/specs/963-g057-both-aliases"
+g057_blank_id_fallback_dir="$tmp_root/specs/964-g057-blank-id-fallback"
+g057_invalid_id_fallback_dir="$tmp_root/specs/964b-g057-invalid-id-fallback"
+g057_top_level_array_dir="$tmp_root/specs/965-g057-top-level-array"
+g057_planned_tests_dir="$tmp_root/specs/965b-g057-planned-tests"
+g057_duplicate_id_dir="$tmp_root/specs/966-g057-duplicate-id"
+g057_duplicate_scenario_id_dir="$tmp_root/specs/966b-g057-duplicate-scenario-id"
+g057_cross_alias_duplicate_dir="$tmp_root/specs/967-g057-cross-alias-duplicate"
+g057_whitespace_duplicate_id_dir="$tmp_root/specs/967b-g057-whitespace-duplicate-id"
+g057_whitespace_cross_alias_dir="$tmp_root/specs/967c-g057-whitespace-cross-alias"
+g057_non_object_dir="$tmp_root/specs/968-g057-non-object"
+g057_blank_identity_dir="$tmp_root/specs/969-g057-blank-identity"
+g057_wrong_type_id_fallback_dir="$tmp_root/specs/970-g057-wrong-type-id-fallback"
+g057_wrong_type_legacy_ignored_dir="$tmp_root/specs/970b-g057-wrong-type-legacy-ignored"
+g057_wrong_type_legacy_id_dir="$tmp_root/specs/971-g057-wrong-type-legacy-id"
+g057_wrong_type_both_dir="$tmp_root/specs/971b-g057-wrong-type-both"
+g057_malformed_dir="$tmp_root/specs/972-g057-malformed"
+g057_unsupported_dir="$tmp_root/specs/973-g057-unsupported"
+g057_undercount_dir="$tmp_root/specs/974-g057-undercount"
+g057_blank_title_dir="$tmp_root/specs/975-g057-blank-title"
+g057_wrong_type_title_dir="$tmp_root/specs/976-g057-wrong-type-title"
+g057_invalid_test_type_dir="$tmp_root/specs/977-g057-invalid-test-type"
+g057_scalar_links_dir="$tmp_root/specs/978-g057-scalar-links"
+g057_null_evidence_dir="$tmp_root/specs/979-g057-null-evidence"
+g057_scalar_planned_tests_dir="$tmp_root/specs/980-g057-scalar-planned-tests"
+g057_invalid_planned_test_dir="$tmp_root/specs/981-g057-invalid-planned-test"
+g057_invalid_string_identity_dir="$tmp_root/specs/982-g057-invalid-string-identity"
+g057_planning_planned_dir="$tmp_root/specs/983-g057-planning-planned"
+g057_planning_authored_dir="$tmp_root/specs/984-g057-planning-authored"
+g057_planning_neither_dir="$tmp_root/specs/985-g057-planning-neither"
+g057_delivery_valid_dir="$tmp_root/specs/986-g057-delivery-valid"
+g057_delivery_planned_dir="$tmp_root/specs/987-g057-delivery-planned"
+g057_delivery_no_evidence_dir="$tmp_root/specs/988-g057-delivery-no-evidence"
+g057_delivery_mixed_dir="$tmp_root/specs/989-g057-delivery-mixed"
+g057_delivery_missing_file_dir="$tmp_root/specs/990-g057-delivery-missing-file"
+g057_delivery_wrong_type_dir="$tmp_root/specs/991-g057-delivery-wrong-type"
+g057_delivery_string_untyped_dir="$tmp_root/specs/991b-g057-delivery-string-untyped"
+g057_delivery_object_untyped_dir="$tmp_root/specs/991c-g057-delivery-object-untyped"
+g057_delivery_null_evidence_member_dir="$tmp_root/specs/991d-g057-delivery-null-evidence-member"
+g057_delivery_numeric_evidence_member_dir="$tmp_root/specs/991e-g057-delivery-numeric-evidence-member"
+g057_delivery_blank_evidence_member_dir="$tmp_root/specs/991f-g057-delivery-blank-evidence-member"
+g057_delivery_whitespace_evidence_member_dir="$tmp_root/specs/991g-g057-delivery-whitespace-evidence-member"
+g057_v2_dir="$tmp_root/specs/992-g057-v2"
+g057_scoped_id_dir="$tmp_root/specs/993-g057-scoped-id"
+g057_unknown_version_dir="$tmp_root/specs/994-g057-unknown-version"
+g057_malformed_scoped_id_dir="$tmp_root/specs/995-g057-malformed-scoped-id"
+g057_duplicate_effective_id_dir="$tmp_root/specs/996-g057-duplicate-effective-id"
+g057_missing_title_dir="$tmp_root/specs/997-g057-missing-title"
+g057_null_links_dir="$tmp_root/specs/998-g057-null-links"
+g057_scalar_evidence_dir="$tmp_root/specs/999-g057-scalar-evidence"
+g057_null_planned_dir="$tmp_root/specs/1000-g057-null-planned"
+g057_invalid_link_member_dir="$tmp_root/specs/1001-g057-invalid-link-member"
+g057_invalid_planned_member_dir="$tmp_root/specs/1002-g057-invalid-planned-member"
+g057_legacy_count_only_dir="$tmp_root/specs/1003-g057-legacy-count-only"
+g057_mixed_heading_wrong_id_dir="$tmp_root/specs/1004-g057-mixed-heading-wrong-id"
+g057_mixed_heading_overcount_dir="$tmp_root/specs/1005-g057-mixed-heading-overcount"
+g057_mixed_heading_valid_dir="$tmp_root/specs/1006-g057-mixed-heading-valid"
+g057_duplicate_scope_known_id_dir="$tmp_root/specs/1007-g057-duplicate-scope-known-id"
+g057_all_identified_surplus_dir="$tmp_root/specs/1008-g057-all-identified-surplus"
 g060_planning_na_dir="$tmp_root/specs/928-bug026-g060-planning-not-applicable"
 g060_delivery_enforced_dir="$tmp_root/specs/929-bug026-g060-delivery-enforced"
 g040_planning_na_dir="$tmp_root/specs/930-g040-planning-not-applicable"
@@ -2300,6 +3407,10 @@ g040_cw_pre_skipped_dir="$tmp_root/specs/934-g040-cw-pre-marker-skipped"
 g040_cw_post_blocks_dir="$tmp_root/specs/935-g040-cw-post-marker-blocks"
 g040_cw_no_marker_dir="$tmp_root/specs/936-g040-cw-no-marker-full-enforcement"
 g040_cw_two_markers_dir="$tmp_root/specs/937-g040-cw-two-markers-fail-loud"
+# Keep deferral terms out of these paths because emit_base_fixture records each
+# absolute fixture path in scopes.md, which Check 18 scans.
+g040_neg_exposure_label_dir="$tmp_root/specs/942-g040-negative-exposure-label"
+g040_pos_exposure_reason_dir="$tmp_root/specs/943-g040-positive-exposure-reason"
 fast_lane_profile_dir="$tmp_root/specs/940-fast-lane-profile-resolve"
 framework_proposal_profile_dir="$tmp_root/specs/941-framework-proposal-profile-resolve"
 g064_framework_root="$tmp_root/framework-g064"
@@ -2322,7 +3433,10 @@ mkdir -p "$tmp_root/specs"
 clone_framework_surface "$tmp_root"
 git -C "$tmp_root" init -q
 export BUBBLES_REPO_ROOT="$tmp_root"
+GUARD_SCRIPT="$tmp_root/bubbles/scripts/state-transition-guard.sh"
+cd "$tmp_root"
 
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_BUG033_ONLY:-0}" != "1" ]]; then
 dogfood_done_dir="$tmp_root/specs/899-transition-guard-selftest-dogfood-done"
 mkdir -p "$dogfood_done_dir"
 cat <<'EOF' > "$dogfood_done_dir/state.json"
@@ -2387,6 +3501,246 @@ cp -R "$s03_planning_feature_dir" "$s03_g068_dir"
 break_gherkin_dod_fidelity "$s03_g068_dir/scopes.md"
 cp -R "$s03_delivery_negative_dir" "$s03_delivery_checked_dir"
 mark_first_dod_checked "$s03_delivery_checked_dir/scopes.md"
+# Canonical positive: this document conforms to scenario-manifest.schema.json.
+cp -R "$s03_planning_feature_dir" "$g057_id_only_dir"
+write_g057_manifest "$g057_id_only_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-001","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+# Compatibility positives: legacy scenarioId and the legacy top-level array are
+# accepted read formats but are not canonical documents for new producers.
+cp -R "$s03_planning_feature_dir" "$g057_scenario_id_only_dir"
+write_g057_manifest "$g057_scenario_id_only_dir" '{"schemaVersion":1,"scenarios":[{"scenarioId":"SCN-G057-002","title":"Legacy identity compatibility","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_mixed_aliases_dir"
+write_g057_manifest "$g057_mixed_aliases_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-003","title":"Canonical identity record","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]},{"scenarioId":"SCN-G057-004","title":"Legacy identity record","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_both_aliases_dir"
+write_g057_manifest "$g057_both_aliases_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-005","scenarioId":"SCN-G057-999","title":"Canonical identity wins","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_blank_id_fallback_dir"
+write_g057_manifest "$g057_blank_id_fallback_dir" '{"schemaVersion":1,"scenarios":[{"id":"   ","scenarioId":"SCN-G057-006","title":"Blank canonical identity falls back","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_invalid_id_fallback_dir"
+write_g057_manifest "$g057_invalid_id_fallback_dir" '{"schemaVersion":1,"scenarios":[{"id":"not-a-scenario-id","scenarioId":"SCN-G057-016","title":"Invalid canonical identity falls back","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_top_level_array_dir"
+write_g057_manifest "$g057_top_level_array_dir" '[{"scenarioId":"SCN-G057-007","title":"Legacy array compatibility","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]'
+cp -R "$s03_planning_feature_dir" "$g057_planned_tests_dir"
+write_g057_manifest "$g057_planned_tests_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-017","title":"Canonical planned test metadata","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_duplicate_id_dir"
+write_g057_manifest "$g057_duplicate_id_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-008","title":"First duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]},{"id":"SCN-G057-008","title":"Second duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_duplicate_scenario_id_dir"
+write_g057_manifest "$g057_duplicate_scenario_id_dir" '{"schemaVersion":1,"scenarios":[{"scenarioId":"SCN-G057-018","title":"First legacy duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]},{"scenarioId":"SCN-G057-018","title":"Second legacy duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_cross_alias_duplicate_dir"
+write_g057_manifest "$g057_cross_alias_duplicate_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-009","title":"Canonical duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]},{"scenarioId":"SCN-G057-009","title":"Cross alias duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_whitespace_duplicate_id_dir"
+write_g057_manifest "$g057_whitespace_duplicate_id_dir" '{"schemaVersion":1,"scenarios":[{"id":" SCN-G057-019","title":"Whitespace duplicate first","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]},{"id":"SCN-G057-019 ","title":"Whitespace duplicate second","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_whitespace_cross_alias_dir"
+write_g057_manifest "$g057_whitespace_cross_alias_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-020","title":"Canonical whitespace duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]},{"scenarioId":"  SCN-G057-020  ","title":"Legacy whitespace duplicate","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_non_object_dir"
+write_g057_manifest "$g057_non_object_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-010","title":"Valid neighbor","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]},"SCN-G057-011"]}'
+cp -R "$s03_planning_feature_dir" "$g057_blank_identity_dir"
+write_g057_manifest "$g057_blank_identity_dir" '{"schemaVersion":1,"scenarios":[{"id":" ","scenarioId":"\t","title":"Blank identities","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_wrong_type_id_fallback_dir"
+write_g057_manifest "$g057_wrong_type_id_fallback_dir" '{"schemaVersion":1,"scenarios":[{"id":57,"scenarioId":"SCN-G057-012","title":"Invalid canonical identity falls back","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_wrong_type_legacy_ignored_dir"
+write_g057_manifest "$g057_wrong_type_legacy_ignored_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-015","scenarioId":57,"title":"Canonical identity ignores invalid legacy alias","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_wrong_type_legacy_id_dir"
+write_g057_manifest "$g057_wrong_type_legacy_id_dir" '{"schemaVersion":1,"scenarios":[{"scenarioId":57,"title":"Wrong legacy identity type","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_wrong_type_both_dir"
+write_g057_manifest "$g057_wrong_type_both_dir" '{"schemaVersion":1,"scenarios":[{"id":57,"scenarioId":58,"title":"Both identities have wrong types","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_malformed_dir"
+write_g057_manifest "$g057_malformed_dir" '{"schemaVersion":1,"scenarios":['
+cp -R "$s03_planning_feature_dir" "$g057_unsupported_dir"
+write_g057_manifest "$g057_unsupported_dir" '{"schemaVersion":2,"scenarios":[{"id":"SCN-G057-013"}]}'
+cp -R "$s03_planning_feature_dir" "$g057_undercount_dir"
+cat <<'EOF' >> "$g057_undercount_dir/scopes.md"
+
+```gherkin
+Scenario: A second scope contract remains represented
+Given two resolved scope scenarios
+When the scenario manifest tracks only one record
+Then G057 reports a real undercount
+```
+
+- [ ] A second scope contract remains represented when G057 checks the manifest count.
+EOF
+write_g057_manifest "$g057_undercount_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-014","title":"Only one represented scenario","requiredTestType":"e2e-ui","linkedTests":["__FUTURE_TEST__"],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_blank_title_dir"
+write_g057_manifest "$g057_blank_title_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-021","title":"   ","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_wrong_type_title_dir"
+write_g057_manifest "$g057_wrong_type_title_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-022","title":57,"requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_invalid_test_type_dir"
+write_g057_manifest "$g057_invalid_test_type_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-023","title":"Unknown test taxonomy","requiredTestType":"e2e","linkedTests":[],"evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_scalar_links_dir"
+write_g057_manifest "$g057_scalar_links_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-024","title":"Scalar linked tests","requiredTestType":"e2e-ui","linkedTests":"tests/demo.spec.ts","evidenceRefs":[]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_null_evidence_dir"
+write_g057_manifest "$g057_null_evidence_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-025","title":"Null evidence refs","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":null}]}'
+cp -R "$s03_planning_feature_dir" "$g057_scalar_planned_tests_dir"
+write_g057_manifest "$g057_scalar_planned_tests_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-026","title":"Scalar planned tests","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[],"plannedTests":"tests/future.spec.ts"}]}'
+cp -R "$s03_planning_feature_dir" "$g057_invalid_planned_test_dir"
+write_g057_manifest "$g057_invalid_planned_test_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-027","title":"Invalid planned test member","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[],"plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior"}]}]}'
+cp -R "$s03_planning_feature_dir" "$g057_invalid_string_identity_dir"
+write_g057_manifest "$g057_invalid_string_identity_dir" '{"schemaVersion":1,"scenarios":[{"id":"not-a-scenario-id","title":"Invalid string identity","requiredTestType":"e2e-ui","linkedTests":[],"evidenceRefs":[]}]}'
+
+# Binding G057 profile matrix. These fixtures use the reader's normalized
+# authored/planned projection and keep every path repository-relative.
+cp -R "$s03_planning_feature_dir" "$g057_planning_planned_dir"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-G057-101/g' "$g057_planning_planned_dir/spec.md"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-G057-101/g' "$g057_planning_planned_dir/scopes.md"
+write_g057_manifest "$g057_planning_planned_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-101","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_planning_authored_dir"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-G057-102/g' "$g057_planning_authored_dir/spec.md"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-G057-102/g' "$g057_planning_authored_dir/scopes.md"
+mkdir -p "$g057_planning_authored_dir/tests"
+printf '%s\n' "test('g057 planning authored behavior', () => {});" > "$g057_planning_authored_dir/tests/g057-planning-authored.e2e.spec.ts"
+write_g057_manifest "$g057_planning_authored_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-102","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/984-g057-planning-authored/tests/g057-planning-authored.e2e.spec.ts","title":"g057 planning authored behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_planning_neither_dir"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-G057-103/g' "$g057_planning_neither_dir/spec.md"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-G057-103/g' "$g057_planning_neither_dir/scopes.md"
+write_g057_manifest "$g057_planning_neither_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-103","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","linkedTests":[],"plannedTests":[],"evidenceRefs":[]}]}'
+
+cp -R "$positive_feature_dir" "$g057_delivery_valid_dir"
+append_g057_scenario "$g057_delivery_valid_dir" "SCN-G057-104"
+write_g057_manifest "$g057_delivery_valid_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/986-g057-delivery-valid/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":["report.md#test-evidence"]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_planned_dir"
+write_g057_manifest "$g057_delivery_planned_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_no_evidence_dir"
+write_g057_manifest "$g057_delivery_no_evidence_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/988-g057-delivery-no-evidence/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_mixed_dir"
+write_g057_manifest "$g057_delivery_mixed_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/989-g057-delivery-mixed/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":["report.md#test-evidence"]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_missing_file_dir"
+write_g057_manifest "$g057_delivery_missing_file_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/990-g057-delivery-missing-file/tests/absent.e2e.spec.ts","title":"absent behavior","type":"e2e-ui"}],"evidenceRefs":["report.md#test-evidence"]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_wrong_type_dir"
+write_g057_manifest "$g057_delivery_wrong_type_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/991-g057-delivery-wrong-type/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"unit"}],"evidenceRefs":["report.md#test-evidence"]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_string_untyped_dir"
+write_g057_manifest "$g057_delivery_string_untyped_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":["specs/991b-g057-delivery-string-untyped/tests/docs-scenario-regression.e2e.spec.ts"],"evidenceRefs":["report.md#test-evidence"]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_object_untyped_dir"
+write_g057_manifest "$g057_delivery_object_untyped_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/991c-g057-delivery-object-untyped/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression"}],"evidenceRefs":["report.md#test-evidence"]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_null_evidence_member_dir"
+write_g057_manifest "$g057_delivery_null_evidence_member_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/991d-g057-delivery-null-evidence-member/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":[null]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_numeric_evidence_member_dir"
+write_g057_manifest "$g057_delivery_numeric_evidence_member_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/991e-g057-delivery-numeric-evidence-member/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":[57]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_blank_evidence_member_dir"
+write_g057_manifest "$g057_delivery_blank_evidence_member_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/991f-g057-delivery-blank-evidence-member/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":[""]}]}'
+
+cp -R "$g057_delivery_valid_dir" "$g057_delivery_whitespace_evidence_member_dir"
+write_g057_manifest "$g057_delivery_whitespace_evidence_member_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-104","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/991g-g057-delivery-whitespace-evidence-member/tests/docs-scenario-regression.e2e.spec.ts","title":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":["  \t  "]}]}'
+
+cp -R "$positive_feature_dir" "$g057_v2_dir"
+append_g057_scenario "$g057_v2_dir" "SCN-G057-105"
+write_g057_manifest "$g057_v2_dir" '{"schemaVersion":2,"scenarios":[{"id":"SCN-G057-105","title":"G057 profile classification","requiredTestType":"e2e-ui","linkedTests":[{"file":"specs/992-g057-v2/tests/docs-scenario-regression.e2e.spec.ts","testId":"docsScenarioRegression","type":"e2e-ui"}],"evidenceRefs":["report.md#test-evidence"]}]}'
+append_g057_delivery_receipts "SCN-G057-104"
+append_g057_delivery_receipts "SCN-G057-105"
+
+cp -R "$s03_planning_feature_dir" "$g057_scoped_id_dir"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-WEB-API-MOBILE-42/g' "$g057_scoped_id_dir/spec.md"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-WEB-API-MOBILE-42/g' "$g057_scoped_id_dir/scopes.md"
+write_g057_manifest "$g057_scoped_id_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-WEB-API-MOBILE-42","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_unknown_version_dir"
+write_g057_manifest "$g057_unknown_version_dir" '{"schemaVersion":99,"scenarios":[{"id":"SCN-009-S03-001","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_malformed_scoped_id_dir"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-009-001-X/g' "$g057_malformed_scoped_id_dir/spec.md"
+bubbles_sed_inplace 's/SCN-009-S03-001/SCN-009-001-X/g' "$g057_malformed_scoped_id_dir/scopes.md"
+write_g057_manifest "$g057_malformed_scoped_id_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-001-X","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_duplicate_effective_id_dir"
+write_g057_manifest "$g057_duplicate_effective_id_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"First duplicate","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/first.spec.ts","title":"first","type":"e2e-ui"}],"evidenceRefs":[]},{"scenarioId":"SCN-009-S03-001","title":"Second duplicate","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/second.spec.ts","title":"second","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_missing_title_dir"
+write_g057_manifest "$g057_missing_title_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_null_links_dir"
+write_g057_manifest "$g057_null_links_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Null linked tests","requiredTestType":"e2e-ui","linkedTests":null,"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_scalar_evidence_dir"
+write_g057_manifest "$g057_scalar_evidence_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Scalar evidence refs","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":"report.md#test-evidence"}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_null_planned_dir"
+write_g057_manifest "$g057_null_planned_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Null planned tests","requiredTestType":"e2e-ui","plannedTests":null,"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_invalid_link_member_dir"
+write_g057_manifest "$g057_invalid_link_member_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Invalid linked-test member","requiredTestType":"e2e-ui","linkedTests":[{}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_invalid_planned_member_dir"
+write_g057_manifest "$g057_invalid_planned_member_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Invalid planned-test member","requiredTestType":"e2e-ui","plannedTests":[{}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_legacy_count_only_dir"
+bubbles_sed_inplace 's/^### SCN-009-S03-001/### Legacy scenario without stable ID/' "$g057_legacy_count_only_dir/scopes.md"
+write_g057_manifest "$g057_legacy_count_only_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-G057-106","title":"Legacy count-only compatibility","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_mixed_heading_wrong_id_dir"
+cat <<'EOF' >> "$g057_mixed_heading_wrong_id_dir/scopes.md"
+
+## Legacy Compatibility Scenario
+
+```gherkin
+Scenario: A residual legacy heading remains count-compatible
+Given one stable scenario and one legacy scenario
+When G057 reconciles identities
+Then the stable identity still matches exactly
+```
+
+## Definition of Done
+
+- [ ] Given one stable scenario and one legacy scenario, when G057 reconciles identities, then the stable identity still matches exactly and the residual legacy heading remains count-compatible.
+EOF
+write_g057_manifest "$g057_mixed_heading_wrong_id_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-WRONG-900","title":"Wrong known identity","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/wrong.spec.ts","title":"wrong known identity","type":"e2e-ui"}],"evidenceRefs":[]},{"id":"SCN-LEGACY-901","title":"Legacy count representative","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/legacy.spec.ts","title":"legacy representative","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$g057_mixed_heading_wrong_id_dir" "$g057_mixed_heading_overcount_dir"
+write_g057_manifest "$g057_mixed_heading_overcount_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Known stable identity","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/known.spec.ts","title":"known stable identity","type":"e2e-ui"}],"evidenceRefs":[]},{"id":"SCN-LEGACY-901","title":"Legacy count representative","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/legacy.spec.ts","title":"legacy representative","type":"e2e-ui"}],"evidenceRefs":[]},{"id":"SCN-EXTRA-902","title":"Overcount must fail","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/extra.spec.ts","title":"extra overcount","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$g057_mixed_heading_wrong_id_dir" "$g057_mixed_heading_valid_dir"
+write_g057_manifest "$g057_mixed_heading_valid_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Known stable identity","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/known.spec.ts","title":"known stable identity","type":"e2e-ui"}],"evidenceRefs":[]},{"id":"SCN-LEGACY-901","title":"Unidentified residual cardinality representative","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/legacy.spec.ts","title":"legacy residual","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_duplicate_scope_known_id_dir"
+cat <<'EOF' >> "$g057_duplicate_scope_known_id_dir/scopes.md"
+
+### SCN-009-S03-001 - Duplicate stable identity
+
+```gherkin
+Scenario: A duplicate stable identity is rejected
+Given two scope scenarios carry one stable ID
+When G057 reconciles identified multiplicity
+Then the duplicate is rejected
+```
+
+## Definition of Done
+
+- [ ] Given two scope scenarios carry one stable ID, when G057 reconciles identified multiplicity, then the duplicate stable identity is rejected.
+EOF
+write_g057_manifest "$g057_duplicate_scope_known_id_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Planning maturity preserves honest incomplete delivery","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/future.spec.ts","title":"future behavior","type":"e2e-ui"}],"evidenceRefs":[]},{"id":"SCN-LEGACY-902","title":"Cardinality peer","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/peer.spec.ts","title":"peer","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+
+cp -R "$s03_planning_feature_dir" "$g057_all_identified_surplus_dir"
+write_g057_manifest "$g057_all_identified_surplus_dir" '{"schemaVersion":1,"scenarios":[{"id":"SCN-009-S03-001","title":"Known stable identity","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/known.spec.ts","title":"known","type":"e2e-ui"}],"evidenceRefs":[]},{"id":"SCN-SURPLUS-902","title":"Surplus identified manifest record","requiredTestType":"e2e-ui","plannedTests":[{"path":"tests/surplus.spec.ts","title":"surplus","type":"e2e-ui"}],"evidenceRefs":[]}]}'
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_G057_ONLY:-0}" == "1" ]]; then
+  run_focused_g057_assertions
+  if [[ "$failures" -gt 0 ]]; then
+    echo "state-transition-guard G057 selftest failed with $failures issue(s)."
+    exit 1
+  fi
+  echo "state-transition-guard G057 selftest passed."
+  exit 0
+fi
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_G061_ONLY:-0}" == "1" ]]; then
+  run_g061_regression_cases
+  if [[ "$failures" -gt 0 ]]; then
+    echo "state-transition-guard G061 selftest failed with $failures issue(s)."
+    exit 1
+  fi
+  echo "state-transition-guard G061 selftest passed."
+  exit 0
+fi
+
+run_g061_regression_cases
 # The other two profiles transition-contract-resolver.sh supports. Both were
 # unreachable through the guard until the contract validator's auditProfile
 # allow-list was widened to the resolver's full four-profile set, so neither had
@@ -2493,6 +3847,11 @@ emit_g040_cw_fixture "$g040_cw_no_marker_dir" 0 \
   "Several action items were deferred to next sprint per planning notes." ""
 emit_g040_cw_fixture "$g040_cw_two_markers_dir" 2 \
   "Several action items were deferred to next sprint in the prior release cycle." ""
+
+emit_g040_exposure_fixture "$g040_neg_exposure_label_dir" \
+  "this scope ships guard configuration only and has no runnable consumer surface"
+emit_g040_exposure_fixture "$g040_pos_exposure_reason_dir" \
+  "punted to a future iteration"
 
 clone_framework_surface "$g064_framework_root"
 mkdir -p "$g064_framework_root/specs"
@@ -2670,8 +4029,7 @@ repo_root_isolation_log="$tmp_root/repo-root-isolation-guard.log"
 repo_root_isolation_status="$(
   cd "$repo_root_isolation_ambient_dir"
   run_capture "$repo_root_isolation_log" \
-    env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
-    bash "$GUARD_SCRIPT" "$repo_root_isolation_feature_dir"
+    run_guard_fast_disabled "$GUARD_SCRIPT" "$repo_root_isolation_feature_dir"
 )"
 if [[ "$repo_root_isolation_status" -eq 0 ]]; then
   pass "Guarded-repository fixture passes from a hostile ambient CWD"
@@ -2685,6 +4043,15 @@ assert_log_not_contains "$repo_root_isolation_log" \
 assert_log_contains "$repo_root_isolation_log" \
   "Retro convergence health SLO is pass/degraded (Gate G090)" \
   "G090 evaluates convergence health against the guarded repository root"
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_ROOT_ISOLATION_ONLY:-0}" == "1" ]]; then
+  if [[ "$failures" -gt 0 ]]; then
+    echo "state-transition-guard root-isolation selftest failed with $failures issue(s)."
+    exit 1
+  fi
+  echo "state-transition-guard root-isolation selftest passed."
+  exit 0
+fi
 
 # --- G053 Check 13B: shell (.sh) runtime-path recognition ---
 # Regression guard for the G053<->G093 alignment fix. The G093 delivery-delta
@@ -2800,10 +4167,9 @@ sleep 20
 EOF
 
 c13_timeout_log="$tmp_root/check13-timeout.log"
-run_capture "$c13_timeout_log" env \
-  BUBBLES_REPO_ROOT="$c13_stub_root" \
-  BUBBLES_ARTIFACT_LINT_TIMEOUT="$c13_lint_cap_seconds" \
-  bash "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
+run_capture "$c13_timeout_log" run_guard_with_repo_root_and_lint_timeout \
+  "$c13_stub_root" "$c13_lint_cap_seconds" \
+  "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
 assert_log_contains "$c13_timeout_log" \
   "this is a TIMEOUT, not a lint failure" \
   "Check 13 reports a lint that did not COMPLETE as a timeout, naming the cap"
@@ -2825,10 +4191,9 @@ cat <<'EOF' > "$c13_stub_lint"
 exit 0
 EOF
 c13_completes_log="$tmp_root/check13-completes.log"
-run_capture "$c13_completes_log" env \
-  BUBBLES_REPO_ROOT="$c13_stub_root" \
-  BUBBLES_ARTIFACT_LINT_TIMEOUT="$c13_lint_cap_seconds" \
-  bash "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
+run_capture "$c13_completes_log" run_guard_with_repo_root_and_lint_timeout \
+  "$c13_stub_root" "$c13_lint_cap_seconds" \
+  "$c13_stub_guard" "$c13_stub_feature_dir" >/dev/null
 assert_log_not_contains "$c13_completes_log" \
   "this is a TIMEOUT, not a lint failure" \
   "Check 13 does not take the timeout path when the same staged lint completes (timeout case is non-tautological)" # portable-ok: assertion prose, not a timeout invocation
@@ -3356,6 +4721,8 @@ fi
 assert_log_contains "$planning_positive_log" "Workflow mode 'product-to-planning' permits current status 'specs_hardened'" "Planning-only mode permits specs_hardened status"
 assert_log_contains "$planning_positive_log" "planMaturityOnly=true is not claiming delivery-done status" "planMaturityOnly is allowed below done"
 
+run_focused_g057_assertions
+
 echo "Running BUG-009 S03 guard profile activation matrix..."
 s03_not_applicable='[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]'
 
@@ -3469,9 +4836,9 @@ exec bash "$SCRIPT_DIR/transition-contract-resolver.real.sh" "$@"
 EOF
 s03_resolver_count_file="$tmp_root/s03-resolver-count.txt"
 s03_resolver_once_log="$tmp_root/s03-resolver-once.log"
-s03_resolver_once_status="$(run_capture "$s03_resolver_once_log" env \
-  BUBBLES_TRANSITION_RESOLVER_COUNT_FILE="$s03_resolver_count_file" \
-  bash "$s03_resolver_once_root/bubbles/scripts/state-transition-guard.sh" "$s03_resolver_once_feature")"
+s03_resolver_once_status="$(run_capture "$s03_resolver_once_log" run_guard_with_resolver_count \
+  "$s03_resolver_count_file" \
+  "$s03_resolver_once_root/bubbles/scripts/state-transition-guard.sh" "$s03_resolver_once_feature")"
 if [[ "$s03_resolver_once_status" -eq 0 \
   && "$(wc -l < "$s03_resolver_count_file" | tr -d '[:space:]')" -eq 1 ]]; then
   pass "BUG-009 S03: guard resolves the transition contract exactly once per invocation"
@@ -3701,10 +5068,9 @@ git -C "$s03_planning_gates_root" -c user.name='Bubbles Selftest' -c user.email=
   commit -q -m 'test: seed planning gate fixtures'
 
 s03_g087_log="$tmp_root/s03-g087.log"
-s03_g087_status="$(run_capture "$s03_g087_log" env \
-  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
-  BUBBLES_REPO_ROOT="$s03_planning_gates_root" \
-  bash "$s03_planning_gates_root/bubbles/scripts/state-transition-guard.sh" "$s03_g087_feature")"
+s03_g087_status="$(run_capture "$s03_g087_log" run_guard_with_repo_root_fast_disabled \
+  "$s03_planning_gates_root" \
+  "$s03_planning_gates_root/bubbles/scripts/state-transition-guard.sh" "$s03_g087_feature")"
 if [[ "$s03_g087_status" -eq 1 ]]; then
   pass "BUG-009 S03: G087 linkage adversary blocks the real planning guard"
 else
@@ -3719,10 +5085,9 @@ git -C "$s03_planning_gates_root" add -f agents/bubbles.workflow.agent.md
 git -C "$s03_planning_gates_root" -c user.name='Bubbles Selftest' -c user.email='bubbles-selftest@example.invalid' \
   commit -q -m 'test: inject G091 planning-chain adversary'
 s03_g091_log="$tmp_root/s03-g091.log"
-s03_g091_status="$(run_capture "$s03_g091_log" env \
-  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
-  BUBBLES_REPO_ROOT="$s03_planning_gates_root" \
-  bash "$s03_planning_gates_root/bubbles/scripts/state-transition-guard.sh" "$s03_g091_feature")"
+s03_g091_status="$(run_capture "$s03_g091_log" run_guard_with_repo_root_fast_disabled \
+  "$s03_planning_gates_root" \
+  "$s03_planning_gates_root/bubbles/scripts/state-transition-guard.sh" "$s03_g091_feature")"
 if [[ "$s03_g091_status" -eq 1 ]]; then
   pass "BUG-009 S03: G091 chain adversary blocks the real planning guard"
 else
@@ -3810,7 +5175,9 @@ assert_log_contains "$lockdown_round_log" "lockdownState.round=3" "Negative fixt
 echo "Running negative workflow-runner-authorization selftest..."
 g064_log="$tmp_root/g064-guard.log"
 g064_timeout_seconds="${BUBBLES_G064_SELFTEST_TIMEOUT_SECONDS:-120}"
-g064_status="$(run_capture "$g064_log" bubbles_run_with_timeout "$g064_timeout_seconds" env BUBBLES_REPO_ROOT="$g064_framework_root" bash "$g064_framework_root/bubbles/scripts/state-transition-guard.sh" "$g064_feature_dir")"
+g064_status="$(run_capture "$g064_log" bubbles_run_with_timeout "$g064_timeout_seconds" \
+  run_guard_fast_disabled \
+  "$g064_framework_root/bubbles/scripts/state-transition-guard.sh" "$g064_feature_dir")"
 if [[ "$g064_status" -ne 0 ]]; then
   pass "Unauthorized workflow runner fixture fails the transition guard as expected"
 else
@@ -3887,6 +5254,79 @@ echo "Running G040 Check 18 — positive: status=done with mixed schema tokens A
 g040_pos_mixed_log="$tmp_root/g040-pos-mixed.log"
 run_capture "$g040_pos_mixed_log" bash "$GUARD_SCRIPT" "$g040_pos_strict_done_mixed_dir" >/dev/null
 assert_log_contains "$g040_pos_mixed_log" "deferral language hit" "G040 Check 18 BLOCKs under status=done when real deferral prose ('punted to Phase 3') accompanies schema followUp* tokens"
+
+echo "Running G040 Check 18 mandated exposure-label pair..."
+g040_neg_exposure_label_log="$tmp_root/g040-neg-exposure-label.log"
+run_capture "$g040_neg_exposure_label_log" bash "$GUARD_SCRIPT" "$g040_neg_exposure_label_dir" >/dev/null
+assert_log_not_contains "$g040_neg_exposure_label_log" "deferral language hit" \
+  "G040 Check 18 ignores the vertical-delivery-mandated Exposure-Deferred label when its reason is benign"
+
+g040_pos_exposure_reason_log="$tmp_root/g040-pos-exposure-reason.log"
+run_capture "$g040_pos_exposure_reason_log" bash "$GUARD_SCRIPT" "$g040_pos_exposure_reason_dir" >/dev/null
+assert_log_contains "$g040_pos_exposure_reason_log" "deferral language hit" \
+  "G040 Check 18 still blocks a deferring reason after the Exposure-Deferred label"
+# BUG032-HARDEN9-G040-BOUNDARIES-012 / SCN-032-028: the prohibited
+# phrases are complete lexical units, not prefixes. Benign `separate clause`
+# and `future workflow` prose must pass while the exact `separate ticket` and
+# `future scope` controls still block outside historical evidence.
+g040_bug032_benign_clause_dir="$tmp_root/specs/958-g040-bug032-benign-separate-clause"
+g040_bug032_benign_workflow_dir="$tmp_root/specs/959-g040-bug032-benign-future-workflow"
+g040_bug032_block_ticket_dir="$tmp_root/specs/960-g040-bug032-block-separate-ticket"
+g040_bug032_block_scope_dir="$tmp_root/specs/961-g040-bug032-block-future-scope"
+emit_g040_fixture "$g040_bug032_benign_clause_dir" "done" \
+  "A separate preservation clause stays negative." "no" "no"
+emit_g040_fixture "$g040_bug032_benign_workflow_dir" "done" \
+  "These are declared future workflow obligations." "no" "no"
+emit_g040_fixture "$g040_bug032_block_ticket_dir" "done" \
+  "Move this work to a separate ticket." "no" "no"
+emit_g040_fixture "$g040_bug032_block_scope_dir" "done" \
+  "Implement this in a future scope." "no" "no"
+
+g040_bug032_benign_failures=0
+for g040_bug032_case in clause workflow; do
+  if [[ "$g040_bug032_case" == "clause" ]]; then
+    g040_bug032_dir="$g040_bug032_benign_clause_dir"
+  else
+    g040_bug032_dir="$g040_bug032_benign_workflow_dir"
+  fi
+  g040_bug032_log="$tmp_root/g040-bug032-benign-$g040_bug032_case.log"
+  run_capture "$g040_bug032_log" bash "$GUARD_SCRIPT" "$g040_bug032_dir" >/dev/null
+  if grep -Fq -- 'deferral language hit' "$g040_bug032_log" \
+    || ! grep -Fq -- 'Zero deferral language found in scope and report artifacts (Gate G040)' "$g040_bug032_log"; then
+    g040_bug032_benign_failures=$((g040_bug032_benign_failures + 1))
+    printf 'BUG032_SCN028_BENIGN_BOUNDARY_MISMATCH case=%s hits=%s\n' \
+      "$g040_bug032_case" \
+      "$(grep -cF -- 'deferral language hit' "$g040_bug032_log" || true)"
+  fi
+done
+if [[ "$g040_bug032_benign_failures" -eq 0 ]]; then
+  pass "BUG-032 G040 permits benign separate-clause and future-workflow wording"
+else
+  fail "BUG-032 G040 benign lexical-boundary matrix has $g040_bug032_benign_failures mismatch(es)"
+fi
+
+g040_bug032_block_failures=0
+for g040_bug032_case in ticket scope; do
+  if [[ "$g040_bug032_case" == "ticket" ]]; then
+    g040_bug032_dir="$g040_bug032_block_ticket_dir"
+  else
+    g040_bug032_dir="$g040_bug032_block_scope_dir"
+  fi
+  g040_bug032_log="$tmp_root/g040-bug032-block-$g040_bug032_case.log"
+  g040_bug032_status="$(run_capture "$g040_bug032_log" bash "$GUARD_SCRIPT" "$g040_bug032_dir")"
+  if [[ "$g040_bug032_status" -eq 0 ]] \
+    || ! grep -Fq -- 'deferral language hit' "$g040_bug032_log"; then
+    g040_bug032_block_failures=$((g040_bug032_block_failures + 1))
+    printf 'BUG032_SCN028_BLOCK_BOUNDARY_MISMATCH case=%s status=%s hits=%s\n' \
+      "$g040_bug032_case" "$g040_bug032_status" \
+      "$(grep -cF -- 'deferral language hit' "$g040_bug032_log" || true)"
+  fi
+done
+if [[ "$g040_bug032_block_failures" -eq 0 ]]; then
+  pass "BUG-032 G040 still blocks exact separate-ticket and future-scope phrases"
+else
+  fail "BUG-032 G040 prohibited lexical-boundary matrix has $g040_bug032_block_failures mismatch(es)"
+fi
 
 # ----------------------------------------------------------------------------
 # G040 / Check 18 — certifying-window boundary (report.md marker parity with
@@ -3991,74 +5431,4850 @@ EOF
   fi
 fi
 
-# BUG-032 D1: Check 8B must classify explicit consumer-interface mutations, not
-# benign provider, lifecycle, or generated-artifact replacement prose. Extract
-# the production regex so the fixtures cannot drift into a second classifier.
+# BUG-032 D1 / SCN-032-013 through SCN-032-016: Check 8B must classify
+# explicit consumer-interface mutations without treating an unrelated object
+# mutation as a route mutation. Every assertion below sources the exact private
+# production helper between stable markers. There is no copied grammar or
+# legacy-regex fallback.
 echo "Running BUG-032 Check 8B consumer-interface mutation classifier..."
 
-check8b_regex="$(grep -E "^[[:space:]]*if grep -Eiq '.*renam.*route" "$PLANNING_CHECKS_SCRIPT" | sed -E "s/^.*grep -Eiq '([^']*)'.*$/\1/" || true)"
-if [[ -z "$check8b_regex" ]]; then
-  fail "BUG-032 Check 8B classifier could not be extracted from $PLANNING_CHECKS_SCRIPT (guard shape changed)"
-else
-  pass "BUG-032 Check 8B classifier extracted from production source (no test/source drift)"
+check8b_classifier_file="$tmp_root/bug032-check8b-classifier.sh"
+check8b_source_output_file="$tmp_root/bug032-check8b-source-output.txt"
+check8b_production_epoch_file="$tmp_root/bug032-check8b-production-epoch.sh"
+check8b_marker_begin_count=0
+check8b_marker_end_count=0
+check8b_marker_begin_line=0
+check8b_marker_end_line=0
+check8b_source_line_number=0
+check8b_marker_state="before"
+check8b_marker_stream_failures=0
+check8b_source_read_passes=0
+check8b_extracted_begin_count=0
+check8b_extracted_end_count=0
+check8b_extracted_line_count=0
+check8b_extracted_body_line_count=0
+check8b_extracted_function_count=0
+check8b_extracted_entrypoint_count=0
+check8b_extracted_first_line=""
+check8b_extracted_last_line=""
 
-  check8b_must_not="$tmp_root/bug032-check8b-must-not-flag.txt"
-  cat <<'EOF' > "$check8b_must_not"
+check8b_parse_function_declaration() {
+  local source_line="$1"
+  local plain_pattern='^[[:space:]]*([_a-zA-Z][_a-zA-Z0-9]*)[[:space:]]*\([[:space:]]*\)[[:space:]]*\{(.*)$'
+  local keyword_pattern='^[[:space:]]*function[[:space:]]+([_a-zA-Z][_a-zA-Z0-9]*)[[:space:]]*(\([[:space:]]*\))?[[:space:]]*\{(.*)$'
+
+  CHECK8B_DECLARATION_NAME=""
+  CHECK8B_DECLARATION_REMAINDER=""
+  CHECK8B_DECLARATION_STYLE=""
+  if [[ "$source_line" =~ $plain_pattern ]]; then
+    CHECK8B_DECLARATION_NAME="${BASH_REMATCH[1]}"
+    CHECK8B_DECLARATION_REMAINDER="${BASH_REMATCH[2]}"
+    CHECK8B_DECLARATION_STYLE="name-parens"
+  elif [[ "$source_line" =~ $keyword_pattern ]]; then
+    CHECK8B_DECLARATION_NAME="${BASH_REMATCH[1]}"
+    CHECK8B_DECLARATION_REMAINDER="${BASH_REMATCH[3]}"
+    if [[ -n "${BASH_REMATCH[2]}" ]]; then
+      CHECK8B_DECLARATION_STYLE="function-name-parens"
+    else
+      CHECK8B_DECLARATION_STYLE="function-name"
+    fi
+  else
+    return 1
+  fi
+  [[ -n "$CHECK8B_DECLARATION_NAME" && -n "$CHECK8B_DECLARATION_STYLE" ]]
+}
+
+check8b_file_sha256() {
+  local file_path="$1"
+  local digest_record=""
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest_record="$(sha256sum "$file_path")" || return 2
+  elif command -v shasum >/dev/null 2>&1; then
+    digest_record="$(shasum -a 256 "$file_path")" || return 2
+  else
+    return 2
+  fi
+  printf '%s\n' "${digest_record%% *}"
+}
+
+check8b_file_bytes() {
+  local file_path="$1"
+  local byte_count=""
+
+  byte_count="$(wc -c < "$file_path")" || return 2
+  byte_count="${byte_count//[[:space:]]/}"
+  printf '%s\n' "$byte_count"
+}
+
+check8b_source_epoch_matches() {
+  local source_path="$1"
+  local expected_sha256="$2"
+  local expected_bytes="$3"
+  local observed_sha256=""
+  local observed_bytes=""
+
+  observed_sha256="$(check8b_file_sha256 "$source_path")" || return 2
+  observed_bytes="$(check8b_file_bytes "$source_path")" || return 2
+  [[ "$observed_sha256" == "$expected_sha256" ]] \
+    && [[ "$observed_bytes" -eq "$expected_bytes" ]]
+}
+
+check8b_source_epoch_sha_before="$(check8b_file_sha256 "$PLANNING_CHECKS_SCRIPT")"
+check8b_source_epoch_bytes_before="$(check8b_file_bytes "$PLANNING_CHECKS_SCRIPT")"
+cp "$PLANNING_CHECKS_SCRIPT" "$check8b_production_epoch_file"
+check8b_source_epoch_sha_after_snapshot="$(check8b_file_sha256 "$PLANNING_CHECKS_SCRIPT")"
+check8b_source_epoch_bytes_after_snapshot="$(check8b_file_bytes "$PLANNING_CHECKS_SCRIPT")"
+check8b_pinned_epoch_sha="$(check8b_file_sha256 "$check8b_production_epoch_file")"
+check8b_pinned_epoch_bytes="$(check8b_file_bytes "$check8b_production_epoch_file")"
+check8b_epoch_failures=0
+if [[ "$check8b_source_epoch_sha_before" != "$check8b_source_epoch_sha_after_snapshot" ]] \
+  || [[ "$check8b_source_epoch_bytes_before" -ne "$check8b_source_epoch_bytes_after_snapshot" ]] \
+  || [[ "$check8b_source_epoch_sha_before" != "$check8b_pinned_epoch_sha" ]] \
+  || [[ "$check8b_source_epoch_bytes_before" -ne "$check8b_pinned_epoch_bytes" ]]; then
+  check8b_epoch_failures=$((check8b_epoch_failures + 1))
+fi
+
+: > "$check8b_classifier_file"
+while IFS= read -r check8b_source_line || [[ -n "$check8b_source_line" ]]; do
+  check8b_source_line_number=$((check8b_source_line_number + 1))
+  case "$check8b_source_line" in
+    '# BEGIN CHECK8B FINITE CLASSIFIER')
+      check8b_marker_begin_count=$((check8b_marker_begin_count + 1))
+      if [[ "$check8b_marker_state" == "before" ]] \
+        && [[ "$check8b_marker_begin_count" -eq 1 ]]; then
+        check8b_marker_begin_line="$check8b_source_line_number"
+        check8b_marker_state="inside"
+        printf '%s\n' "$check8b_source_line" >> "$check8b_classifier_file"
+        check8b_extracted_begin_count=$((check8b_extracted_begin_count + 1))
+        check8b_extracted_line_count=$((check8b_extracted_line_count + 1))
+        check8b_extracted_first_line="$check8b_source_line"
+        check8b_extracted_last_line="$check8b_source_line"
+      else
+        check8b_marker_stream_failures=$((check8b_marker_stream_failures + 1))
+      fi
+      ;;
+    '# END CHECK8B FINITE CLASSIFIER')
+      check8b_marker_end_count=$((check8b_marker_end_count + 1))
+      if [[ "$check8b_marker_state" == "inside" ]] \
+        && [[ "$check8b_marker_end_count" -eq 1 ]]; then
+        check8b_marker_end_line="$check8b_source_line_number"
+        printf '%s\n' "$check8b_source_line" >> "$check8b_classifier_file"
+        check8b_extracted_end_count=$((check8b_extracted_end_count + 1))
+        check8b_extracted_line_count=$((check8b_extracted_line_count + 1))
+        check8b_extracted_last_line="$check8b_source_line"
+        check8b_marker_state="after"
+      else
+        check8b_marker_stream_failures=$((check8b_marker_stream_failures + 1))
+      fi
+      ;;
+    *)
+      if [[ "$check8b_marker_state" == "inside" ]]; then
+        printf '%s\n' "$check8b_source_line" >> "$check8b_classifier_file"
+        check8b_extracted_line_count=$((check8b_extracted_line_count + 1))
+        check8b_extracted_body_line_count=$((check8b_extracted_body_line_count + 1))
+        check8b_extracted_last_line="$check8b_source_line"
+        if check8b_parse_function_declaration "$check8b_source_line"; then
+          check8b_extracted_function_count=$((check8b_extracted_function_count + 1))
+          [[ "$CHECK8B_DECLARATION_NAME" == "check8b_classify_line" ]] \
+            && check8b_extracted_entrypoint_count=$((check8b_extracted_entrypoint_count + 1))
+        fi
+      fi
+      ;;
+  esac
+done < "$check8b_production_epoch_file"
+check8b_source_read_passes=1
+check8b_classifier_source_status=1
+check8b_classifier_syntax_status=1
+check8b_classifier_ready=0
+check8b_sourceability_failures=0
+
+if [[ "$check8b_source_read_passes" -ne 1 ]] \
+  || [[ "$check8b_marker_stream_failures" -ne 0 ]] \
+  || [[ "$check8b_marker_state" != "after" ]] \
+  || [[ "$check8b_marker_begin_count" -ne 1 ]] \
+  || [[ "$check8b_marker_end_count" -ne 1 ]] \
+  || [[ "$check8b_marker_begin_line" -ge "$check8b_marker_end_line" ]] \
+  || [[ "$check8b_extracted_line_count" -lt 10 ]] \
+  || [[ "$check8b_extracted_body_line_count" -lt 8 ]] \
+  || [[ "$check8b_extracted_function_count" -lt 2 ]] \
+  || [[ "$check8b_extracted_entrypoint_count" -ne 1 ]] \
+  || [[ "$check8b_extracted_begin_count" -ne 1 ]] \
+  || [[ "$check8b_extracted_end_count" -ne 1 ]] \
+  || [[ "$check8b_extracted_line_count" -ne $((check8b_marker_end_line - check8b_marker_begin_line + 1)) ]] \
+  || [[ "$check8b_extracted_body_line_count" -ne $((check8b_marker_end_line - check8b_marker_begin_line - 1)) ]] \
+  || [[ "$check8b_extracted_first_line" != '# BEGIN CHECK8B FINITE CLASSIFIER' ]] \
+  || [[ "$check8b_extracted_last_line" != '# END CHECK8B FINITE CLASSIFIER' ]]; then
+  check8b_sourceability_failures=$((check8b_sourceability_failures + 1))
+fi
+
+if bash -n "$check8b_classifier_file"; then
+  check8b_classifier_syntax_status=0
+else
+  check8b_classifier_syntax_status=$?
+  check8b_sourceability_failures=$((check8b_sourceability_failures + 1))
+fi
+
+CHECK8B_CLASSIFICATION="source-sentinel-classification"
+CHECK8B_VERB="source-sentinel-verb"
+CHECK8B_MUTATION_TARGET="source-sentinel-target"
+CHECK8B_DIRECT_SURFACES="source-sentinel-direct"
+CHECK8B_PRESERVED_SURFACES="source-sentinel-preserved"
+CHECK8B_REASON="source-sentinel-reason"
+CHECK8B_UNRESOLVED_PHRASE="source-sentinel-unresolved"
+CHECK8B_BOUNDARY="source-sentinel-boundary"
+CHECK8B_TOKEN_COUNT=37
+CHECK8B_CANDIDATE_COUNT=5
+_CHECK8B_TOKENS=(source-sentinel-token "source sentinel token two")
+_CHECK8B_CLAUSE_IDS=(37 38)
+_CHECK8B_CANDIDATE_INDEXES=(37 38)
+
+check8b_trace_strip_inert_text() {
+  local input_text="$1"
+  local input_length="${#input_text}"
+  local index=0
+  local character=""
+  local next_character=""
+  local following_character=""
+  local previous_character=""
+  local lexical_state="plain"
+  local parameter_depth=0
+
+  CHECK8B_TRACE_EXECUTABLE_TEXT=""
+  CHECK8B_TRACE_UNCLOSED_QUOTE=0
+  while [[ "$index" -lt "$input_length" ]]; do
+    character="${input_text:$index:1}"
+    next_character=""
+    following_character=""
+    previous_character=""
+    [[ $((index + 1)) -lt "$input_length" ]] \
+      && next_character="${input_text:$((index + 1)):1}"
+    [[ $((index + 2)) -lt "$input_length" ]] \
+      && following_character="${input_text:$((index + 2)):1}"
+    [[ "$index" -gt 0 ]] \
+      && previous_character="${input_text:$((index - 1)):1}"
+
+    case "$lexical_state" in
+      plain)
+        if [[ "$parameter_depth" -gt 0 ]]; then
+          if [[ "$character" == '$' && "$next_character" == '{' ]]; then
+            CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT$character$next_character"
+            parameter_depth=$((parameter_depth + 1))
+            index=$((index + 2))
+            continue
+          fi
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT$character"
+          [[ "$character" != '}' ]] || parameter_depth=$((parameter_depth - 1))
+        elif [[ "$character" == '$' && "$next_character" == '{' ]]; then
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT$character$next_character"
+          parameter_depth=1
+          index=$((index + 2))
+          continue
+        elif [[ "$character" == "<" && "$next_character" == "<" ]] \
+          && [[ "$previous_character" != "<" ]] \
+          && [[ "$following_character" != "<" ]]; then
+          return 1
+        elif [[ "$character" == "\\" ]]; then
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+          if [[ $((index + 1)) -lt "$input_length" ]]; then
+            if [[ "$next_character" == $'\n' ]]; then
+              CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT"$'\n'
+            else
+              CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+            fi
+            index=$((index + 2))
+            continue
+          fi
+        elif [[ "$character" == "'" ]]; then
+          lexical_state="single-quote"
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        elif [[ "$character" == '"' ]]; then
+          lexical_state="double-quote"
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        elif [[ "$character" == "#" ]] \
+          && { [[ "$index" -eq 0 ]] \
+            || [[ "$previous_character" =~ [[:space:]\;\&\|\(\)\{\}] ]]; }; then
+          lexical_state="comment"
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        else
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT$character"
+        fi
+        ;;
+      single-quote)
+        if [[ "$character" == "'" ]]; then
+          lexical_state="plain"
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        elif [[ "$character" == $'\n' ]]; then
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT"$'\n'
+        else
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        fi
+        ;;
+      double-quote)
+        if [[ "$character" == "\\" ]]; then
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+          if [[ $((index + 1)) -lt "$input_length" ]]; then
+            if [[ "$next_character" == $'\n' ]]; then
+              CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT"$'\n'
+            else
+              CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+            fi
+            index=$((index + 2))
+            continue
+          fi
+        elif [[ "$character" == '"' ]]; then
+          lexical_state="plain"
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        elif [[ "$character" == $'\n' ]]; then
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT"$'\n'
+        else
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        fi
+        ;;
+      comment)
+        if [[ "$character" == $'\n' ]]; then
+          lexical_state="plain"
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT"$'\n'
+        else
+          CHECK8B_TRACE_EXECUTABLE_TEXT="$CHECK8B_TRACE_EXECUTABLE_TEXT "
+        fi
+        ;;
+    esac
+    index=$((index + 1))
+  done
+
+  if [[ "$parameter_depth" -ne 0 ]]; then
+    return 1
+  fi
+  if [[ "$lexical_state" == "single-quote" ]] \
+    || [[ "$lexical_state" == "double-quote" ]]; then
+    # shellcheck disable=SC2034  # diagnostic trace flag for a future failure dump
+    CHECK8B_TRACE_UNCLOSED_QUOTE=1
+    return 1
+  fi
+  return 0
+}
+
+check8b_trace_has_executable_assignment() {
+  local executable_text="$1"
+  local variable_name="$2"
+  local assignment_word_pattern='^[[:alpha:]_][[:alnum:]_]*(\[[^]]+\])?[+]?='
+  local target_assignment_pattern="^${variable_name}(\\[[^]]+\\])?[+]?="
+  local command_segment=""
+  local command_word=""
+  local command_index=0
+
+  [[ "$variable_name" =~ ^[[:alpha:]_][[:alnum:]_]*$ ]] || return 1
+  check8b_trace_split_command_list "$executable_text" || return 1
+  for command_segment in "${CHECK8B_TRACE_COMMAND_SEGMENTS[@]}"; do
+    check8b_trace_command_words "$command_segment" || continue
+    command_index="$CHECK8B_TRACE_COMMAND_WORD_START"
+    [[ "$command_index" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]] || continue
+    command_word="${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}"
+    case "$command_word" in
+      local|declare|typeset|readonly|export)
+        command_index=$((command_index + 1))
+        while [[ "$command_index" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]]; do
+          command_word="${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}"
+          case "$command_word" in
+            -p|-f|-F|+p|+f|+F) break ;;
+            --|-[[:alpha:]]*|+[[:alpha:]]*) ;;
+            *)
+              [[ "$command_word" =~ $target_assignment_pattern ]] && return 0
+              ;;
+          esac
+          command_index=$((command_index + 1))
+        done
+        ;;
+      *)
+        while [[ "$command_index" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]]; do
+          command_word="${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}"
+          [[ "$command_word" =~ $assignment_word_pattern ]] || break
+          [[ "$command_word" =~ $target_assignment_pattern ]] && return 0
+          command_index=$((command_index + 1))
+        done
+        ;;
+    esac
+  done
+  return 1
+}
+
+check8b_trace_append_command_segment() {
+  local command_segment="$1"
+
+  command_segment="${command_segment#"${command_segment%%[![:space:]]*}"}"
+  command_segment="${command_segment%"${command_segment##*[![:space:]]}"}"
+  [[ -n "$command_segment" ]] || return 0
+  CHECK8B_TRACE_COMMAND_SEGMENTS+=("$command_segment")
+}
+
+check8b_trace_split_command_list() {
+  local executable_text="$1"
+  local input_length="${#executable_text}"
+  local index=0
+  local character=""
+  local next_character=""
+  local previous_character=""
+  local command_segment=""
+  local parameter_depth=0
+  local parenthesis_depth=0
+  local conditional_depth=0
+
+  CHECK8B_TRACE_COMMAND_SEGMENTS=()
+  CHECK8B_TRACE_COMMAND_PARSE_UNCERTAIN=0
+  while [[ "$index" -lt "$input_length" ]]; do
+    character="${executable_text:$index:1}"
+    next_character=""
+    previous_character=""
+    [[ $((index + 1)) -lt "$input_length" ]] \
+      && next_character="${executable_text:$((index + 1)):1}"
+    [[ "$index" -gt 0 ]] \
+      && previous_character="${executable_text:$((index - 1)):1}"
+
+    if [[ "$parameter_depth" -gt 0 ]]; then
+      command_segment="$command_segment$character"
+      if [[ "$character" == '$' && "$next_character" == '{' ]]; then
+        command_segment="$command_segment$next_character"
+        parameter_depth=$((parameter_depth + 1))
+        index=$((index + 2))
+        continue
+      fi
+      [[ "$character" != '}' ]] || parameter_depth=$((parameter_depth - 1))
+      index=$((index + 1))
+      continue
+    fi
+
+    if [[ "$conditional_depth" -gt 0 ]]; then
+      if [[ "$character" == '$' && "$next_character" == '{' ]]; then
+        command_segment="$command_segment$character$next_character"
+        parameter_depth=1
+        index=$((index + 2))
+        continue
+      fi
+      command_segment="$command_segment$character"
+      if [[ "$character" == ']' && "$next_character" == ']' ]]; then
+        command_segment="$command_segment$next_character"
+        conditional_depth=0
+        index=$((index + 2))
+        continue
+      fi
+      index=$((index + 1))
+      continue
+    fi
+
+    if [[ "$parenthesis_depth" -gt 0 ]]; then
+      if [[ "$character" == '$' && "$next_character" == '{' ]]; then
+        command_segment="$command_segment$character$next_character"
+        parameter_depth=1
+        index=$((index + 2))
+        continue
+      fi
+      command_segment="$command_segment$character"
+      if [[ "$character" == '(' ]]; then
+        parenthesis_depth=$((parenthesis_depth + 1))
+      elif [[ "$character" == ')' ]]; then
+        parenthesis_depth=$((parenthesis_depth - 1))
+      fi
+      index=$((index + 1))
+      continue
+    fi
+
+    if [[ "$character" == '$' && "$next_character" == '{' ]]; then
+      command_segment="$command_segment$character$next_character"
+      parameter_depth=1
+      index=$((index + 2))
+      continue
+    fi
+    if [[ "$character" == '[' && "$next_character" == '[' ]] \
+      && { [[ "$index" -eq 0 ]] \
+        || [[ "$previous_character" =~ [[:space:]\;\&\|\(\)\{\}] ]]; }; then
+      command_segment="$command_segment$character$next_character"
+      conditional_depth=1
+      index=$((index + 2))
+      continue
+    fi
+    if [[ "$character" == '$' && "$next_character" == '(' ]]; then
+      command_segment="$command_segment$character$next_character"
+      parenthesis_depth=1
+      index=$((index + 2))
+      continue
+    fi
+    if [[ "$character" == '(' ]]; then
+      command_segment="$command_segment$character"
+      parenthesis_depth=1
+      index=$((index + 1))
+      continue
+    fi
+    if [[ "$character" == ')' ]] \
+      || [[ "$character" == ';' ]] \
+      || [[ "$character" == '{' ]] \
+      || [[ "$character" == '}' ]] \
+      || [[ "$character" == $'\n' ]]; then
+      check8b_trace_append_command_segment "$command_segment"
+      command_segment=""
+      index=$((index + 1))
+      continue
+    fi
+    if { [[ "$character" == '&' && "$next_character" == '&' ]] \
+      || [[ "$character" == '|' && "$next_character" == '|' ]]; }; then
+      check8b_trace_append_command_segment "$command_segment"
+      command_segment=""
+      index=$((index + 2))
+      continue
+    fi
+    command_segment="$command_segment$character"
+    index=$((index + 1))
+  done
+
+  if [[ "$parameter_depth" -ne 0 ]] \
+    || [[ "$parenthesis_depth" -ne 0 ]] \
+    || [[ "$conditional_depth" -ne 0 ]]; then
+    # shellcheck disable=SC2034  # diagnostic trace flag for a future failure dump
+    CHECK8B_TRACE_COMMAND_PARSE_UNCERTAIN=1
+    CHECK8B_TRACE_COMMAND_SEGMENTS=()
+    return 1
+  fi
+  check8b_trace_append_command_segment "$command_segment"
+  return 0
+}
+
+check8b_trace_command_words() {
+  local command_segment="$1"
+  local command_word=""
+
+  CHECK8B_TRACE_COMMAND_WORDS=()
+  CHECK8B_TRACE_COMMAND_WORD_START=0
+  IFS=$' \t\r\n' read -r -a CHECK8B_TRACE_COMMAND_WORDS <<< "$command_segment"
+  while [[ "$CHECK8B_TRACE_COMMAND_WORD_START" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]]; do
+    command_word="${CHECK8B_TRACE_COMMAND_WORDS[$CHECK8B_TRACE_COMMAND_WORD_START]}"
+    case "$command_word" in
+      if|elif|then|else|do|while|until|'!')
+        CHECK8B_TRACE_COMMAND_WORD_START=$((CHECK8B_TRACE_COMMAND_WORD_START + 1))
+        ;;
+      *) break ;;
+    esac
+  done
+  [[ "$CHECK8B_TRACE_COMMAND_WORD_START" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]]
+}
+
+check8b_trace_has_executable_call() {
+  local executable_text="$1"
+  local command_name="$2"
+  local assignment_word_pattern='^[[:alpha:]_][[:alnum:]_]*(\[[^]]+\])?[+]?='
+  local command_segment=""
+  local command_word=""
+  local command_index=0
+
+  [[ "$command_name" =~ ^[[:alpha:]_][[:alnum:]_]*$ ]] || return 1
+  check8b_trace_split_command_list "$executable_text" || return 1
+  for command_segment in "${CHECK8B_TRACE_COMMAND_SEGMENTS[@]}"; do
+    check8b_trace_command_words "$command_segment" || continue
+    command_index="$CHECK8B_TRACE_COMMAND_WORD_START"
+    while [[ "$command_index" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]]; do
+      command_word="${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}"
+      [[ "$command_word" =~ $assignment_word_pattern ]] || break
+      command_index=$((command_index + 1))
+    done
+    [[ "$command_index" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]] || continue
+    [[ "${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}" == "$command_name" ]] && return 0
+  done
+  return 1
+}
+
+check8b_trace_has_executable_relationship_call() {
+  local executable_text="$1"
+  local relationship_name=""
+
+  for relationship_name in \
+    _check8b_is_surface _check8b_is_surface_head_at _check8b_surface_from \
+    _check8b_passive_surface _check8b_named_surface_before _check8b_target_after; do
+    check8b_trace_has_executable_call "$executable_text" "$relationship_name" && return 0
+  done
+  return 1
+}
+
+check8b_function_brace_scan_line() {
+  local source_line="$1"
+  local initial_depth="$2"
+  local depth="$initial_depth"
+  local declaration_remainder=""
+  local closing_remainder=""
+  local trailing_text=""
+
+  CHECK8B_FUNCTION_BRACE_SCAN_FAILURES=0
+  CHECK8B_FUNCTION_BRACE_CLOSED=0
+  CHECK8B_FUNCTION_BRACE_TRAILING_CODE=0
+  CHECK8B_FUNCTION_BRACE_FINAL_DEPTH="$initial_depth"
+
+  if [[ "$initial_depth" -eq 0 ]]; then
+    check8b_parse_function_declaration "$source_line" || {
+      CHECK8B_FUNCTION_BRACE_SCAN_FAILURES=$((CHECK8B_FUNCTION_BRACE_SCAN_FAILURES + 1))
+      return 1
+    }
+    depth=1
+    declaration_remainder="$CHECK8B_DECLARATION_REMAINDER"
+    declaration_remainder="${declaration_remainder#"${declaration_remainder%%[![:space:]]*}"}"
+    declaration_remainder="${declaration_remainder%"${declaration_remainder##*[![:space:]]}"}"
+    if [[ "$declaration_remainder" =~ (^|[[:space:]\;])\}([[:space:]]*\;)?[[:space:]]*$ ]]; then
+      CHECK8B_FUNCTION_BRACE_CLOSED=1
+      depth=0
+    fi
+    CHECK8B_FUNCTION_BRACE_FINAL_DEPTH="$depth"
+    return 0
+  fi
+
+  # Production declarations and calibration fixtures keep their top-level
+  # closing brace unindented. Nested groups remain indented and therefore stay
+  # body syntax. Bash -n and the independent structural oracle validate that
+  # body; this declaration-only detector owns only the source-time boundary.
+  if [[ "$source_line" == '}' ]] || [[ "$source_line" == '};' ]]; then
+    CHECK8B_FUNCTION_BRACE_CLOSED=1
+    CHECK8B_FUNCTION_BRACE_FINAL_DEPTH=0
+    return 0
+  fi
+  if [[ "$source_line" == '}'* ]]; then
+    closing_remainder="${source_line#\}}"
+    trailing_text="${closing_remainder#"${closing_remainder%%[![:space:]]*}"}"
+    trailing_text="${trailing_text%"${trailing_text##*[![:space:]]}"}"
+    if [[ "$trailing_text" != ';' ]]; then
+      # shellcheck disable=SC2034  # diagnostic trace flag for a future failure dump
+      CHECK8B_FUNCTION_BRACE_TRAILING_CODE=1
+      CHECK8B_FUNCTION_BRACE_SCAN_FAILURES=$((CHECK8B_FUNCTION_BRACE_SCAN_FAILURES + 1))
+      return 1
+    fi
+    # shellcheck disable=SC2034  # diagnostic trace flag for a future failure dump
+    CHECK8B_FUNCTION_BRACE_CLOSED=1
+    CHECK8B_FUNCTION_BRACE_FINAL_DEPTH=0
+    return 0
+  fi
+  CHECK8B_FUNCTION_BRACE_FINAL_DEPTH="$depth"
+  return 0
+}
+
+check8b_source_declaration_only_contract() {
+  local source_file="$1"
+  local source_line=""
+  local source_tail=""
+  local marker_state="before"
+  local active_function=""
+  local function_brace_depth=0
+
+  CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=0
+  CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE=0
+  CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="none"
+  CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT=0
+  CHECK8B_SOURCE_DECLARATION_BEGIN_COUNT=0
+  CHECK8B_SOURCE_DECLARATION_END_COUNT=0
+  CHECK8B_SOURCE_DECLARATION_STYLE_NAME_PARENS=0
+  CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME=0
+  CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME_PARENS=0
+  CHECK8B_SOURCE_DECLARATION_LINE_NUMBER=0
+
+  while IFS= read -r source_line || [[ -n "$source_line" ]]; do
+    CHECK8B_SOURCE_DECLARATION_LINE_NUMBER=$((CHECK8B_SOURCE_DECLARATION_LINE_NUMBER + 1))
+    if [[ -n "$active_function" ]]; then
+      if ! check8b_function_brace_scan_line "$source_line" "$function_brace_depth"; then
+        CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+        if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="malformed-function-body:$active_function"
+        fi
+        active_function=""
+        function_brace_depth=0
+        continue
+      fi
+      function_brace_depth="$CHECK8B_FUNCTION_BRACE_FINAL_DEPTH"
+      [[ "$function_brace_depth" -ne 0 ]] || active_function=""
+      continue
+    fi
+
+    source_tail="${source_line#"${source_line%%[![:space:]]*}"}"
+    source_tail="${source_tail%"${source_tail##*[![:space:]]}"}"
+    [[ -n "$source_tail" ]] || continue
+    if [[ "$source_tail" == '# BEGIN CHECK8B FINITE CLASSIFIER' ]]; then
+      CHECK8B_SOURCE_DECLARATION_BEGIN_COUNT=$((CHECK8B_SOURCE_DECLARATION_BEGIN_COUNT + 1))
+      if [[ "$marker_state" == "before" ]] \
+        && [[ "$CHECK8B_SOURCE_DECLARATION_BEGIN_COUNT" -eq 1 ]]; then
+        marker_state="inside"
+      else
+        CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+        if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="misordered-begin-marker"
+        fi
+      fi
+      continue
+    fi
+    if [[ "$source_tail" == '# END CHECK8B FINITE CLASSIFIER' ]]; then
+      CHECK8B_SOURCE_DECLARATION_END_COUNT=$((CHECK8B_SOURCE_DECLARATION_END_COUNT + 1))
+      if [[ "$marker_state" == "inside" ]] \
+        && [[ "$CHECK8B_SOURCE_DECLARATION_END_COUNT" -eq 1 ]]; then
+        marker_state="after"
+      else
+        CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+        if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="misordered-end-marker"
+        fi
+      fi
+      continue
+    fi
+    if [[ "$source_tail" == \#* ]]; then
+      if [[ "$marker_state" != "inside" ]]; then
+        CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+        if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="comment-outside-marker-block"
+        fi
+      fi
+      continue
+    fi
+    if [[ "$marker_state" == "inside" ]] \
+      && check8b_parse_function_declaration "$source_line"; then
+      CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT=$((CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT + 1))
+      case "$CHECK8B_DECLARATION_STYLE" in
+        name-parens) CHECK8B_SOURCE_DECLARATION_STYLE_NAME_PARENS=$((CHECK8B_SOURCE_DECLARATION_STYLE_NAME_PARENS + 1)) ;;
+        function-name) CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME=$((CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME + 1)) ;;
+        function-name-parens) CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME_PARENS=$((CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME_PARENS + 1)) ;;
+        *)
+          CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+          if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+            CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+            CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="unsupported-function-declaration"
+          fi
+          ;;
+      esac
+      if ! check8b_function_brace_scan_line "$source_line" 0; then
+        CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+        if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+          CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="malformed-function-declaration:$CHECK8B_DECLARATION_NAME"
+        fi
+        continue
+      fi
+      function_brace_depth="$CHECK8B_FUNCTION_BRACE_FINAL_DEPTH"
+      if [[ "$function_brace_depth" -gt 0 ]]; then
+        active_function="$CHECK8B_DECLARATION_NAME"
+      fi
+      continue
+    fi
+
+    CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+    if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+      CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+      if [[ "$marker_state" == "inside" ]]; then
+        CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="top-level-non-function"
+      else
+        CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="content-outside-marker-block"
+      fi
+    fi
+  done < "$source_file"
+
+  if [[ -n "$active_function" ]] || [[ "$function_brace_depth" -ne 0 ]]; then
+    CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+    if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+      CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+      CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="unclosed-function:$active_function"
+    fi
+  fi
+  if [[ "$marker_state" != "after" ]] \
+    || [[ "$CHECK8B_SOURCE_DECLARATION_BEGIN_COUNT" -ne 1 ]] \
+    || [[ "$CHECK8B_SOURCE_DECLARATION_END_COUNT" -ne 1 ]]; then
+    CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES=$((CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES + 1))
+    if [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" -eq 0 ]]; then
+      CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE="$CHECK8B_SOURCE_DECLARATION_LINE_NUMBER"
+      CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON="marker-contract"
+    fi
+  fi
+  [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES" -eq 0 ]]
+}
+
+check8b_sourceability_nested_fixture="$tmp_root/bug032-check8b-sourceability-nested-fixture.sh"
+check8b_sourceability_malformed_fixture="$tmp_root/bug032-check8b-sourceability-malformed-fixture.sh"
+cat <<'EOF' > "$check8b_sourceability_nested_fixture"
+# BEGIN CHECK8B FINITE CLASSIFIER
+check8b_nested_sourceability_fixture() {
+  local -a values=(one two)
+  local index=0
+  if [[ "${#values[@]}" -eq 2 ]]; then
+    case "${values[$index]}" in
+      one)
+        for index in "${!values[@]}"; do
+          (( index >= 0 )) || return 1
+        done
+        ;;
+      *) return 1 ;;
+    esac
+  fi
+  return 0
+}
+# END CHECK8B FINITE CLASSIFIER
+EOF
+cat <<'EOF' > "$check8b_sourceability_malformed_fixture"
+# BEGIN CHECK8B FINITE CLASSIFIER
+check8b_malformed_sourceability_fixture() {
+  local value=one
+} printf '%s\n' forbidden-trailing-code
+# END CHECK8B FINITE CLASSIFIER
+EOF
+check8b_sourceability_calibration_failures=0
+if check8b_source_declaration_only_contract "$check8b_sourceability_nested_fixture" \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT" -eq 1 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES" -eq 0 ]]; then
+  pass "BUG-032 TI-07 declaration-only detector accepts nested if, case, loop, array, conditional, and arithmetic syntax inside one valid function body"
+else
+  check8b_sourceability_calibration_failures=$((check8b_sourceability_calibration_failures + 1))
+  echo "BUG032_TI07_VALID_NESTED_BODY_REJECTED failures=$CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES line=$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE reason=$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON functions=$CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT"
+fi
+if check8b_source_declaration_only_contract "$check8b_sourceability_malformed_fixture"; then
+  check8b_sourceability_calibration_failures=$((check8b_sourceability_calibration_failures + 1))
+  echo 'BUG032_TI07_MALFORMED_TRAILING_BODY_ACCEPTED'
+elif [[ "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON" == "malformed-function-body:check8b_malformed_sourceability_fixture" ]]; then
+  pass "BUG-032 TI-07 declaration-only detector still rejects executable text after the closing function brace"
+else
+  check8b_sourceability_calibration_failures=$((check8b_sourceability_calibration_failures + 1))
+  echo "BUG032_TI07_MALFORMED_BODY_WRONG_REASON failures=$CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES line=$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE reason=$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON"
+fi
+if [[ "$check8b_sourceability_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 TI-07 sourceability brace scanner calibration preserves valid nested grammar and malformed-body rejection"
+else
+  fail "BUG-032 TI-07 sourceability brace scanner calibration has $check8b_sourceability_calibration_failures failure(s)"
+fi
+
+declare -A check8b_source_assignment_names=()
+
+check8b_source_inventory_note_failure() {
+  local failure_reason="$1"
+
+  CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FAILURES=$((CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FAILURES + 1))
+  if [[ "$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON" == "none" ]]; then
+    CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON="$failure_reason"
+  fi
+}
+
+check8b_source_inventory_parenthesis_delta() {
+  local input_text="$1"
+  local input_index=0
+  local input_character=""
+
+  CHECK8B_SOURCE_INVENTORY_PAREN_DELTA=0
+  while [[ "$input_index" -lt "${#input_text}" ]]; do
+    input_character="${input_text:$input_index:1}"
+    if [[ "$input_character" == "(" ]]; then
+      CHECK8B_SOURCE_INVENTORY_PAREN_DELTA=$((CHECK8B_SOURCE_INVENTORY_PAREN_DELTA + 1))
+    elif [[ "$input_character" == ")" ]]; then
+      CHECK8B_SOURCE_INVENTORY_PAREN_DELTA=$((CHECK8B_SOURCE_INVENTORY_PAREN_DELTA - 1))
+    fi
+    input_index=$((input_index + 1))
+  done
+}
+
+check8b_source_inventory_add_operand() {
+  local operand="$1"
+  local allow_bare_name="$2"
+  local assignment_pattern='^([[:alpha:]_][[:alnum:]_]*)(\[.+\])?(\+)?=(.*)$'
+  local bare_name_pattern='^([[:alpha:]_][[:alnum:]_]*)(\[.+\])?$'
+  local inventory_name=""
+
+  CHECK8B_SOURCE_INVENTORY_OPERAND_IS_ASSIGNMENT=0
+  CHECK8B_SOURCE_INVENTORY_OPERAND_VALUE=""
+  if [[ "$operand" =~ $assignment_pattern ]]; then
+    inventory_name="${BASH_REMATCH[1]}"
+    CHECK8B_SOURCE_INVENTORY_OPERAND_IS_ASSIGNMENT=1
+    CHECK8B_SOURCE_INVENTORY_OPERAND_VALUE="${BASH_REMATCH[4]}"
+  elif [[ "$allow_bare_name" -eq 1 ]] && [[ "$operand" =~ $bare_name_pattern ]]; then
+    inventory_name="${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+  check8b_source_assignment_names["$inventory_name"]=1
+  return 0
+}
+
+check8b_source_inventory_parse_segment() {
+  local command_segment="$1"
+  local command_index=0
+  local command_word=""
+  local declaration_mode=0
+  local declaration_options=1
+  local parenthesis_depth=0
+
+  check8b_trace_command_words "$command_segment" || return 0
+  command_index="$CHECK8B_TRACE_COMMAND_WORD_START"
+  command_word="${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}"
+  case "$command_word" in
+    local|declare|typeset|readonly|export)
+      declaration_mode=1
+      command_index=$((command_index + 1))
+      ;;
+    case|for|select|return|break|continue|shift|unset|printf|read|true|false|:|'[['|'((')
+      return 0
+      ;;
+  esac
+
+  while [[ "$command_index" -lt "${#CHECK8B_TRACE_COMMAND_WORDS[@]}" ]]; do
+    command_word="${CHECK8B_TRACE_COMMAND_WORDS[$command_index]}"
+    if [[ "$parenthesis_depth" -gt 0 ]]; then
+      check8b_source_inventory_parenthesis_delta "$command_word"
+      parenthesis_depth=$((parenthesis_depth + CHECK8B_SOURCE_INVENTORY_PAREN_DELTA))
+      if [[ "$parenthesis_depth" -lt 0 ]]; then
+        check8b_source_inventory_note_failure "unbalanced-assignment-value:$command_word"
+        return 1
+      fi
+      command_index=$((command_index + 1))
+      continue
+    fi
+
+    if [[ "$declaration_mode" -eq 1 ]] && [[ "$declaration_options" -eq 1 ]]; then
+      case "$command_word" in
+        --)
+          declaration_options=0
+          command_index=$((command_index + 1))
+          continue
+          ;;
+        -p|-f|-F|+p|+f|+F)
+          return 0
+          ;;
+        -[[:alpha:]]*|+[[:alpha:]]*)
+          command_index=$((command_index + 1))
+          continue
+          ;;
+      esac
+      declaration_options=0
+    fi
+
+    if check8b_source_inventory_add_operand "$command_word" "$declaration_mode"; then
+      if [[ "$CHECK8B_SOURCE_INVENTORY_OPERAND_IS_ASSIGNMENT" -eq 1 ]]; then
+        check8b_source_inventory_parenthesis_delta "$CHECK8B_SOURCE_INVENTORY_OPERAND_VALUE"
+        parenthesis_depth="$CHECK8B_SOURCE_INVENTORY_PAREN_DELTA"
+        if [[ "$parenthesis_depth" -lt 0 ]]; then
+          check8b_source_inventory_note_failure "unbalanced-assignment-value:$command_word"
+          return 1
+        fi
+      fi
+      command_index=$((command_index + 1))
+      continue
+    fi
+
+    if [[ "$declaration_mode" -eq 1 ]]; then
+      check8b_source_inventory_note_failure "unparseable-declaration-operand:$command_word"
+      return 1
+    fi
+    if [[ "$command_word" == *"="* ]]; then
+      check8b_source_inventory_note_failure "unparseable-bare-assignment:$command_word"
+      return 1
+    fi
+    break
+  done
+
+  if [[ "$parenthesis_depth" -ne 0 ]]; then
+    check8b_source_inventory_note_failure "unclosed-assignment-value"
+    return 1
+  fi
+  return 0
+}
+
+check8b_source_assignment_inventory_build() {
+  local source_file="$1"
+  local source_line=""
+  local source_tail=""
+  local marker_state="before"
+  local marker_begin_count=0
+  local marker_end_count=0
+  local bounded_source=""
+  local executable_source=""
+  local command_segment=""
+
+  check8b_source_assignment_names=()
+  CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FAILURES=0
+  CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON="none"
+  while IFS= read -r source_line || [[ -n "$source_line" ]]; do
+    source_tail="${source_line#"${source_line%%[![:space:]]*}"}"
+    source_tail="${source_tail%"${source_tail##*[![:space:]]}"}"
+    if [[ "$source_tail" == '# BEGIN CHECK8B FINITE CLASSIFIER' ]]; then
+      marker_begin_count=$((marker_begin_count + 1))
+      if [[ "$marker_state" == "before" ]] && [[ "$marker_begin_count" -eq 1 ]]; then
+        marker_state="inside"
+      else
+        check8b_source_inventory_note_failure "misordered-begin-marker"
+      fi
+      continue
+    fi
+    if [[ "$source_tail" == '# END CHECK8B FINITE CLASSIFIER' ]]; then
+      marker_end_count=$((marker_end_count + 1))
+      if [[ "$marker_state" == "inside" ]] && [[ "$marker_end_count" -eq 1 ]]; then
+        marker_state="after"
+      else
+        check8b_source_inventory_note_failure "misordered-end-marker"
+      fi
+      continue
+    fi
+    if [[ "$marker_state" == "inside" ]]; then
+      bounded_source="${bounded_source}${bounded_source:+$'\n'}$source_line"
+    fi
+  done < "$source_file"
+
+  if [[ "$marker_state" != "after" ]] \
+    || [[ "$marker_begin_count" -ne 1 ]] \
+    || [[ "$marker_end_count" -ne 1 ]]; then
+    check8b_source_inventory_note_failure "marker-contract"
+  fi
+  if ! check8b_trace_strip_inert_text "$bounded_source"; then
+    check8b_source_inventory_note_failure "inert-text-parse"
+  else
+    executable_source="$CHECK8B_TRACE_EXECUTABLE_TEXT"
+    if ! check8b_trace_split_command_list "$executable_source"; then
+      check8b_source_inventory_note_failure "command-segment-parse"
+    else
+      for command_segment in "${CHECK8B_TRACE_COMMAND_SEGMENTS[@]}"; do
+        check8b_source_inventory_parse_segment "$command_segment" || true
+      done
+    fi
+  fi
+  [[ "$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FAILURES" -eq 0 ]]
+}
+
+check8b_source_contract_matches() {
+  local source_file="$1"
+  local source_output_file="$2"
+  local expected_errexit="$3"
+  shift 3
+  local source_status=0
+  local source_attempted=0
+  local detector_matched=0
+  local inventory_matched=0
+  local source_contract_failures=0
+  local source_state_name=""
+  local source_state_value=""
+  local state_capture_file="${source_output_file}.declare-state"
+  local options_before=""
+  local options_after=""
+  local shopts_before=""
+  local shopts_after=""
+  local traps_before=""
+  local traps_after=""
+  local ifs_before="$IFS"
+  local pwd_before="$PWD"
+  local errexit_before="off"
+  local errexit_after="off"
+  local argv_index=0
+  local -a argv_before=("$@")
+  local -a argv_after=()
+  local -A tracked_state=()
+  local -A state_before=()
+  local caller_state_clean=1
+
+  if check8b_source_assignment_inventory_build "$source_file"; then
+    inventory_matched=1
+    for source_state_name in "${!check8b_source_assignment_names[@]}"; do
+      tracked_state["$source_state_name"]=1
+    done
+  else
+    source_contract_failures=$((source_contract_failures + 1))
+  fi
+  for source_state_name in "${!tracked_state[@]}"; do
+    if declare -p "$source_state_name" > "$state_capture_file" 2>/dev/null; then
+      IFS= read -r source_state_value < "$state_capture_file" || source_state_value=""
+      state_before["$source_state_name"]="$source_state_value"
+    else
+      state_before["$source_state_name"]="__CHECK8B_ABSENT__"
+    fi
+  done
+
+  [[ $- == *e* ]] && errexit_before="on"
+  options_before="$(set +o)"
+  shopts_before="$(shopt -p)"
+  traps_before="$(trap -p)"
+  : > "$source_output_file"
+  if [[ "$inventory_matched" -eq 1 ]] \
+    && check8b_source_declaration_only_contract "$source_file"; then
+    detector_matched=1
+    source_attempted=1
+    unset -f check8b_classify_line 2>/dev/null || true
+    # shellcheck disable=SC1090  # exact marker block is selected from the production source at runtime
+    source "$source_file" > "$source_output_file" 2>&1
+    source_status=$?
+  else
+    source_status=125
+    source_contract_failures=$((source_contract_failures + 1))
+  fi
+  [[ $- == *e* ]] && errexit_after="on"
+  options_after="$(set +o)"
+  shopts_after="$(shopt -p)"
+  traps_after="$(trap -p)"
+  argv_after=("$@")
+
+  if [[ "$source_attempted" -eq 1 ]]; then
+    [[ "$source_status" -eq 0 ]] || source_contract_failures=$((source_contract_failures + 1))
+    declare -F check8b_classify_line >/dev/null 2>&1 \
+      || source_contract_failures=$((source_contract_failures + 1))
+  fi
+  [[ "$errexit_before" == "$expected_errexit" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ "$errexit_after" == "$errexit_before" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ ! -s "$source_output_file" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ "$options_before" == "$options_after" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ "$shopts_before" == "$shopts_after" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ "$traps_before" == "$traps_after" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ "$ifs_before" == "$IFS" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  [[ "$pwd_before" == "$PWD" ]] \
+    || source_contract_failures=$((source_contract_failures + 1))
+  if [[ "${#argv_before[@]}" -ne "${#argv_after[@]}" ]]; then
+    source_contract_failures=$((source_contract_failures + 1))
+  else
+    for argv_index in "${!argv_before[@]}"; do
+      [[ "${argv_before[$argv_index]}" == "${argv_after[$argv_index]}" ]] \
+        || source_contract_failures=$((source_contract_failures + 1))
+    done
+  fi
+  for source_state_name in "${!tracked_state[@]}"; do
+    if declare -p "$source_state_name" > "$state_capture_file" 2>/dev/null; then
+      IFS= read -r source_state_value < "$state_capture_file" || source_state_value=""
+    else
+      source_state_value="__CHECK8B_ABSENT__"
+    fi
+    if [[ "$source_state_value" != "${state_before[$source_state_name]}" ]]; then
+      caller_state_clean=0
+      source_contract_failures=$((source_contract_failures + 1))
+    fi
+  done
+
+  CHECK8B_SOURCE_CONTRACT_MATCHED=0
+  # shellcheck disable=SC2034  # diagnostic trace flag for a future failure dump
+  CHECK8B_SOURCE_CALLER_STATE_CLEAN="$caller_state_clean"
+  [[ "$source_contract_failures" -eq 0 ]] \
+    && [[ "$inventory_matched" -eq 1 ]] \
+    && [[ "$detector_matched" -eq 1 ]] \
+    && [[ "$source_attempted" -eq 1 ]] \
+    && CHECK8B_SOURCE_CONTRACT_MATCHED=1
+  printf 'BUG032_TI05_SOURCE_CONTRACT sourceStatus=%s inventoryMatched=%s inventoryFailures=%s inventoryReason=%s detectorMatched=%s sourceAttempted=%s declarationFunctions=%s detectorFailures=%s detectorFirstLine=%s detectorReason=%s callerStateClean=%s errexitBefore=%s errexitAfter=%s trackedState=%s argvCount=%s failures=%s matched=%s\n' \
+    "$source_status" "$inventory_matched" \
+    "$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FAILURES" \
+    "$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON" \
+    "$detector_matched" "$source_attempted" \
+    "$CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT" \
+    "$CHECK8B_SOURCE_DECLARATION_ONLY_FAILURES" \
+    "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_LINE" \
+    "$CHECK8B_SOURCE_DECLARATION_ONLY_FIRST_REASON" "$caller_state_clean" \
+    "$errexit_before" "$errexit_after" \
+    "${#tracked_state[@]}" "${#argv_before[@]}" \
+    "$source_contract_failures" "$CHECK8B_SOURCE_CONTRACT_MATCHED"
+  return 0
+}
+
+check8b_source_probe_has_contract() {
+  local probe_file="$1"
+  local expected_match="$2"
+  local expected_detector="$3"
+  local expected_source_attempted="$4"
+  local expected_detector_reason="$5"
+  local probe_line=""
+  local match_count=0
+  local detector_failures=-1
+
+  while IFS= read -r probe_line || [[ -n "$probe_line" ]]; do
+    printf '%s\n' "$probe_line"
+    if [[ "$probe_line" == BUG032_TI05_SOURCE_CONTRACT\ * ]] \
+      && [[ "$probe_line" == *" inventoryMatched=1 "* ]] \
+      && [[ "$probe_line" == *" inventoryFailures=0 "* ]] \
+      && [[ "$probe_line" == *" detectorMatched=$expected_detector "* ]] \
+      && [[ "$probe_line" == *" sourceAttempted=$expected_source_attempted "* ]] \
+      && [[ "$probe_line" == *" detectorReason=$expected_detector_reason "* ]] \
+      && [[ "$probe_line" == *" callerStateClean=1 "* ]] \
+      && [[ "$probe_line" == *" matched=$expected_match" ]]; then
+      if [[ "$probe_line" =~ detectorFailures=([0-9]+) ]]; then
+        detector_failures="${BASH_REMATCH[1]}"
+      fi
+      if { [[ "$expected_detector" -eq 1 ]] && [[ "$detector_failures" -eq 0 ]]; } \
+        || { [[ "$expected_detector" -eq 0 ]] && [[ "$detector_failures" -gt 0 ]]; }; then
+        match_count=$((match_count + 1))
+      fi
+    fi
+  done < "$probe_file"
+  [[ "$match_count" -eq 1 ]]
+}
+
+check8b_source_inventory_fixture="$tmp_root/bug032-check8b-source-inventory-fixture.sh"
+check8b_source_inventory_invalid_fixture="$tmp_root/bug032-check8b-source-inventory-invalid-fixture.sh"
+cat <<'EOF' > "$check8b_source_inventory_fixture"
+# BEGIN CHECK8B FINITE CLASSIFIER
+_check8b_inventory_fixture() {
+  CHECK8B_CLASSIFICATION="irrelevant"
+  _CHECK8B_TOKENS[3]="token"
+  ti05_nested_index_probe[${#ti05_nested_index_probe[@]}]="nested"
+  ti05_arbitrary_scalar_probe="scalar"
+  ti05_arbitrary_array_probe=(one two)
+  local -a ti05_local_array=(three four)
+  local -r ti05_local_one=five ti05_local_two=six
+  declare -A ti05_local_assoc=([seven]=eight) ti05_second_assoc=([nine]=ten)
+  typeset +x ti05_typeset_scalar=eleven ti05_typeset_indexed[2]=twelve
+  readonly ti05_readonly_scalar=thirteen ti05_readonly_second=fourteen
+  export ti05_export_scalar=fifteen ti05_export_second=sixteen
+}
+# END CHECK8B FINITE CLASSIFIER
+EOF
+cat <<'EOF' > "$check8b_source_inventory_invalid_fixture"
+# BEGIN CHECK8B FINITE CLASSIFIER
+_check8b_inventory_invalid_fixture() {
+  ti05_unparseable[=value
+}
+# END CHECK8B FINITE CLASSIFIER
+EOF
+check8b_source_inventory_calibration_failures=0
+if ! check8b_source_assignment_inventory_build "$check8b_classifier_file" \
+  || [[ -z "${check8b_source_assignment_names[CHECK8B_CLASSIFICATION]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[_CHECK8B_TOKENS]:-}" ]]; then
+  check8b_source_inventory_calibration_failures=$((check8b_source_inventory_calibration_failures + 1))
+  echo "BUG032_TI05_SOURCE_INVENTORY_PRODUCTION_FIXTURE_FAILED reason=$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON names=${#check8b_source_assignment_names[@]}"
+fi
+if ! check8b_source_assignment_inventory_build "$check8b_source_inventory_fixture" \
+  || [[ -z "${check8b_source_assignment_names[CHECK8B_CLASSIFICATION]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[_CHECK8B_TOKENS]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_nested_index_probe]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_arbitrary_scalar_probe]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_arbitrary_array_probe]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_local_array]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_local_one]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_local_two]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_local_assoc]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_second_assoc]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_typeset_indexed]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_readonly_second]:-}" ]] \
+  || [[ -z "${check8b_source_assignment_names[ti05_export_second]:-}" ]]; then
+  check8b_source_inventory_calibration_failures=$((check8b_source_inventory_calibration_failures + 1))
+  echo "BUG032_TI05_SOURCE_INVENTORY_VALID_FIXTURE_FAILED reason=$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON names=${#check8b_source_assignment_names[@]}"
+fi
+if check8b_source_assignment_inventory_build "$check8b_source_inventory_invalid_fixture"; then
+  check8b_source_inventory_calibration_failures=$((check8b_source_inventory_calibration_failures + 1))
+  echo 'BUG032_TI05_SOURCE_INVENTORY_ACCEPTED_UNPARSEABLE_ASSIGNMENT'
+fi
+if [[ "$check8b_source_inventory_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B source-derived state inventory discovers scalar, indexed-array, declaration, and arbitrary canary names and rejects malformed assignment syntax"
+else
+  fail "BUG-032 Check 8B source-derived state inventory calibration has $check8b_source_inventory_calibration_failures failure(s)"
+fi
+
+bug032_ti05_existing_caller="stable-before-source"
+unset \
+  bug032_ti05_new_scalar bug032_ti05_second_scalar \
+  bug032_ti05_new_array bug032_ti05_new_assoc \
+  bug032_ti05_declare_one bug032_ti05_declare_two \
+  bug032_ti05_typeset_one bug032_ti05_typeset_two \
+  bug032_ti05_readonly_one bug032_ti05_readonly_two \
+  bug032_ti05_export_one bug032_ti05_export_two \
+  _CHECK8B_FUTURE_ARRAY _CHECK8B_DYNAMIC_SOURCE_MUTATION \
+  ti05_source_time_scalar_canary ti05_source_time_array_canary 2>/dev/null || true
+
+check8b_source_probe_on="$tmp_root/bug032-check8b-source-probe-errexit-on.log"
+check8b_source_probe_off="$tmp_root/bug032-check8b-source-probe-errexit-off.log"
+(
+  set -e
+  check8b_source_contract_matches "$check8b_classifier_file" \
+    "$check8b_source_output_file.on" on 'source arg one' '' 'source:*' '--literal'
+) > "$check8b_source_probe_on"
+(
+  set +e
+  check8b_source_contract_matches "$check8b_classifier_file" \
+    "$check8b_source_output_file.off" off 'source arg one' '' 'source:*' '--literal'
+) > "$check8b_source_probe_off"
+
+if [[ "$check8b_sourceability_failures" -eq 0 ]] \
+  && [[ "$check8b_epoch_failures" -eq 0 ]] \
+  && check8b_source_epoch_matches "$PLANNING_CHECKS_SCRIPT" \
+    "$check8b_pinned_epoch_sha" "$check8b_pinned_epoch_bytes" \
+  && check8b_source_probe_has_contract "$check8b_source_probe_on" 1 1 1 none \
+  && check8b_source_probe_has_contract "$check8b_source_probe_off" 1 1 1 none; then
+  :
+else
+  check8b_sourceability_failures=$((check8b_sourceability_failures + 1))
+fi
+
+unset -f check8b_classify_line 2>/dev/null || true
+if check8b_source_declaration_only_contract "$check8b_classifier_file"; then
+  # shellcheck disable=SC1090  # exact marker block is selected from the pinned production epoch
+  source "$check8b_classifier_file" > "$check8b_source_output_file" 2>&1
+  check8b_classifier_source_status=$?
+else
+  check8b_classifier_source_status=125
+fi
+if [[ "$check8b_classifier_source_status" -eq 0 ]] \
+  && declare -F check8b_classify_line >/dev/null 2>&1 \
+  && [[ ! -s "$check8b_source_output_file" ]] \
+  && check8b_source_epoch_matches "$PLANNING_CHECKS_SCRIPT" \
+    "$check8b_pinned_epoch_sha" "$check8b_pinned_epoch_bytes"; then
+  check8b_classifier_source_status=0
+  check8b_classifier_ready=1
+else
+  check8b_sourceability_failures=$((check8b_sourceability_failures + 1))
+fi
+
+check8b_source_mutation_labels=(output nounset errexit-on-to-off errexit-off-to-on trap ifs pwd argv two-assignments-one-line indexed-array associative-array declare-multioperand typeset-multioperand readonly-multioperand export-multioperand existing-caller-state result-state clause-array future-contract-array dynamic-state arbitrary-scalar-state arbitrary-array-state)
+check8b_source_mutation_errexit=(on on on off on on on on on on on on on on on on on on on on on on)
+check8b_source_mutation_payloads=(
+  "printf '%s\\n' forbidden-source-output"
+  'set +u'
+  'set +e'
+  'set -e'
+  "trap ':' USR1"
+  'IFS=:'
+  'cd /'
+  'set -- source-mutated-argv'
+  'bug032_ti05_new_scalar=one bug032_ti05_second_scalar=two'
+  'bug032_ti05_new_array=(created array)'
+  'declare -A bug032_ti05_new_assoc=([created]=array)'
+  'declare bug032_ti05_declare_one=one bug032_ti05_declare_two=two'
+  'typeset bug032_ti05_typeset_one=one bug032_ti05_typeset_two=two'
+  'readonly bug032_ti05_readonly_one=one bug032_ti05_readonly_two=two'
+  'export bug032_ti05_export_one=one bug032_ti05_export_two=two'
+  'bug032_ti05_existing_caller=mutated'
+  'CHECK8B_REASON=source-mutated-reason'
+  '_CHECK8B_CLAUSE_IDS=(source-mutated-clause)'
+  '_CHECK8B_FUTURE_ARRAY=(source-mutated-future)'
+  '_CHECK8B_DYNAMIC_SOURCE_MUTATION=created'
+  'ti05_source_time_scalar_canary=mutated'
+  'ti05_source_time_array_canary=(mutated array)'
+)
+check8b_source_mutation_failures=0
+check8b_source_probe_parent_is_clean() {
+  local canary_name=""
+
+  for canary_name in \
+    bug032_ti05_new_scalar bug032_ti05_second_scalar \
+    bug032_ti05_new_array bug032_ti05_new_assoc \
+    bug032_ti05_declare_one bug032_ti05_declare_two \
+    bug032_ti05_typeset_one bug032_ti05_typeset_two \
+    bug032_ti05_readonly_one bug032_ti05_readonly_two \
+    bug032_ti05_export_one bug032_ti05_export_two \
+    _CHECK8B_FUTURE_ARRAY _CHECK8B_DYNAMIC_SOURCE_MUTATION \
+    ti05_source_time_scalar_canary ti05_source_time_array_canary; do
+    declare -p "$canary_name" >/dev/null 2>&1 && return 1
+  done
+  [[ "$bug032_ti05_existing_caller" == "stable-before-source" ]]
+}
+if [[ "${#check8b_source_mutation_labels[@]}" -ne "${#check8b_source_mutation_errexit[@]}" ]] \
+  || [[ "${#check8b_source_mutation_labels[@]}" -ne "${#check8b_source_mutation_payloads[@]}" ]]; then
+  check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+  echo "BUG032_TI05_SOURCE_MUTATION_MATRIX_SHAPE labels=${#check8b_source_mutation_labels[@]} errexit=${#check8b_source_mutation_errexit[@]} payloads=${#check8b_source_mutation_payloads[@]}"
+fi
+for check8b_index in "${!check8b_source_mutation_labels[@]}"; do
+  check8b_source_mutant="$tmp_root/bug032-check8b-source-mutant-$check8b_index.sh"
+  check8b_source_mutant_output="$tmp_root/bug032-check8b-source-mutant-$check8b_index.out"
+  check8b_source_mutant_probe="$tmp_root/bug032-check8b-source-mutant-$check8b_index.probe"
+  : > "$check8b_source_mutant"
+  while IFS= read -r check8b_source_mutant_line || [[ -n "$check8b_source_mutant_line" ]]; do
+    if [[ "$check8b_source_mutant_line" == '# END CHECK8B FINITE CLASSIFIER' ]]; then
+      printf '%s\n' "${check8b_source_mutation_payloads[$check8b_index]}" >> "$check8b_source_mutant"
+    fi
+    printf '%s\n' "$check8b_source_mutant_line" >> "$check8b_source_mutant"
+  done < "$check8b_classifier_file"
+  if ! check8b_source_assignment_inventory_build "$check8b_source_mutant"; then
+    check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+    echo "BUG032_TI05_SOURCE_MUTATION_INVENTORY_FAILED class=${check8b_source_mutation_labels[$check8b_index]} reason=$CHECK8B_SOURCE_ASSIGNMENT_INVENTORY_FIRST_REASON"
+  fi
+  case "${check8b_source_mutation_labels[$check8b_index]}" in
+    arbitrary-scalar-state)
+      if [[ -z "${check8b_source_assignment_names[ti05_source_time_scalar_canary]:-}" ]]; then
+        check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+        echo 'BUG032_TI05_ARBITRARY_SCALAR_NOT_DERIVED'
+      fi
+      ;;
+    arbitrary-array-state)
+      if [[ -z "${check8b_source_assignment_names[ti05_source_time_array_canary]:-}" ]]; then
+        check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+        echo 'BUG032_TI05_ARBITRARY_ARRAY_NOT_DERIVED'
+      fi
+      ;;
+  esac
+  (
+    if [[ "${check8b_source_mutation_errexit[$check8b_index]}" == "on" ]]; then
+      set -e
+    else
+      set +e
+    fi
+    check8b_source_contract_matches "$check8b_source_mutant" \
+      "$check8b_source_mutant_output" \
+      "${check8b_source_mutation_errexit[$check8b_index]}" \
+      'source arg one' '' 'source:*' '--literal'
+  ) > "$check8b_source_mutant_probe"
+  if check8b_source_probe_has_contract \
+    "$check8b_source_mutant_probe" 0 0 0 top-level-non-function; then
+    pass "BUG-032 Check 8B pre-source declaration-only detector rejects ${check8b_source_mutation_labels[$check8b_index]} top-level mutation before source"
+  else
+    check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+    echo "BUG032_TI05_SOURCE_MUTATION_ACCEPTED class=${check8b_source_mutation_labels[$check8b_index]} expectedDetectorMatched=0 expectedSourceAttempted=0"
+  fi
+  if ! check8b_source_probe_parent_is_clean; then
+    check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+    echo "BUG032_TI05_SOURCE_PROBE_ISOLATION_FAILED class=${check8b_source_mutation_labels[$check8b_index]}"
+  fi
+done
+if check8b_source_probe_parent_is_clean; then
+  pass "BUG-032 Check 8B source mutation probes remain isolated and leave the parent caller canaries unchanged"
+else
+  check8b_source_mutation_failures=$((check8b_source_mutation_failures + 1))
+  fail "BUG-032 Check 8B source mutation probe isolation changed a parent caller canary"
+fi
+unset -f check8b_source_probe_parent_is_clean
+unset \
+  bug032_ti05_existing_caller bug032_ti05_new_scalar bug032_ti05_second_scalar \
+  bug032_ti05_new_array bug032_ti05_new_assoc \
+  bug032_ti05_declare_one bug032_ti05_declare_two \
+  bug032_ti05_typeset_one bug032_ti05_typeset_two \
+  bug032_ti05_readonly_one bug032_ti05_readonly_two \
+  bug032_ti05_export_one bug032_ti05_export_two \
+  _CHECK8B_FUTURE_ARRAY _CHECK8B_DYNAMIC_SOURCE_MUTATION \
+  ti05_source_time_scalar_canary ti05_source_time_array_canary 2>/dev/null || true
+[[ "$check8b_source_mutation_failures" -eq 0 ]] \
+  || check8b_sourceability_failures=$((check8b_sourceability_failures + 1))
+
+check8b_epoch_mutation_source="$tmp_root/bug032-check8b-epoch-mutation-source.sh"
+cp "$check8b_production_epoch_file" "$check8b_epoch_mutation_source"
+check8b_epoch_mutation_sha="$(check8b_file_sha256 "$check8b_epoch_mutation_source")"
+check8b_epoch_mutation_bytes="$(check8b_file_bytes "$check8b_epoch_mutation_source")"
+printf '%s\n' '# deliberate source-epoch mutation after observation' >> "$check8b_epoch_mutation_source"
+if check8b_source_epoch_matches "$check8b_epoch_mutation_source" \
+  "$check8b_epoch_mutation_sha" "$check8b_epoch_mutation_bytes"; then
+  check8b_epoch_failures=$((check8b_epoch_failures + 1))
+  echo 'BUG032_TI05_SOURCE_EPOCH_MUTATION_ACCEPTED'
+else
+  pass "BUG-032 Check 8B source epoch oracle detects a production-byte change between observation and use"
+fi
+[[ "$check8b_epoch_failures" -eq 0 ]] \
+  || check8b_sourceability_failures=$((check8b_sourceability_failures + 1))
+
+if [[ "$check8b_sourceability_failures" -eq 0 ]] \
+  && [[ "$check8b_classifier_ready" -eq 1 ]]; then
+  pass "BUG-032 Check 8B finite classifier has one atomic marker block whose pre-source declaration-only detector admits only complete supported function declarations and inert marker-bounded comments"
+  pass "BUG-032 Check 8B marker discovery and exact marker-bounded extraction share one ordered pinned production-source epoch"
+  pass "BUG-032 Check 8B sourceability preserves exact argv and caller options with errexit initially on and off"
+  pass "BUG-032 Check 8B declaration-only detector rejects two assignments on one line, arrays, multioperand declare/typeset/readonly/export forms, existing-caller mutation, printf, and every other calibrated top-level executable before source"
+  pass "BUG-032 Check 8B finite classifier extracted from production markers (no test/source drift)"
+else
+  check8b_source_output_bytes="$(wc -c < "$check8b_source_output_file" 2>/dev/null || printf 'unavailable')"
+  fail "BUG-032 Check 8B finite classifier marker/sourceability contract failed (sourceabilityFailures=$check8b_sourceability_failures epochFailures=$check8b_epoch_failures pinnedSha=$check8b_pinned_epoch_sha pinnedBytes=$check8b_pinned_epoch_bytes readPasses=$check8b_source_read_passes streamFailures=$check8b_marker_stream_failures begin=$check8b_marker_begin_count end=$check8b_marker_end_count beginLine=$check8b_marker_begin_line endLine=$check8b_marker_end_line extractedLines=$check8b_extracted_line_count bodyLines=$check8b_extracted_body_line_count functions=$check8b_extracted_function_count entrypoints=$check8b_extracted_entrypoint_count extractedBegin=$check8b_extracted_begin_count extractedEnd=$check8b_extracted_end_count syntaxStatus=$check8b_classifier_syntax_status sourceStatus=$check8b_classifier_source_status sourceOutputBytes=$check8b_source_output_bytes mutationProbeFailures=$check8b_source_mutation_failures)"
+fi
+
+bug032_check8b_classify() {
+  local declaration="$1"
+
+  CHECK8B_LAST_STATUS=2
+  CHECK8B_CLASSIFICATION="__check8b_unset__"
+  CHECK8B_VERB="__check8b_unset__"
+  CHECK8B_MUTATION_TARGET="__check8b_unset__"
+  CHECK8B_DIRECT_SURFACES="__check8b_unset__"
+  CHECK8B_PRESERVED_SURFACES="__check8b_unset__"
+  CHECK8B_REASON="__check8b_unset__"
+  CHECK8B_UNRESOLVED_PHRASE="__check8b_unset__"
+  CHECK8B_BOUNDARY="__check8b_unset__"
+  CHECK8B_TOKEN_COUNT=-1
+  CHECK8B_CANDIDATE_COUNT=-1
+  _CHECK8B_TOKENS=(__check8b_stale_token__)
+  _CHECK8B_CLAUSE_IDS=(999)
+  _CHECK8B_CANDIDATE_INDEXES=(999)
+  if [[ "$check8b_classifier_ready" -ne 1 ]]; then
+    return 2
+  fi
+  if check8b_classify_line "$declaration"; then
+    CHECK8B_LAST_STATUS=0
+  else
+    CHECK8B_LAST_STATUS=$?
+  fi
+  return "$CHECK8B_LAST_STATUS"
+}
+
+# The helper result is one closed record. Every fixture passes expectations
+# authored from the BUG-032 design contract; the matcher never derives an
+# expected field from the helper output it is checking.
+check8b_helper_record_matches() {
+  [[ "$#" -eq 14 ]] || return 1
+  local expected_status="$1"
+  local expected_classification="$2"
+  local expected_verb="$3"
+  local expected_target="$4"
+  local expected_direct="$5"
+  local expected_preserved="$6"
+  local expected_reason="$7"
+  local expected_unresolved="$8"
+  local expected_boundary="$9"
+  local expected_token_count="${10}"
+  local expected_candidate_count="${11}"
+  local expected_retained_tokens="${12}"
+  local expected_retained_clause_ids="${13}"
+  local expected_retained_candidates="${14}"
+  local result_name=""
+
+  for result_name in \
+    CHECK8B_LAST_STATUS CHECK8B_CLASSIFICATION CHECK8B_VERB \
+    CHECK8B_MUTATION_TARGET CHECK8B_DIRECT_SURFACES \
+    CHECK8B_PRESERVED_SURFACES CHECK8B_REASON \
+    CHECK8B_UNRESOLVED_PHRASE CHECK8B_BOUNDARY CHECK8B_TOKEN_COUNT \
+    CHECK8B_CANDIDATE_COUNT; do
+    declare -p "$result_name" >/dev/null 2>&1 || return 1
+  done
+  for result_name in \
+    _CHECK8B_TOKENS _CHECK8B_CLAUSE_IDS _CHECK8B_CANDIDATE_INDEXES; do
+    declare -p "$result_name" >/dev/null 2>&1 || return 1
+  done
+
+  [[ "$CHECK8B_LAST_STATUS" -eq "$expected_status" ]] \
+    && [[ "$CHECK8B_CLASSIFICATION" == "$expected_classification" ]] \
+    && [[ "$CHECK8B_VERB" == "$expected_verb" ]] \
+    && [[ "$CHECK8B_MUTATION_TARGET" == "$expected_target" ]] \
+    && [[ "$CHECK8B_DIRECT_SURFACES" == "$expected_direct" ]] \
+    && [[ "$CHECK8B_PRESERVED_SURFACES" == "$expected_preserved" ]] \
+    && [[ "$CHECK8B_REASON" == "$expected_reason" ]] \
+    && [[ "$CHECK8B_UNRESOLVED_PHRASE" == "$expected_unresolved" ]] \
+    && [[ "$CHECK8B_BOUNDARY" == "$expected_boundary" ]] \
+    && [[ "$CHECK8B_TOKEN_COUNT" -eq "$expected_token_count" ]] \
+    && [[ "$CHECK8B_CANDIDATE_COUNT" -eq "$expected_candidate_count" ]] \
+    && [[ "${#_CHECK8B_TOKENS[@]}" -eq "$expected_retained_tokens" ]] \
+    && [[ "${#_CHECK8B_CLAUSE_IDS[@]}" -eq "$expected_retained_clause_ids" ]] \
+    && [[ "${#_CHECK8B_CANDIDATE_INDEXES[@]}" -eq "$expected_retained_candidates" ]]
+}
+
+check8b_helper_matcher_calibration_failures=0
+CHECK8B_LAST_STATUS=0
+CHECK8B_CLASSIFICATION="direct-positive"
+CHECK8B_VERB="remove"
+CHECK8B_MUTATION_TARGET="route"
+CHECK8B_DIRECT_SURFACES="remove:route"
+CHECK8B_PRESERVED_SURFACES="none"
+CHECK8B_REASON="direct"
+CHECK8B_UNRESOLVED_PHRASE="none"
+CHECK8B_BOUNDARY="not-applicable"
+CHECK8B_TOKEN_COUNT=5
+CHECK8B_CANDIDATE_COUNT=1
+_CHECK8B_TOKENS=(remove the public api route)
+_CHECK8B_CLAUSE_IDS=(0 0 0 0 0)
+_CHECK8B_CANDIDATE_INDEXES=(0)
+if ! check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 5 1 5 5 1; then
+  check8b_helper_matcher_calibration_failures=$((check8b_helper_matcher_calibration_failures + 1))
+  echo 'BUG032_TI02_HELPER_MATCHER_REJECTED_COMPLETE_FIXTURE'
+fi
+CHECK8B_REASON="mixed"
+if check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 5 1 5 5 1; then
+  check8b_helper_matcher_calibration_failures=$((check8b_helper_matcher_calibration_failures + 1))
+  echo 'BUG032_TI02_HELPER_MATCHER_ACCEPTED_ONE_FIELD_MUTATION'
+fi
+CHECK8B_REASON="direct"
+unset CHECK8B_BOUNDARY
+if check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 5 1 5 5 1; then
+  check8b_helper_matcher_calibration_failures=$((check8b_helper_matcher_calibration_failures + 1))
+  echo 'BUG032_TI02_HELPER_MATCHER_ACCEPTED_MISSING_FIELD'
+fi
+CHECK8B_BOUNDARY="not-applicable"
+CHECK8B_UNRESOLVED_PHRASE=""
+if check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 5 1 5 5 1; then
+  check8b_helper_matcher_calibration_failures=$((check8b_helper_matcher_calibration_failures + 1))
+  echo 'BUG032_TI02_HELPER_MATCHER_ACCEPTED_EMPTY_FIELD'
+fi
+if [[ "$check8b_helper_matcher_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B exact helper matcher rejects one-field mutations plus missing and empty fields"
+else
+  fail "BUG-032 Check 8B exact helper matcher calibration has $check8b_helper_matcher_calibration_failures failure(s)"
+fi
+
+check8b_must_not="$tmp_root/bug032-check8b-must-not-flag.txt"
+cat <<'EOF' > "$check8b_must_not"
 The stale generation path is replaced by the current generated artifact.
 The provider implementation is replaced without changing its contract.
 The lifecycle state is replaced by the successor state; its public contract is unchanged.
 The generated artifact replaces a stale artifact path; route and endpoint identities are unchanged.
 EOF
 
-  check8b_must_flag="$tmp_root/bug032-check8b-must-flag.txt"
-  cat <<'EOF' > "$check8b_must_flag"
+check8b_must_not_failures=0
+check8b_must_not_token_counts=(11 9 14 14)
+check8b_index=0
+while IFS= read -r check8b_line || [[ -n "$check8b_line" ]]; do
+  if bug032_check8b_classify "$check8b_line"; then :; else :; fi
+  if ! check8b_helper_record_matches \
+    0 irrelevant none none none none none none not-applicable \
+    "${check8b_must_not_token_counts[$check8b_index]}" 0 \
+    "${check8b_must_not_token_counts[$check8b_index]}" \
+    "${check8b_must_not_token_counts[$check8b_index]}" 0; then
+    check8b_must_not_failures=$((check8b_must_not_failures + 1))
+    echo "BUG032_CHECK8B_UNEXPECTED status=$CHECK8B_LAST_STATUS class=$CHECK8B_CLASSIFICATION verb=$CHECK8B_VERB target=$CHECK8B_MUTATION_TARGET direct=$CHECK8B_DIRECT_SURFACES preserved=$CHECK8B_PRESERVED_SURFACES reason=$CHECK8B_REASON unresolved=$CHECK8B_UNRESOLVED_PHRASE boundary=$CHECK8B_BOUNDARY tokenCount=$CHECK8B_TOKEN_COUNT candidateCount=$CHECK8B_CANDIDATE_COUNT retainedTokens=${#_CHECK8B_TOKENS[@]} retainedClauseIds=${#_CHECK8B_CLAUSE_IDS[@]} retainedCandidates=${#_CHECK8B_CANDIDATE_INDEXES[@]} line=$check8b_line"
+  fi
+  check8b_index=$((check8b_index + 1))
+done < "$check8b_must_not"
+if [[ "$check8b_must_not_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B ignores stale-generation, provider, lifecycle, and artifact replacement semantics"
+else
+  fail "BUG-032 Check 8B false-positives on $check8b_must_not_failures replacement declaration(s) that do not mutate a consumer interface"
+fi
+
+check8b_exact_inflections="$tmp_root/bug032-check8b-exact-inflections.txt"
+cat <<'EOF' > "$check8b_exact_inflections"
+The migration renames the public route from /old to /new.
+The migration removes the legacy path after compatibility expires.
+EOF
+check8b_inflection_count=0
+check8b_inflection_verbs=(rename remove)
+check8b_inflection_targets=(route path)
+check8b_inflection_token_counts=(10 9)
+check8b_index=0
+while IFS= read -r check8b_line || [[ -n "$check8b_line" ]]; do
+  bug032_check8b_classify "$check8b_line"
+  if check8b_helper_record_matches \
+    0 direct-positive "${check8b_inflection_verbs[$check8b_index]}" \
+    "${check8b_inflection_targets[$check8b_index]}" \
+    "${check8b_inflection_verbs[$check8b_index]}:${check8b_inflection_targets[$check8b_index]}" \
+    none direct none not-applicable \
+    "${check8b_inflection_token_counts[$check8b_index]}" 1 \
+    "${check8b_inflection_token_counts[$check8b_index]}" \
+    "${check8b_inflection_token_counts[$check8b_index]}" 1; then
+    check8b_inflection_count=$((check8b_inflection_count + 1))
+  fi
+  check8b_index=$((check8b_index + 1))
+done < "$check8b_exact_inflections"
+if [[ "$check8b_inflection_count" -eq 2 ]]; then
+  pass "BUG032-IV-F1 Check 8B triggers on the exact mutation inflections 'renames' and 'removes'"
+else
+  fail "BUG032-IV-F1 Check 8B detected $check8b_inflection_count of 2 exact 'renames'/'removes' mutations"
+fi
+
+check8b_unrelated_clause='Remove stale cache entries after replacement; the public API contract is unchanged.'
+bug032_check8b_classify "$check8b_unrelated_clause"
+if check8b_helper_record_matches \
+  0 negative remove 'stale cache entries' none contract preserved-surface none \
+  not-applicable 12 1 12 12 1; then
+  pass "BUG032-IV-F2 Check 8B does not bridge cache cleanup to an unchanged public API contract in another clause"
+else
+  fail "BUG032-IV-F2 Check 8B did not classify the punctuated cache cleanup as negative (classification=$CHECK8B_CLASSIFICATION mutationTarget=$CHECK8B_MUTATION_TARGET preservedSurfaces=$CHECK8B_PRESERVED_SURFACES)"
+fi
+
+check8b_must_flag="$tmp_root/bug032-check8b-must-flag.txt"
+cat <<'EOF' > "$check8b_must_flag"
 The public route is renamed from /old to /new.
 The legacy path is removed after migration.
 Rename the endpoint from v1 to v2.
 The public contract is deprecated.
 Move the identifier to the canonical key.
 EOF
-
-  if grep -Eiq "$check8b_regex" "$check8b_must_not"; then
-    fail "BUG-032 Check 8B false-positives on replacement semantics that do not mutate a consumer interface"
-    echo "--- offending benign replacement lines ---"
-    grep -niE "$check8b_regex" "$check8b_must_not" || true
-    echo "--- end ---"
-  else
-    pass "BUG-032 Check 8B ignores stale-generation, provider, lifecycle, and artifact replacement semantics"
+check8b_pos_count=0
+check8b_must_flag_verbs=(rename remove rename deprecate move)
+check8b_must_flag_targets=(route path endpoint contract identifier)
+check8b_must_flag_token_counts=(9 7 7 5 7)
+check8b_index=0
+while IFS= read -r check8b_line || [[ -n "$check8b_line" ]]; do
+  bug032_check8b_classify "$check8b_line"
+  if check8b_helper_record_matches \
+    0 direct-positive "${check8b_must_flag_verbs[$check8b_index]}" \
+    "${check8b_must_flag_targets[$check8b_index]}" \
+    "${check8b_must_flag_verbs[$check8b_index]}:${check8b_must_flag_targets[$check8b_index]}" \
+    none direct none not-applicable \
+    "${check8b_must_flag_token_counts[$check8b_index]}" 1 \
+    "${check8b_must_flag_token_counts[$check8b_index]}" \
+    "${check8b_must_flag_token_counts[$check8b_index]}" 1; then
+    check8b_pos_count=$((check8b_pos_count + 1))
   fi
+  check8b_index=$((check8b_index + 1))
+done < "$check8b_must_flag"
+if [[ "$check8b_pos_count" -eq 5 ]]; then
+  pass "BUG-032 Check 8B still flags all 5 explicit route/path/endpoint/contract/identifier mutations"
+else
+  fail "BUG-032 Check 8B detected $check8b_pos_count of 5 explicit consumer-interface mutations"
+fi
 
-  check8b_exact_inflections="$tmp_root/bug032-check8b-exact-inflections.txt"
-  cat <<'EOF' > "$check8b_exact_inflections"
-The migration renames the public route from /old to /new.
-The migration removes the legacy path after compatibility expires.
+check8b_scn013_unpunctuated='Remove stale cache entries before invoking the public API route without changing that route'
+check8b_scn013_punctuated="${check8b_scn013_unpunctuated}."
+bug032_check8b_classify 'Remove the public API route'
+if check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 5 1 5 5 1; then
+  pass "BUG-032 SCN-032-013 pre-fix direct public-route removal control remains positive"
+else
+  fail "BUG-032 SCN-032-013 pre-fix direct public-route removal control must remain a complete positive record (status=$CHECK8B_LAST_STATUS classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON)"
+fi
+
+bug032_check8b_classify "$check8b_scn013_unpunctuated"
+if check8b_helper_record_matches \
+  0 negative remove 'stale cache entries' none route preserved-surface none \
+  not-applicable 14 1 14 14 1; then
+  pass "BUG-032 Check 8B classifies unpunctuated cache removal plus preserved public route as negative"
+else
+  fail "BUG-032 Check 8B classifies unpunctuated cache removal plus preserved public route as one complete negative record (status=$CHECK8B_LAST_STATUS classification=$CHECK8B_CLASSIFICATION mutationTarget=$CHECK8B_MUTATION_TARGET preservedSurfaces=$CHECK8B_PRESERVED_SURFACES reason=$CHECK8B_REASON)"
+fi
+
+check8b_scn013_negative_failures=0
+for check8b_line in "$check8b_scn013_punctuated" "$check8b_scn013_unpunctuated"; do
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 negative remove 'stale cache entries' none route preserved-surface none \
+    not-applicable 14 1 14 14 1; then
+    check8b_scn013_negative_failures=$((check8b_scn013_negative_failures + 1))
+    echo "BUG032_SCN013_NEGATIVE_MISMATCH classification=$CHECK8B_CLASSIFICATION mutationTarget=$CHECK8B_MUTATION_TARGET preservedSurfaces=$CHECK8B_PRESERVED_SURFACES reason=$CHECK8B_REASON"
+  fi
+done
+if [[ "$check8b_scn013_negative_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B classifies punctuated and unpunctuated cache removal plus preserved public route as negative"
+else
+  fail "BUG-032 Check 8B negative fixture matrix has $check8b_scn013_negative_failures mismatch(es)"
+fi
+
+check8b_scn013_direct_failures=0
+check8b_scn013_direct_token_counts=(5 6)
+check8b_index=0
+for check8b_line in 'Remove the public API route' 'The public API route is removed'; do
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 direct-positive remove route remove:route none direct none \
+    not-applicable "${check8b_scn013_direct_token_counts[$check8b_index]}" 1 \
+    "${check8b_scn013_direct_token_counts[$check8b_index]}" \
+    "${check8b_scn013_direct_token_counts[$check8b_index]}" 1; then
+    check8b_scn013_direct_failures=$((check8b_scn013_direct_failures + 1))
+    echo "BUG032_SCN013_DIRECT_MISMATCH classification=$CHECK8B_CLASSIFICATION directSurfaces=$CHECK8B_DIRECT_SURFACES reason=$CHECK8B_REASON line=$check8b_line"
+  fi
+  check8b_index=$((check8b_index + 1))
+done
+if [[ "$check8b_scn013_direct_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B keeps active and passive public-route removal direct-positive"
+else
+  fail "BUG-032 Check 8B direct active/passive fixture matrix has $check8b_scn013_direct_failures mismatch(es)"
+fi
+
+check8b_scn013_mixed='Preserve the public API route while removing the legacy redirect'
+bug032_check8b_classify "$check8b_scn013_mixed"
+if check8b_helper_record_matches \
+  0 mixed-surface remove redirect remove:redirect route mixed none \
+  not-applicable 10 1 10 10 1; then
+  pass "BUG-032 Check 8B classifies preserved route plus removed redirect as mixed-surface"
+else
+  fail "BUG-032 Check 8B did not preserve mixed-surface separation (classification=$CHECK8B_CLASSIFICATION directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES reason=$CHECK8B_REASON)"
+fi
+
+check8b_scn013_conflict='Remove the public API route without changing that route'
+bug032_check8b_classify "$check8b_scn013_conflict"
+if check8b_helper_record_matches \
+  0 ambiguous remove unresolved none route conflict none \
+  not-applicable 9 1 9 9 1; then
+  pass "BUG-032 Check 8B blocks same-surface mutation and preservation as ambiguous"
+else
+  fail "BUG-032 Check 8B did not block the same-surface contradiction (classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON)"
+fi
+
+check8b_scn013_unresolved='Remove stale cache entries near the public API route'
+bug032_check8b_classify "$check8b_scn013_unresolved"
+if check8b_helper_record_matches \
+  0 ambiguous remove unresolved none none unresolved 'public api route' \
+  not-applicable 9 1 9 9 1; then
+  pass "BUG-032 Check 8B blocks unresolved nearby route mention as ambiguous"
+else
+  fail "BUG-032 Check 8B did not block the unresolved nearby route mention (classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON)"
+fi
+
+check8b_scn013_token_limit='Remove'
+for _ in {1..127}; do
+  check8b_scn013_token_limit="$check8b_scn013_token_limit filler"
+done
+check8b_scn013_token_limit="$check8b_scn013_token_limit route"
+bug032_check8b_classify "$check8b_scn013_token_limit"
+if check8b_helper_record_matches \
+  0 ambiguous none unresolved none none token-limit none \
+  tokens=129/128:first-overflow 128 0 128 128 0; then
+  pass "BUG-032 Check 8B blocks relevant declarations above 128 tokens as ambiguous"
+else
+  fail "BUG-032 Check 8B did not fail closed at the 128-token bound (classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON)"
+fi
+
+check8b_scn013_candidate_limit='remove route remove path remove endpoint remove contract remove api remove url remove slug remove identifier remove redirect'
+bug032_check8b_classify "$check8b_scn013_candidate_limit"
+if check8b_helper_record_matches \
+  0 ambiguous remove unresolved none none candidate-limit none \
+  candidates=9/8:first-overflow 18 9 18 18 8; then
+  pass "BUG-032 Check 8B blocks more than eight relationship candidates as ambiguous"
+else
+  fail "BUG-032 Check 8B did not fail closed above eight relationship candidates (classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON)"
+fi
+
+bug032_run_check8b_guard_case() {
+  local case_slug="$1"
+  local declaration="$2"
+  local case_dir="$tmp_root/specs/954-bug032-check8b-$case_slug"
+
+  cp -R "$positive_feature_dir" "$case_dir"
+  {
+    printf '\n### Consumer Interface Declaration\n\n'
+    printf '%s\n' "$declaration"
+  } >> "$case_dir/scopes.md"
+  BUG032_CHECK8B_GUARD_LOG="$tmp_root/bug032-check8b-$case_slug.log"
+  BUG032_CHECK8B_GUARD_STATUS="$(run_capture "$BUG032_CHECK8B_GUARD_LOG" bash "$GUARD_SCRIPT" "$case_dir")"
+}
+
+# The operator contract is one closed, ordered record. This parser rejects a
+# missing record, duplicate expected records, malformed or reordered fields,
+# legacy camelCase/narrative output, and an extra field after `correction`.
+# It validates every Check 8B record in the log, not merely one convenient
+# substring, so one valid record cannot hide a malformed sibling. Explicit
+# non-Check-8B records own their fields until a separator or new check record;
+# target-shaped fields without such an owner remain malformed orphans.
+check8b_guard_record_matches() {
+  local log_file="$1"
+  local expected_scope="$2"
+  local expected_classification="$3"
+  local expected_target="$4"
+  local expected_direct="$5"
+  local expected_preserved="$6"
+  local expected_reason="$7"
+  local expected_boundary="$8"
+  local expected_impact="$9"
+  local expected_sweep="${10}"
+  local expected_completion="${11}"
+  local expected_inventory="${12}"
+  local expected_result="${13}"
+  local expected_correction="${14}"
+
+  awk \
+    -v expected_scope="$expected_scope" \
+    -v expected_classification="$expected_classification" \
+    -v expected_target="$expected_target" \
+    -v expected_direct="$expected_direct" \
+    -v expected_preserved="$expected_preserved" \
+    -v expected_reason="$expected_reason" \
+    -v expected_boundary="$expected_boundary" \
+    -v expected_impact="$expected_impact" \
+    -v expected_sweep="$expected_sweep" \
+    -v expected_completion="$expected_completion" \
+    -v expected_inventory="$expected_inventory" \
+    -v expected_result="$expected_result" \
+    -v expected_correction="$expected_correction" '
+    BEGIN {
+      field_count = split("check scope source-location classification mutation-target direct-surfaces preserved-surfaces reason boundary impact-checks impact-sweep-section impact-completion-item impact-consumer-inventory result correction", fields, " ")
+      expected[1] = "Check 8B"
+      expected[2] = expected_scope
+      expected[4] = expected_classification
+      expected[5] = expected_target
+      expected[6] = expected_direct
+      expected[7] = expected_preserved
+      expected[8] = expected_reason
+      expected[9] = expected_boundary
+      expected[10] = expected_impact
+      expected[11] = expected_sweep
+      expected[12] = expected_completion
+      expected[13] = expected_inventory
+      expected[14] = expected_result
+      expected[15] = expected_correction
+    }
+    {
+      line = $0
+      if (line == "check: Check 8B") {
+        if (active) malformed++
+        record_count++
+        active = 1
+        foreign_record_active = 0
+        closed_tail = 0
+        field_index = 1
+        for (value_index = 1; value_index <= field_count; value_index++) values[value_index] = ""
+        values[1] = "Check 8B"
+        next
+      }
+
+      if (line ~ /^check: [^[:space:]]/) {
+        if (active) malformed++
+        active = 0
+        foreign_record_active = 1
+        closed_tail = 0
+        next
+      }
+
+      if (foreign_record_active) {
+        if (line ~ /^--- .* ---$/ || line ~ /^BEGIN[_ ]TRANSITION_GUARD_RESULT/) {
+          foreign_record_active = 0
+          closed_tail = 0
+        }
+        next
+      }
+
+      if (line ~ /Check 8B[[:space:]]+scope=/ ||
+          line ~ /(^|[^[:alnum:]_-])(mutationTarget|directSurfaces|preservedSurfaces|impactChecks|impactSweepSection|impactCompletionItem|impactConsumerInventory)([^[:alnum:]_-]|$)/) {
+        legacy_count++
+        malformed++
+        if (active) active = 0
+        next
+      }
+
+      if (active) {
+        field_index++
+        expected_prefix = fields[field_index] ": "
+        if (field_index > field_count || index(line, expected_prefix) != 1) {
+          malformed++
+          active = 0
+          next
+        }
+        values[field_index] = substr(line, length(expected_prefix) + 1)
+        if (field_index == field_count) {
+          complete_count++
+          record_matches = 1
+          for (value_index = 1; value_index <= field_count; value_index++) {
+            if (value_index == 3) {
+              source_prefix = expected_scope ":"
+              source_line = substr(values[value_index], length(source_prefix) + 1)
+              if (index(values[value_index], source_prefix) != 1 || source_line !~ /^[0-9]+$/) record_matches = 0
+            } else if (values[value_index] != expected[value_index]) {
+              record_matches = 0
+            }
+          }
+          if (record_matches) expected_match_count++
+          active = 0
+          closed_tail = 1
+        }
+        next
+      }
+
+      if (line ~ /^(scope|source-location|classification|mutation-target|direct-surfaces|preserved-surfaces|reason|boundary|impact-checks|impact-sweep-section|impact-completion-item|impact-consumer-inventory|result|correction): /) {
+        orphan_field_count++
+        malformed++
+        next
+      }
+
+      if (line ~ /^--- Check [0-9A-Z]+:/ || line ~ /^BEGIN[_ ]TRANSITION_GUARD_RESULT/) {
+        closed_tail = 0
+        next
+      }
+
+      if (closed_tail && line ~ /^[a-z][a-z0-9-]*: /) {
+        extra_field_count++
+        malformed++
+      }
+    }
+    END {
+      if (active) malformed++
+      if (record_count != 1 || complete_count != 1 || expected_match_count != 1 ||
+          legacy_count != 0 || orphan_field_count != 0 || extra_field_count != 0 || malformed != 0) exit 1
+    }
+  ' "$log_file"
+}
+
+check8b_direct_correction_for() {
+  local direct_surfaces="$1"
+  CHECK8B_EXPECTED_CORRECTION="Add only the missing Consumer Impact Sweep section, completion item, and affected-consumer inventory for direct surfaces: $direct_surfaces."
+}
+
+check8b_record_oracle_valid="$tmp_root/bug032-check8b-record-oracle-valid.log"
+check8b_record_oracle_foreign_then_valid="$tmp_root/bug032-check8b-record-oracle-foreign-then-valid.log"
+check8b_record_oracle_orphan="$tmp_root/bug032-check8b-record-oracle-orphan.log"
+check8b_record_oracle_missing="$tmp_root/bug032-check8b-record-oracle-missing.log"
+check8b_record_oracle_incomplete="$tmp_root/bug032-check8b-record-oracle-incomplete.log"
+check8b_record_oracle_incomplete_sibling="$tmp_root/bug032-check8b-record-oracle-incomplete-sibling.log"
+check8b_record_oracle_duplicate="$tmp_root/bug032-check8b-record-oracle-duplicate.log"
+check8b_record_oracle_nonmatching_sibling="$tmp_root/bug032-check8b-record-oracle-nonmatching-sibling.log"
+check8b_record_oracle_unordered="$tmp_root/bug032-check8b-record-oracle-unordered.log"
+check8b_record_oracle_legacy="$tmp_root/bug032-check8b-record-oracle-legacy.log"
+check8b_record_oracle_legacy_after_separator="$tmp_root/bug032-check8b-record-oracle-legacy-after-separator.log"
+check8b_record_oracle_open="$tmp_root/bug032-check8b-record-oracle-open.log"
+check8b_record_oracle_open_after_prose="$tmp_root/bug032-check8b-record-oracle-open-after-prose.log"
+cat <<'EOF' > "$check8b_record_oracle_valid"
+check: Check 8B
+scope: scopes.md
+source-location: scopes.md:24
+classification: negative
+mutation-target: route
+direct-surfaces: none
+preserved-surfaces: route
+reason: preserved-surface
+boundary: not-applicable
+impact-checks: skipped
+impact-sweep-section: skipped
+impact-completion-item: skipped
+impact-consumer-inventory: skipped
+result: continue
+correction: none
 EOF
-  check8b_inflection_count="$({ grep -ciE "$check8b_regex" "$check8b_exact_inflections"; } || true)"
-  if [[ "$check8b_inflection_count" -eq 2 ]]; then
-    pass "BUG032-IV-F1 Check 8B triggers on the exact mutation inflections 'renames' and 'removes'"
-  else
-    fail "BUG032-IV-F1 Check 8B detected $check8b_inflection_count of 2 exact 'renames'/'removes' mutations"
-  fi
-
-  check8b_unrelated_clauses="$tmp_root/bug032-check8b-unrelated-clauses.txt"
-  cat <<'EOF' > "$check8b_unrelated_clauses"
-Remove stale cache entries after replacement; the public API contract is unchanged.
+cat <<'EOF' > "$check8b_record_oracle_foreign_then_valid"
+check: Context projection
+scope: scopes.md
+consumers: Check 8B,Check 5A
+projection-status: complete
+producer-status: complete
+input-read-status: complete
+source-location: scope-start
+active-count: 10
+fixture-count: 4
+structural-status: preserved
+reason: none
+boundary: complete
+check-8b-disposition: pending
+check-8b-impact-checks: pending
+check-5a-disposition: pending
+check-5a-stress-checks: pending
+result: continue
+correction: none
+--- Check 8B: Consumer Trace Planning For Renames/Removals ---
 EOF
-  if grep -Eiq "$check8b_regex" "$check8b_unrelated_clauses"; then
-    fail "BUG032-IV-F2 Check 8B bridges unrelated clauses and falsely classifies cache cleanup as a public-interface mutation"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_foreign_then_valid"
+done < "$check8b_record_oracle_valid"
+printf '%s\n' 'scope: scopes.md' > "$check8b_record_oracle_orphan"
+printf '%s\n' 'unrelated guard output with no diagnostic record' > "$check8b_record_oracle_missing"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  [[ "$check8b_record_line" == 'correction: none' ]] && continue
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_incomplete"
+done < "$check8b_record_oracle_valid"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  [[ "$check8b_record_line" == 'correction: none' ]] && continue
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_incomplete_sibling"
+done < "$check8b_record_oracle_valid"
+printf '%s\n' '' 'unrelated prose cannot close or forgive an incomplete record' >> "$check8b_record_oracle_incomplete_sibling"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_incomplete_sibling"
+done < "$check8b_record_oracle_valid"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_duplicate"
+done < "$check8b_record_oracle_valid"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_duplicate"
+done < "$check8b_record_oracle_valid"
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_nonmatching_sibling"
+done < "$check8b_record_oracle_valid"
+cat <<'EOF' >> "$check8b_record_oracle_nonmatching_sibling"
+check: Check 8B
+scope: scopes.md
+source-location: scopes.md:31
+classification: direct-positive
+mutation-target: route
+direct-surfaces: remove:route
+preserved-surfaces: none
+reason: direct
+boundary: not-applicable
+impact-checks: run
+impact-sweep-section: missing
+impact-completion-item: missing
+impact-consumer-inventory: missing
+result: blocked
+correction: Add only the missing Consumer Impact Sweep section, completion item, and affected-consumer inventory for direct surfaces: remove:route.
+EOF
+cat <<'EOF' > "$check8b_record_oracle_unordered"
+check: Check 8B
+scope: scopes.md
+source-location: scopes.md:24
+classification: negative
+mutation-target: route
+direct-surfaces: none
+preserved-surfaces: route
+boundary: not-applicable
+reason: preserved-surface
+impact-checks: skipped
+impact-sweep-section: skipped
+impact-completion-item: skipped
+impact-consumer-inventory: skipped
+result: continue
+correction: none
+EOF
+cat <<'EOF' > "$check8b_record_oracle_legacy"
+Check 8B scope=scopes.md classification=negative mutationTarget=route directSurfaces=none preservedSurfaces=route reason=preserved-surface impactChecks=skipped result=continue correction=none
+EOF
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_legacy_after_separator"
+done < "$check8b_record_oracle_valid"
+cat <<'EOF' >> "$check8b_record_oracle_legacy_after_separator"
+check: Context projection
+scope: scopes.md
+result: continue
+correction: none
+--- unrelated separator ---
+INFO: Check 8B scope=scopes.md classification=negative mutationTarget=route directSurfaces=none preservedSurfaces=route reason=preserved-surface impactChecks=skipped result=continue correction=none
+EOF
+cat <<'EOF' > "$check8b_record_oracle_open"
+check: Check 8B
+scope: scopes.md
+source-location: scopes.md:24
+classification: negative
+mutation-target: route
+direct-surfaces: none
+preserved-surfaces: route
+reason: preserved-surface
+boundary: not-applicable
+impact-checks: skipped
+impact-sweep-section: skipped
+impact-completion-item: skipped
+impact-consumer-inventory: skipped
+result: continue
+correction: none
+debug-field: forbidden
+EOF
+while IFS= read -r check8b_record_line || [[ -n "$check8b_record_line" ]]; do
+  printf '%s\n' "$check8b_record_line" >> "$check8b_record_oracle_open_after_prose"
+done < "$check8b_record_oracle_valid"
+cat <<'EOF' >> "$check8b_record_oracle_open_after_prose"
+
+unrelated prose and a blank line cannot make the closed record open-ended
+debug-field: forbidden-after-prose
+EOF
+
+check8b_expect_guard_oracle_rejection() {
+  local oracle_file="$1"
+  local oracle_label="$2"
+
+  if check8b_guard_record_matches "$oracle_file" \
+    scopes.md negative route none route preserved-surface not-applicable \
+    skipped skipped skipped skipped continue none; then
+    fail "BUG-032 Check 8B guard oracle rejects $oracle_label"
   else
-    pass "BUG032-IV-F2 Check 8B does not bridge cache cleanup to an unchanged public API contract in another clause"
+    pass "BUG-032 Check 8B guard oracle rejects $oracle_label"
+  fi
+}
+
+if check8b_guard_record_matches "$check8b_record_oracle_valid" \
+  scopes.md negative route none route preserved-surface not-applicable \
+  skipped skipped skipped skipped continue none; then
+  pass "BUG-032 Check 8B guard oracle accepts exactly one complete ordered expected record"
+else
+  fail "BUG-032 Check 8B guard oracle rejected its one complete ordered expected record"
+fi
+if check8b_guard_record_matches "$check8b_record_oracle_foreign_then_valid" \
+  scopes.md negative route none route preserved-surface not-applicable \
+  skipped skipped skipped skipped continue none; then
+  pass "BUG-032 Check 8B guard oracle ignores a foreign Context projection record"
+else
+  fail "BUG-032 Check 8B guard oracle let a foreign Context projection poison the expected record"
+fi
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_orphan" 'a true orphan target field'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_missing" 'a missing record'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_incomplete" 'an incomplete record'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_incomplete_sibling" 'an incomplete record hidden before a complete expected sibling'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_duplicate" 'duplicate complete matching records'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_nonmatching_sibling" 'one matching record plus one complete nonmatching sibling'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_unordered" 'an unordered record'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_legacy" 'legacy camelCase narrative output'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_legacy_after_separator" 'legacy camelCase narrative after a foreign record and nonstandard separator'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_open" 'an extra field after correction'
+check8b_expect_guard_oracle_rejection "$check8b_record_oracle_open_after_prose" 'an extra field after correction separated by blank and prose lines'
+
+bug032_run_check8b_guard_case "negative-unpunctuated" "$check8b_scn013_unpunctuated"
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  && check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md negative 'stale cache entries' none route preserved-surface \
+    not-applicable skipped skipped skipped skipped continue none; then
+  pass "BUG-032 Check 8B unpunctuated negative fixture imposes no Consumer Impact Sweep requirement"
+else
+  fail "BUG-032 Check 8B unpunctuated negative guard record must be closed, ordered, and exact (status=$BUG032_CHECK8B_GUARD_STATUS)"
+fi
+
+check8b_direct_guard_failures=0
+for check8b_direct_case in active passive; do
+  if [[ "$check8b_direct_case" == "active" ]]; then
+    check8b_line='Remove the public API route'
+  else
+    check8b_line='The public API route is removed'
+  fi
+  bug032_run_check8b_guard_case "direct-$check8b_direct_case" "$check8b_line"
+  check8b_direct_correction_for remove:route
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md direct-positive route remove:route none direct not-applicable \
+      run missing missing missing blocked "$CHECK8B_EXPECTED_CORRECTION"; then
+    check8b_direct_guard_failures=$((check8b_direct_guard_failures + 1))
+    echo "BUG032_SCN013_DIRECT_GUARD_RECORD_MISMATCH case=$check8b_direct_case status=$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+done
+if [[ "$check8b_direct_guard_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B active and passive public-route removals invoke all three impact-planning checks"
+else
+  fail "BUG-032 Check 8B direct guard matrix has $check8b_direct_guard_failures impact-planning mismatch(es)"
+fi
+
+bug032_run_check8b_guard_case "mixed-surface" "$check8b_scn013_mixed"
+check8b_direct_correction_for remove:redirect
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+  && check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md mixed-surface redirect remove:redirect route mixed not-applicable \
+    run missing missing missing blocked "$CHECK8B_EXPECTED_CORRECTION"; then
+  pass "BUG-032 Check 8B mixed-surface guard path evaluates impact planning only for the removed redirect"
+else
+  fail "BUG-032 Check 8B mixed-surface guard record did not isolate redirect impact (status=$BUG032_CHECK8B_GUARD_STATUS)"
+fi
+
+check8b_ambiguous_guard_failures=0
+for check8b_ambiguous_case in conflict unresolved token-limit; do
+  case "$check8b_ambiguous_case" in
+    conflict)
+      check8b_line="$check8b_scn013_conflict"
+      check8b_expected_preserved=route
+      check8b_expected_boundary=not-applicable
+      check8b_expected_correction='Rewrite only this declaration so route is either removed or preserved, not both.'
+      ;;
+    unresolved)
+      check8b_line="$check8b_scn013_unresolved"
+      check8b_expected_preserved=none
+      check8b_expected_boundary=not-applicable
+      check8b_expected_correction='Rewrite only this declaration to state whether the public API route changes or remains unchanged.'
+      ;;
+    token-limit)
+      check8b_line="$check8b_scn013_token_limit"
+      check8b_expected_preserved=none
+      check8b_expected_boundary='tokens=129/128:first-overflow'
+      check8b_expected_correction='Split only this declaration before token 129 while preserving its meaning.'
+      ;;
+  esac
+  bug032_run_check8b_guard_case "ambiguous-$check8b_ambiguous_case" "$check8b_line"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md ambiguous unresolved none "$check8b_expected_preserved" \
+      "$check8b_ambiguous_case" "$check8b_expected_boundary" \
+      skipped skipped skipped skipped blocked "$check8b_expected_correction"; then
+    check8b_ambiguous_guard_failures=$((check8b_ambiguous_guard_failures + 1))
+    echo "BUG032_SCN013_AMBIGUOUS_GUARD_RECORD_MISMATCH case=$check8b_ambiguous_case status=$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+done
+if [[ "$check8b_ambiguous_guard_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B ambiguous guard paths fail closed with reason-specific local rewrite guidance"
+else
+  fail "BUG-032 Check 8B ambiguous guard matrix has $check8b_ambiguous_guard_failures mismatch(es)"
+fi
+
+# BUG032-CR-01 / SCN-032-014: negation belongs to its local phrase. An
+# unrelated leading `no` clause or `without` adjunct must not suppress a later
+# active or passive route removal. The owned-negation twins prevent a broad
+# "ignore negation" implementation from satisfying the regression.
+check8b_negation_direct_lines=(
+  'No cache migration is required; remove the public route.'
+  'No cache migration is required. The public route is removed.'
+  'Without migration remove the public route.'
+  'The public route without migration is removed.'
+)
+check8b_owned_negation_lines=(
+  'Do not remove the public route.'
+  'The public route is not removed.'
+  'Without removing the public route, purge stale cache entries.'
+  'No public route is removed.'
+)
+check8b_negation_direct_token_counts=(9 10 6 7)
+check8b_owned_negation_token_counts=(6 6 9 5)
+
+check8b_negation_direct_failures=0
+for check8b_index in "${!check8b_negation_direct_lines[@]}"; do
+  check8b_line="${check8b_negation_direct_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 direct-positive remove route remove:route none direct none \
+    not-applicable "${check8b_negation_direct_token_counts[$check8b_index]}" 1 \
+    "${check8b_negation_direct_token_counts[$check8b_index]}" \
+    "${check8b_negation_direct_token_counts[$check8b_index]}" 1; then
+    check8b_negation_direct_failures=$((check8b_negation_direct_failures + 1))
+    echo "BUG032_CR01_DIRECT_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES line=$check8b_line"
   fi
 
-  check8b_pos_count="$({ grep -ciE "$check8b_regex" "$check8b_must_flag"; } || true)"
-  if [[ "$check8b_pos_count" -eq 5 ]]; then
-    pass "BUG-032 Check 8B still flags all 5 explicit route/path/endpoint/contract/identifier mutations"
-  else
-    fail "BUG-032 Check 8B detected $check8b_pos_count of 5 explicit consumer-interface mutations"
-    echo "--- explicit mutation lines matched ---"
-    grep -niE "$check8b_regex" "$check8b_must_flag" || true
-    echo "--- end ---"
+  bug032_run_check8b_guard_case "phrase-local-direct-$check8b_index" "$check8b_line"
+  check8b_direct_correction_for remove:route
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md direct-positive route remove:route none direct not-applicable \
+      run missing missing missing blocked "$CHECK8B_EXPECTED_CORRECTION"; then
+    check8b_negation_direct_failures=$((check8b_negation_direct_failures + 1))
+    echo "BUG032_CR01_DIRECT_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS line=$check8b_line"
   fi
+done
+if [[ "$check8b_negation_direct_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B keeps direct mutations positive after unrelated no or without phrases"
+else
+  fail "BUG-032 Check 8B unrelated-negation direct matrix has $check8b_negation_direct_failures mismatch(es)"
+fi
+
+check8b_owned_negation_failures=0
+for check8b_index in "${!check8b_owned_negation_lines[@]}"; do
+  check8b_line="${check8b_owned_negation_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 negative remove route none route preserved-surface none \
+    not-applicable "${check8b_owned_negation_token_counts[$check8b_index]}" 1 \
+    "${check8b_owned_negation_token_counts[$check8b_index]}" \
+    "${check8b_owned_negation_token_counts[$check8b_index]}" 1; then
+    check8b_owned_negation_failures=$((check8b_owned_negation_failures + 1))
+    echo "BUG032_CR01_OWNED_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES line=$check8b_line"
+  fi
+
+  bug032_run_check8b_guard_case "owned-negation-$check8b_index" "$check8b_line"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md negative route none route preserved-surface not-applicable \
+      skipped skipped skipped skipped continue none; then
+    check8b_owned_negation_failures=$((check8b_owned_negation_failures + 1))
+    echo "BUG032_CR01_OWNED_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS line=$check8b_line"
+  fi
+done
+if [[ "$check8b_owned_negation_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B keeps owned negation negative"
+else
+  fail "BUG-032 Check 8B owned-negation matrix has $check8b_owned_negation_failures mismatch(es)"
+fi
+
+# BUG032-CR-02 / SCN-032-015: a trailing ordinary artifact noun leaves the
+# mutation object unresolved. Each ambiguity has both a direct twin and a
+# separate-clause preservation twin, and all three forms drive the real guard.
+check8b_tail_lines=(
+  'Remove the public API route example.'
+  'Remove the endpoint test.'
+  'Remove the contract fixture.'
+  'Remove the link documentation.'
+)
+check8b_tail_direct_lines=(
+  'Remove the public API route.'
+  'Remove the endpoint.'
+  'Remove the contract.'
+  'Remove the link.'
+)
+check8b_tail_preserved_lines=(
+  'Remove the route example. The public API route remains unchanged.'
+  'Remove the endpoint test. The endpoint remains unchanged.'
+  'Remove the contract fixture. The contract remains unchanged.'
+  'Remove the link documentation. The link remains unchanged.'
+)
+check8b_tail_surfaces=(route endpoint contract link)
+check8b_tail_phrases=('route example' 'endpoint test' 'contract fixture' 'link documentation')
+check8b_tail_token_counts=(6 4 4 4)
+check8b_tail_direct_token_counts=(5 3 3 3)
+check8b_tail_preserved_token_counts=(10 8 8 8)
+
+check8b_tail_ambiguous_failures=0
+check8b_tail_twin_failures=0
+for check8b_index in "${!check8b_tail_lines[@]}"; do
+  check8b_surface="${check8b_tail_surfaces[$check8b_index]}"
+  check8b_phrase="${check8b_tail_phrases[$check8b_index]}"
+  check8b_line="${check8b_tail_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 ambiguous remove unresolved none none surface-tail "$check8b_phrase" \
+    not-applicable "${check8b_tail_token_counts[$check8b_index]}" 1 \
+    "${check8b_tail_token_counts[$check8b_index]}" \
+    "${check8b_tail_token_counts[$check8b_index]}" 1; then
+    check8b_tail_ambiguous_failures=$((check8b_tail_ambiguous_failures + 1))
+    echo "BUG032_CR02_TAIL_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON mutationTarget=$CHECK8B_MUTATION_TARGET unresolvedPhrase=$CHECK8B_UNRESOLVED_PHRASE directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES boundary=$CHECK8B_BOUNDARY"
+  fi
+  bug032_run_check8b_guard_case "surface-tail-$check8b_index" "$check8b_line"
+  check8b_expected_correction="Rewrite only this declaration to distinguish artifact '$check8b_phrase' from consumer surface '$check8b_surface'."
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md ambiguous unresolved none none surface-tail not-applicable \
+      skipped skipped skipped skipped blocked "$check8b_expected_correction"; then
+    check8b_tail_ambiguous_failures=$((check8b_tail_ambiguous_failures + 1))
+    echo "BUG032_CR02_TAIL_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS phrase=$check8b_phrase"
+  fi
+
+  check8b_line="${check8b_tail_direct_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 direct-positive remove "$check8b_surface" "remove:$check8b_surface" \
+    none direct none not-applicable \
+    "${check8b_tail_direct_token_counts[$check8b_index]}" 1 \
+    "${check8b_tail_direct_token_counts[$check8b_index]}" \
+    "${check8b_tail_direct_token_counts[$check8b_index]}" 1; then
+    check8b_tail_twin_failures=$((check8b_tail_twin_failures + 1))
+    echo "BUG032_CR02_DIRECT_TWIN_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES"
+  fi
+  bug032_run_check8b_guard_case "surface-tail-direct-$check8b_index" "$check8b_line"
+  check8b_direct_correction_for "remove:$check8b_surface"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md direct-positive "$check8b_surface" "remove:$check8b_surface" \
+      none direct not-applicable run missing missing missing blocked \
+      "$CHECK8B_EXPECTED_CORRECTION"; then
+    check8b_tail_twin_failures=$((check8b_tail_twin_failures + 1))
+    echo "BUG032_CR02_DIRECT_TWIN_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+
+  check8b_line="${check8b_tail_preserved_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 negative remove "$check8b_phrase" none "$check8b_surface" \
+    preserved-surface none not-applicable \
+    "${check8b_tail_preserved_token_counts[$check8b_index]}" 1 \
+    "${check8b_tail_preserved_token_counts[$check8b_index]}" \
+    "${check8b_tail_preserved_token_counts[$check8b_index]}" 1; then
+    check8b_tail_twin_failures=$((check8b_tail_twin_failures + 1))
+    echo "BUG032_CR02_PRESERVED_TWIN_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES boundary=$CHECK8B_BOUNDARY"
+  fi
+  bug032_run_check8b_guard_case "surface-tail-preserved-$check8b_index" "$check8b_line"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md negative "$check8b_phrase" none "$check8b_surface" \
+      preserved-surface not-applicable skipped skipped skipped skipped continue none; then
+    check8b_tail_twin_failures=$((check8b_tail_twin_failures + 1))
+    echo "BUG032_CR02_PRESERVED_TWIN_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+done
+if [[ "$check8b_tail_ambiguous_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B blocks trailing artifact nouns as surface-tail"
+else
+  fail "BUG-032 Check 8B trailing-artifact matrix has $check8b_tail_ambiguous_failures ambiguity mismatch(es)"
+fi
+if [[ "$check8b_tail_twin_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B discriminates direct and explicitly preserved trailing-noun twins"
+else
+  fail "BUG-032 Check 8B trailing-noun twin matrix has $check8b_tail_twin_failures mismatch(es)"
+fi
+
+# BUG032-HARDEN9-C8B-PASSIVE-OBJECT-001 / SCN-032-013: a passive
+# mutation must own its actual object. A route used before an unrelated cache
+# removal is preserved context, not the object being removed. The direct
+# passive route control prevents a broad passive-form exemption.
+check8b_scn013_passive_object='The public API route is used while stale cache entries are removed.'
+check8b_scn013_passive_direct_control='The public API route is removed.'
+check8b_scn013_passive_behavior_failures=0
+bug032_check8b_classify "$check8b_scn013_passive_object"
+if ! check8b_helper_record_matches \
+  0 negative remove 'stale cache entries' none route preserved-surface none \
+  not-applicable 12 1 12 12 1; then
+  check8b_scn013_passive_behavior_failures=$((check8b_scn013_passive_behavior_failures + 1))
+  printf 'BUG032_SCN013_PASSIVE_OBJECT_HELPER_MISMATCH status=%s classification=%s target=%s direct=%s preserved=%s reason=%s\n' \
+    "$CHECK8B_LAST_STATUS" "$CHECK8B_CLASSIFICATION" \
+    "$CHECK8B_MUTATION_TARGET" "$CHECK8B_DIRECT_SURFACES" \
+    "$CHECK8B_PRESERVED_SURFACES" "$CHECK8B_REASON"
+fi
+bug032_run_check8b_guard_case "scn013-passive-object" "$check8b_scn013_passive_object"
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md negative 'stale cache entries' none route preserved-surface \
+    not-applicable skipped skipped skipped skipped continue none; then
+  check8b_scn013_passive_behavior_failures=$((check8b_scn013_passive_behavior_failures + 1))
+  printf 'BUG032_SCN013_PASSIVE_OBJECT_GUARD_MISMATCH status=%s\n' \
+    "$BUG032_CHECK8B_GUARD_STATUS"
+fi
+if [[ "$check8b_scn013_passive_behavior_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B keeps a used passive surface separate from an unrelated passive object"
+else
+  fail "BUG-032 Check 8B passive-object behavior matrix has $check8b_scn013_passive_behavior_failures mismatch(es)"
+fi
+
+check8b_scn013_passive_control_failures=0
+bug032_check8b_classify "$check8b_scn013_passive_direct_control"
+if ! check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 6 1 6 6 1; then
+  check8b_scn013_passive_control_failures=$((check8b_scn013_passive_control_failures + 1))
+  printf 'BUG032_SCN013_PASSIVE_DIRECT_CONTROL_HELPER_MISMATCH classification=%s target=%s direct=%s reason=%s\n' \
+    "$CHECK8B_CLASSIFICATION" "$CHECK8B_MUTATION_TARGET" \
+    "$CHECK8B_DIRECT_SURFACES" "$CHECK8B_REASON"
+fi
+bug032_run_check8b_guard_case "scn013-passive-direct-control" "$check8b_scn013_passive_direct_control"
+check8b_direct_correction_for remove:route
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md direct-positive route remove:route none direct not-applicable \
+    run missing missing missing blocked "$CHECK8B_EXPECTED_CORRECTION"; then
+  check8b_scn013_passive_control_failures=$((check8b_scn013_passive_control_failures + 1))
+  printf 'BUG032_SCN013_PASSIVE_DIRECT_CONTROL_GUARD_MISMATCH status=%s\n' \
+    "$BUG032_CHECK8B_GUARD_STATUS"
+fi
+if [[ "$check8b_scn013_passive_control_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B passive direct-route control remains direct-positive"
+else
+  fail "BUG-032 Check 8B passive direct-route control matrix has $check8b_scn013_passive_control_failures mismatch(es)"
+fi
+
+# BUG032-HARDEN9-C8B-PASSIVE-TAIL-002 / SCN-032-015: passive tails
+# carry the same unresolved/direct/explicitly-clarified three-way contract as
+# active tails. Every form runs through both the sourced production helper and
+# the real guard consumer.
+check8b_scn015_passive_unresolved_lines=(
+  'The endpoint test is removed.'
+  'The route example is removed.'
+)
+check8b_scn015_passive_direct_lines=(
+  'The endpoint is removed.'
+  'The public route is removed.'
+)
+check8b_scn015_passive_clarified_lines=(
+  'The endpoint test is removed. The public endpoint remains unchanged.'
+  'The route example is removed. The public route remains unchanged.'
+)
+check8b_scn015_passive_surfaces=(endpoint route)
+check8b_scn015_passive_phrases=('endpoint test' 'route example')
+check8b_scn015_passive_direct_token_counts=(4 5)
+check8b_scn015_passive_behavior_failures=0
+check8b_scn015_passive_direct_failures=0
+for check8b_index in "${!check8b_scn015_passive_unresolved_lines[@]}"; do
+  check8b_surface="${check8b_scn015_passive_surfaces[$check8b_index]}"
+  check8b_phrase="${check8b_scn015_passive_phrases[$check8b_index]}"
+
+  check8b_line="${check8b_scn015_passive_unresolved_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 ambiguous remove unresolved none none surface-tail "$check8b_phrase" \
+    not-applicable 5 1 5 5 1; then
+    check8b_scn015_passive_behavior_failures=$((check8b_scn015_passive_behavior_failures + 1))
+    printf 'BUG032_SCN015_PASSIVE_UNRESOLVED_HELPER_MISMATCH index=%s classification=%s target=%s direct=%s preserved=%s reason=%s unresolved=%s\n' \
+      "$check8b_index" "$CHECK8B_CLASSIFICATION" "$CHECK8B_MUTATION_TARGET" \
+      "$CHECK8B_DIRECT_SURFACES" "$CHECK8B_PRESERVED_SURFACES" \
+      "$CHECK8B_REASON" "$CHECK8B_UNRESOLVED_PHRASE"
+  fi
+  bug032_run_check8b_guard_case "scn015-passive-unresolved-$check8b_index" "$check8b_line"
+  check8b_expected_correction="Rewrite only this declaration to distinguish artifact '$check8b_phrase' from consumer surface '$check8b_surface'."
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md ambiguous unresolved none none surface-tail not-applicable \
+      skipped skipped skipped skipped blocked "$check8b_expected_correction"; then
+    check8b_scn015_passive_behavior_failures=$((check8b_scn015_passive_behavior_failures + 1))
+    printf 'BUG032_SCN015_PASSIVE_UNRESOLVED_GUARD_MISMATCH index=%s status=%s\n' \
+      "$check8b_index" "$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+
+  check8b_line="${check8b_scn015_passive_clarified_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 negative remove "$check8b_phrase" none "$check8b_surface" \
+    preserved-surface none not-applicable 10 1 10 10 1; then
+    check8b_scn015_passive_behavior_failures=$((check8b_scn015_passive_behavior_failures + 1))
+    printf 'BUG032_SCN015_PASSIVE_CLARIFIED_HELPER_MISMATCH index=%s classification=%s target=%s direct=%s preserved=%s reason=%s\n' \
+      "$check8b_index" "$CHECK8B_CLASSIFICATION" "$CHECK8B_MUTATION_TARGET" \
+      "$CHECK8B_DIRECT_SURFACES" "$CHECK8B_PRESERVED_SURFACES" "$CHECK8B_REASON"
+  fi
+  bug032_run_check8b_guard_case "scn015-passive-clarified-$check8b_index" "$check8b_line"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md negative "$check8b_phrase" none "$check8b_surface" \
+      preserved-surface not-applicable skipped skipped skipped skipped continue none; then
+    check8b_scn015_passive_behavior_failures=$((check8b_scn015_passive_behavior_failures + 1))
+    printf 'BUG032_SCN015_PASSIVE_CLARIFIED_GUARD_MISMATCH index=%s status=%s\n' \
+      "$check8b_index" "$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+
+  check8b_line="${check8b_scn015_passive_direct_lines[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 direct-positive remove "$check8b_surface" "remove:$check8b_surface" \
+    none direct none not-applicable \
+    "${check8b_scn015_passive_direct_token_counts[$check8b_index]}" 1 \
+    "${check8b_scn015_passive_direct_token_counts[$check8b_index]}" \
+    "${check8b_scn015_passive_direct_token_counts[$check8b_index]}" 1; then
+    check8b_scn015_passive_direct_failures=$((check8b_scn015_passive_direct_failures + 1))
+    printf 'BUG032_SCN015_PASSIVE_DIRECT_HELPER_MISMATCH index=%s classification=%s target=%s direct=%s reason=%s\n' \
+      "$check8b_index" "$CHECK8B_CLASSIFICATION" "$CHECK8B_MUTATION_TARGET" \
+      "$CHECK8B_DIRECT_SURFACES" "$CHECK8B_REASON"
+  fi
+  bug032_run_check8b_guard_case "scn015-passive-direct-$check8b_index" "$check8b_line"
+  check8b_direct_correction_for "remove:$check8b_surface"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md direct-positive "$check8b_surface" "remove:$check8b_surface" \
+      none direct not-applicable run missing missing missing blocked \
+      "$CHECK8B_EXPECTED_CORRECTION"; then
+    check8b_scn015_passive_direct_failures=$((check8b_scn015_passive_direct_failures + 1))
+    printf 'BUG032_SCN015_PASSIVE_DIRECT_GUARD_MISMATCH index=%s status=%s\n' \
+      "$check8b_index" "$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+done
+if [[ "$check8b_scn015_passive_behavior_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B blocks passive artifact tails and accepts explicit passive clarification"
+else
+  fail "BUG-032 Check 8B passive artifact-tail matrix has $check8b_scn015_passive_behavior_failures mismatch(es)"
+fi
+if [[ "$check8b_scn015_passive_direct_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B passive tail direct controls remain positive"
+else
+  fail "BUG-032 Check 8B passive artifact-tail direct-control matrix has $check8b_scn015_passive_direct_failures mismatch(es)"
+fi
+
+# BUG032-HARDEN9-C8B-PASSIVE-NEGATION-003 / SCN-032-014: the two-token
+# auxiliary `will be` remains direct, while `will not be` owns the negation.
+check8b_scn014_passive_will_not='The public route will not be removed.'
+check8b_scn014_passive_will_be='The public route will be removed.'
+check8b_scn014_passive_negative_failures=0
+bug032_check8b_classify "$check8b_scn014_passive_will_not"
+if ! check8b_helper_record_matches \
+  0 negative remove route none route preserved-surface none \
+  not-applicable 7 1 7 7 1; then
+  check8b_scn014_passive_negative_failures=$((check8b_scn014_passive_negative_failures + 1))
+  printf 'BUG032_SCN014_PASSIVE_WILL_NOT_HELPER_MISMATCH classification=%s target=%s direct=%s preserved=%s reason=%s\n' \
+    "$CHECK8B_CLASSIFICATION" "$CHECK8B_MUTATION_TARGET" \
+    "$CHECK8B_DIRECT_SURFACES" "$CHECK8B_PRESERVED_SURFACES" "$CHECK8B_REASON"
+fi
+bug032_run_check8b_guard_case "scn014-passive-will-not" "$check8b_scn014_passive_will_not"
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md negative route none route preserved-surface not-applicable \
+    skipped skipped skipped skipped continue none; then
+  check8b_scn014_passive_negative_failures=$((check8b_scn014_passive_negative_failures + 1))
+  printf 'BUG032_SCN014_PASSIVE_WILL_NOT_GUARD_MISMATCH status=%s\n' \
+    "$BUG032_CHECK8B_GUARD_STATUS"
+fi
+if [[ "$check8b_scn014_passive_negative_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B preserves passive will-not negation"
+else
+  fail "BUG-032 Check 8B passive will-not negation matrix has $check8b_scn014_passive_negative_failures mismatch(es)"
+fi
+
+check8b_scn014_passive_positive_failures=0
+bug032_check8b_classify "$check8b_scn014_passive_will_be"
+if ! check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  not-applicable 6 1 6 6 1; then
+  check8b_scn014_passive_positive_failures=$((check8b_scn014_passive_positive_failures + 1))
+  printf 'BUG032_SCN014_PASSIVE_WILL_BE_HELPER_MISMATCH classification=%s target=%s direct=%s reason=%s\n' \
+    "$CHECK8B_CLASSIFICATION" "$CHECK8B_MUTATION_TARGET" \
+    "$CHECK8B_DIRECT_SURFACES" "$CHECK8B_REASON"
+fi
+bug032_run_check8b_guard_case "scn014-passive-will-be" "$check8b_scn014_passive_will_be"
+check8b_direct_correction_for remove:route
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md direct-positive route remove:route none direct not-applicable \
+    run missing missing missing blocked "$CHECK8B_EXPECTED_CORRECTION"; then
+  check8b_scn014_passive_positive_failures=$((check8b_scn014_passive_positive_failures + 1))
+  printf 'BUG032_SCN014_PASSIVE_WILL_BE_GUARD_MISMATCH status=%s\n' \
+    "$BUG032_CHECK8B_GUARD_STATUS"
+fi
+if [[ "$check8b_scn014_passive_positive_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B passive will-be control remains direct-positive"
+else
+  fail "BUG-032 Check 8B passive will-be direct-control matrix has $check8b_scn014_passive_positive_failures mismatch(es)"
+fi
+
+# BUG032-HARDEN9-C8B-CONTEXT-004 / SCN-032-020: the complete scope
+# consumer, rather than the line helper in isolation, owns active-vs-fixture
+# context. The same mutation sentence appears in each ignored context and in an
+# active declaration that must still block as surface-tail.
+check8b_scn020_contexts=(gherkin examples test-plan)
+check8b_scn020_context_failures=0
+for check8b_scn020_context in "${check8b_scn020_contexts[@]}"; do
+  check8b_scn020_dir="$tmp_root/specs/955-bug032-scn020-$check8b_scn020_context"
+  cp -R "$positive_feature_dir" "$check8b_scn020_dir"
+  case "$check8b_scn020_context" in
+    gherkin)
+      cat <<'EOF' >> "$check8b_scn020_dir/scopes.md"
+
+### Fixture Gherkin
+
+```gherkin
+Given fixture prose says "Remove the endpoint test."
+```
+EOF
+      ;;
+    examples)
+      cat <<'EOF' >> "$check8b_scn020_dir/scopes.md"
+
+### Examples
+
+| declaration |
+| --- |
+| Remove the endpoint test. |
+EOF
+      ;;
+    test-plan)
+      cat <<'EOF' >> "$check8b_scn020_dir/scopes.md"
+
+### Test Plan
+
+| Test Type | Description | Expected Result |
+| --- | --- | --- |
+| Functional fixture | Remove the endpoint test. | The fixture remains inert. |
+EOF
+      ;;
+  esac
+  check8b_scn020_log="$tmp_root/bug032-scn020-$check8b_scn020_context.log"
+  check8b_scn020_status="$(run_capture "$check8b_scn020_log" bash "$GUARD_SCRIPT" "$check8b_scn020_dir")"
+  if [[ "$check8b_scn020_status" -ne 0 ]] \
+    || grep -Fq -- 'check: Check 8B' "$check8b_scn020_log" \
+    || grep -Fq -- 'Check 8B blocked an ambiguous declaration' "$check8b_scn020_log"; then
+    check8b_scn020_context_failures=$((check8b_scn020_context_failures + 1))
+    printf 'BUG032_SCN020_CONTEXT_MISMATCH context=%s status=%s check8bRecords=%s ambiguityBlocks=%s\n' \
+      "$check8b_scn020_context" "$check8b_scn020_status" \
+      "$(grep -cF -- 'check: Check 8B' "$check8b_scn020_log" || true)" \
+      "$(grep -cF -- 'Check 8B blocked an ambiguous declaration' "$check8b_scn020_log" || true)"
+  fi
+done
+if [[ "$check8b_scn020_context_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B ignores Gherkin Examples and Test Plan fixture prose"
+else
+  fail "BUG-032 Check 8B fixture-context matrix has $check8b_scn020_context_failures mismatch(es)"
+fi
+
+bug032_run_check8b_guard_case "scn020-active-control" 'Remove the endpoint test.'
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -ne 0 ]] \
+  && check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md ambiguous unresolved none none surface-tail not-applicable \
+    skipped skipped skipped skipped blocked \
+    "Rewrite only this declaration to distinguish artifact 'endpoint test' from consumer surface 'endpoint'."; then
+  pass "BUG-032 Check 8B still evaluates identical active declarations"
+else
+  fail "BUG-032 Check 8B active fixture twin has unexpected status=$BUG032_CHECK8B_GUARD_STATUS"
+fi
+
+# BUG032-CR-03 / SCN-032-016: construct the exact 128/129-token pair without
+# an external generator. In the overflow case `route` is token 129 and must not
+# be retained or inspected.
+check8b_token_neutral_126=""
+for ((check8b_index = 1; check8b_index <= 126; check8b_index++)); do
+  check8b_token_neutral_126="${check8b_token_neutral_126}${check8b_token_neutral_126:+ }neutral$check8b_index"
+done
+check8b_token_128="$check8b_token_neutral_126 remove route"
+check8b_token_129="overflow129 $check8b_token_neutral_126 remove route"
+
+# DEBUG tracing observes entry into production helper functions without copying
+# or replacing their grammar. The role registry is deliberately closed over
+# every declaration in the marked block. Roles come from declaration bodies,
+# so irrelevant renames or inlining do not stale a copied name table. A new
+# body with no recognized role fails closed instead of becoming a vacuous pass.
+declare -A check8b_production_functions=()
+declare -A check8b_trace_roles=()
+declare -A check8b_trace_observed_declarations=()
+
+check8b_trace_role_from_body() {
+  local function_name="$1"
+  local function_body="$2"
+  local semantic_body=""
+  local closed_result_name=""
+  local closed_result_assignments=0
+  local candidate_coordination=0
+  local relationship_coordination=0
+
+  CHECK8B_TRACE_DERIVED_ROLE="unknown"
+  CHECK8B_TRACE_ENTRYPOINT_ASSIGNMENT_COUNT=0
+  CHECK8B_TRACE_ENTRYPOINT_CANDIDATE_COORDINATION=0
+  CHECK8B_TRACE_ENTRYPOINT_RELATIONSHIP_COORDINATION=0
+  if ! check8b_trace_strip_inert_text "$function_body"; then
+    return 1
+  fi
+  semantic_body="$CHECK8B_TRACE_EXECUTABLE_TEXT"
+  if ! check8b_trace_split_command_list "$semantic_body"; then
+    return 1
+  fi
+
+  if [[ "$function_name" == "check8b_classify_line" ]]; then
+    for closed_result_name in \
+      CHECK8B_CLASSIFICATION CHECK8B_VERB CHECK8B_MUTATION_TARGET \
+      CHECK8B_DIRECT_SURFACES CHECK8B_PRESERVED_SURFACES CHECK8B_REASON \
+      CHECK8B_UNRESOLVED_PHRASE CHECK8B_BOUNDARY CHECK8B_TOKEN_COUNT \
+      CHECK8B_CANDIDATE_COUNT _CHECK8B_TOKENS _CHECK8B_CANDIDATE_INDEXES; do
+      if check8b_trace_has_executable_assignment "$semantic_body" "$closed_result_name"; then
+        closed_result_assignments=$((closed_result_assignments + 1))
+      fi
+    done
+    check8b_trace_has_executable_call "$semantic_body" "_check8b_mutation_verb" \
+      && candidate_coordination=1
+    check8b_trace_has_executable_relationship_call "$semantic_body" \
+      && relationship_coordination=1
+    CHECK8B_TRACE_ENTRYPOINT_ASSIGNMENT_COUNT="$closed_result_assignments"
+    CHECK8B_TRACE_ENTRYPOINT_CANDIDATE_COORDINATION="$candidate_coordination"
+    CHECK8B_TRACE_ENTRYPOINT_RELATIONSHIP_COORDINATION="$relationship_coordination"
+    if [[ "$closed_result_assignments" -eq 12 ]] \
+      && [[ "$candidate_coordination" -eq 1 ]] \
+      && [[ "$relationship_coordination" -eq 1 ]]; then
+      CHECK8B_TRACE_DERIVED_ROLE="entrypoint"
+    fi
+  elif [[ "$function_name" != _check8b_* ]]; then
+    CHECK8B_TRACE_DERIVED_ROLE="unknown"
+  elif check8b_trace_has_executable_assignment "$semantic_body" "_CHECK8B_WORD_RESULT"; then
+    CHECK8B_TRACE_DERIVED_ROLE="candidate-semantic"
+  elif check8b_trace_has_executable_assignment "$semantic_body" "_CHECK8B_SURFACE_RESULT" \
+    || check8b_trace_has_executable_assignment "$semantic_body" "_CHECK8B_SURFACE_INDEX" \
+    || check8b_trace_has_executable_assignment "$semantic_body" "_CHECK8B_REFERENCE_RESULT" \
+    || check8b_trace_has_executable_assignment "$semantic_body" "_CHECK8B_TARGET_RESULT" \
+    || check8b_trace_has_executable_relationship_call "$semantic_body"; then
+    CHECK8B_TRACE_DERIVED_ROLE="relationship"
+  elif check8b_trace_has_executable_assignment "$semantic_body" "_CHECK8B_CSV_RESULT" \
+    || check8b_trace_has_executable_call "$semantic_body" "case"; then
+    CHECK8B_TRACE_DERIVED_ROLE="semantic-support"
+  fi
+}
+
+check8b_trace_register_function_role() {
+  local function_name="$1"
+  local function_body="$2"
+  local role=""
+
+  if ! check8b_trace_role_from_body "$function_name" "$function_body"; then
+    CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+    CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}lexical:$function_name"
+    return 1
+  fi
+  role="$CHECK8B_TRACE_DERIVED_ROLE"
+  check8b_trace_roles["$function_name"]="$role"
+  case "$role" in
+    candidate-semantic) CHECK8B_TRACE_ROLE_CANDIDATE_DECLARATIONS=$((CHECK8B_TRACE_ROLE_CANDIDATE_DECLARATIONS + 1)) ;;
+    semantic-support) CHECK8B_TRACE_ROLE_SEMANTIC_SUPPORT_DECLARATIONS=$((CHECK8B_TRACE_ROLE_SEMANTIC_SUPPORT_DECLARATIONS + 1)) ;;
+    relationship) CHECK8B_TRACE_ROLE_RELATIONSHIP_DECLARATIONS=$((CHECK8B_TRACE_ROLE_RELATIONSHIP_DECLARATIONS + 1)) ;;
+    entrypoint) CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS=$((CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS + 1)) ;;
+    unknown)
+      CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+      CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}$function_name"
+      ;;
+  esac
+  return 0
+}
+
+check8b_trace_role_contract_build() {
+  local classifier_file="$1"
+  local source_line=""
+  local function_name=""
+  local function_body=""
+  local declaration_tail=""
+  local active_function=""
+  local function_brace_depth=0
+
+  CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=0
+  CHECK8B_TRACE_ROLE_UNKNOWN_NAMES=""
+  CHECK8B_TRACE_ROLE_MISSING_NAMES=""
+  CHECK8B_TRACE_STYLE_NAME_PARENS=0
+  CHECK8B_TRACE_STYLE_FUNCTION_NAME=0
+  CHECK8B_TRACE_STYLE_FUNCTION_NAME_PARENS=0
+  CHECK8B_TRACE_ROLE_CANDIDATE_DECLARATIONS=0
+  CHECK8B_TRACE_ROLE_SEMANTIC_SUPPORT_DECLARATIONS=0
+  CHECK8B_TRACE_ROLE_RELATIONSHIP_DECLARATIONS=0
+  CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS=0
+  check8b_production_functions=()
+  check8b_trace_roles=()
+  check8b_trace_observed_declarations=()
+
+  while IFS= read -r source_line || [[ -n "$source_line" ]]; do
+    if [[ -z "$active_function" ]]; then
+      if ! check8b_parse_function_declaration "$source_line"; then
+        continue
+      fi
+      function_name="$CHECK8B_DECLARATION_NAME"
+      declaration_tail="$CHECK8B_DECLARATION_REMAINDER"
+      case "$CHECK8B_DECLARATION_STYLE" in
+        name-parens) CHECK8B_TRACE_STYLE_NAME_PARENS=$((CHECK8B_TRACE_STYLE_NAME_PARENS + 1)) ;;
+        function-name) CHECK8B_TRACE_STYLE_FUNCTION_NAME=$((CHECK8B_TRACE_STYLE_FUNCTION_NAME + 1)) ;;
+        function-name-parens) CHECK8B_TRACE_STYLE_FUNCTION_NAME_PARENS=$((CHECK8B_TRACE_STYLE_FUNCTION_NAME_PARENS + 1)) ;;
+        *) CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1)) ;;
+      esac
+      if [[ -n "${check8b_trace_observed_declarations[$function_name]:-}" ]]; then
+        CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+        CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}duplicate:$function_name"
+        continue
+      fi
+      check8b_production_functions["$function_name"]=1
+      check8b_trace_observed_declarations["$function_name"]=1
+      function_body="$declaration_tail"
+      if ! check8b_function_brace_scan_line "$source_line" 0; then
+        CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+        CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}brace:$function_name"
+        continue
+      fi
+      function_brace_depth="$CHECK8B_FUNCTION_BRACE_FINAL_DEPTH"
+      if [[ "$function_brace_depth" -eq 0 ]]; then
+        check8b_trace_register_function_role "$function_name" "$function_body" || true
+        function_body=""
+      else
+        active_function="$function_name"
+      fi
+      continue
+    fi
+
+    if check8b_parse_function_declaration "$source_line"; then
+      CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+      CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}nested:$CHECK8B_DECLARATION_NAME"
+    fi
+    function_body="${function_body}${function_body:+$'\n'}$source_line"
+    if ! check8b_function_brace_scan_line "$source_line" "$function_brace_depth"; then
+      CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+      CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}brace:$active_function"
+      active_function=""
+      function_body=""
+      function_brace_depth=0
+      continue
+    fi
+    function_brace_depth="$CHECK8B_FUNCTION_BRACE_FINAL_DEPTH"
+    if [[ "$function_brace_depth" -eq 0 ]]; then
+      check8b_trace_register_function_role "$active_function" "$function_body" || true
+      active_function=""
+      function_body=""
+      continue
+    fi
+  done < "$classifier_file"
+
+  if [[ -n "$active_function" ]]; then
+    CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+    CHECK8B_TRACE_ROLE_UNKNOWN_NAMES="${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES}${CHECK8B_TRACE_ROLE_UNKNOWN_NAMES:+,}unclosed:$active_function"
+  fi
+  [[ "$CHECK8B_TRACE_ROLE_CANDIDATE_DECLARATIONS" -ge 1 ]] \
+    || CHECK8B_TRACE_ROLE_MISSING_NAMES="${CHECK8B_TRACE_ROLE_MISSING_NAMES}${CHECK8B_TRACE_ROLE_MISSING_NAMES:+,}candidate-semantic"
+  [[ "$CHECK8B_TRACE_ROLE_SEMANTIC_SUPPORT_DECLARATIONS" -ge 1 ]] \
+    || CHECK8B_TRACE_ROLE_MISSING_NAMES="${CHECK8B_TRACE_ROLE_MISSING_NAMES}${CHECK8B_TRACE_ROLE_MISSING_NAMES:+,}semantic-support"
+  [[ "$CHECK8B_TRACE_ROLE_RELATIONSHIP_DECLARATIONS" -ge 1 ]] \
+    || CHECK8B_TRACE_ROLE_MISSING_NAMES="${CHECK8B_TRACE_ROLE_MISSING_NAMES}${CHECK8B_TRACE_ROLE_MISSING_NAMES:+,}relationship"
+  [[ "$CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS" -eq 1 ]] \
+    || CHECK8B_TRACE_ROLE_MISSING_NAMES="${CHECK8B_TRACE_ROLE_MISSING_NAMES}${CHECK8B_TRACE_ROLE_MISSING_NAMES:+,}entrypoint:$CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS"
+  if [[ -n "$CHECK8B_TRACE_ROLE_MISSING_NAMES" ]]; then
+    CHECK8B_TRACE_ROLE_CONTRACT_FAILURES=$((CHECK8B_TRACE_ROLE_CONTRACT_FAILURES + 1))
+  fi
+  [[ "$CHECK8B_TRACE_ROLE_CONTRACT_FAILURES" -eq 0 ]]
+}
+
+check8b_trace_role_contract_failures=0
+if ! check8b_trace_role_contract_build "$check8b_classifier_file"; then
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  echo "BUG032_TI03_TRACE_ROLE_CONTRACT_INVALID unknown=$CHECK8B_TRACE_ROLE_UNKNOWN_NAMES missing=$CHECK8B_TRACE_ROLE_MISSING_NAMES failures=$CHECK8B_TRACE_ROLE_CONTRACT_FAILURES"
+fi
+
+check8b_trace_unknown_mutant="$tmp_root/bug032-check8b-trace-role-unknown-mutant.sh"
+cp "$check8b_classifier_file" "$check8b_trace_unknown_mutant"
+cat <<'EOF' >> "$check8b_trace_unknown_mutant"
+function _check8b_unclassified_probe() {
+  # _CHECK8B_WORD_RESULT _CHECK8B_SURFACE_RESULT _CHECK8B_TOKENS[
+  :
+}
+EOF
+if check8b_trace_role_contract_build "$check8b_trace_unknown_mutant"; then
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  echo 'BUG032_TI03_UNKNOWN_TRACE_ROLE_ACCEPTED'
+else
+  pass "BUG-032 Check 8B closed trace-role oracle rejects a declared private helper whose source body has no classified role"
+fi
+
+check8b_trace_style_fixture="$tmp_root/bug032-check8b-trace-role-declaration-styles.sh"
+cat <<'EOF' > "$check8b_trace_style_fixture"
+# BEGIN CHECK8B FINITE CLASSIFIER
+_check8b_mutation_verb () {
+  _CHECK8B_WORD_RESULT="candidate"
+}
+function _check8b_is_surface {
+  case "$1" in
+    *) return 0 ;;
+  esac
+}
+function _check8b_surface_from () {
+  {
+    _CHECK8B_SURFACE_RESULT="$1"
+    _CHECK8B_SURFACE_INDEX=0
+  }
+}
+function check8b_classify_line {
+  CHECK8B_CLASSIFICATION=""
+  CHECK8B_VERB=""
+  CHECK8B_MUTATION_TARGET=""
+  CHECK8B_DIRECT_SURFACES=""
+  CHECK8B_PRESERVED_SURFACES=""
+  CHECK8B_REASON=""
+  CHECK8B_UNRESOLVED_PHRASE=""
+  CHECK8B_BOUNDARY=""
+  CHECK8B_TOKEN_COUNT=0
+  CHECK8B_CANDIDATE_COUNT=0
+  _CHECK8B_TOKENS=()
+  _CHECK8B_CANDIDATE_INDEXES=()
+  _check8b_mutation_verb probe
+  _check8b_surface_from 0 0
+  return 0
+}
+# END CHECK8B FINITE CLASSIFIER
+EOF
+check8b_trace_assignment_form_texts=(
+  '  CHECK8B_REASON=""'
+  'local CHECK8B_REASON=local-value'
+  'declare CHECK8B_REASON=declare-value'
+  'typeset CHECK8B_REASON=typeset-value'
+  'readonly CHECK8B_REASON=readonly-value'
+  'export CHECK8B_REASON=export-value'
+  'CHECK8B_REASON+=append-value'
+  '_CHECK8B_TOKENS=()'
+  '_CHECK8B_TOKENS[0]=token-value'
+)
+check8b_trace_assignment_form_names=(
+  CHECK8B_REASON CHECK8B_REASON CHECK8B_REASON CHECK8B_REASON CHECK8B_REASON
+  CHECK8B_REASON CHECK8B_REASON _CHECK8B_TOKENS _CHECK8B_TOKENS
+)
+check8b_trace_assignment_form_failures=0
+for check8b_role_form_index in "${!check8b_trace_assignment_form_texts[@]}"; do
+  if ! check8b_trace_strip_inert_text "${check8b_trace_assignment_form_texts[$check8b_role_form_index]}" \
+    || ! check8b_trace_has_executable_assignment \
+      "$CHECK8B_TRACE_EXECUTABLE_TEXT" \
+      "${check8b_trace_assignment_form_names[$check8b_role_form_index]}"; then
+    check8b_trace_assignment_form_failures=$((check8b_trace_assignment_form_failures + 1))
+  fi
+done
+check8b_trace_inert_assignment_texts=(
+  'local inert=CHECK8B_REASON='
+  'local prefix_CHECK8B_REASON=value'
+  'local CHECK8B_REASON_suffix=value'
+  'local inert=${CHECK8B_REASON:=value}'
+  'printf "%s\n" CHECK8B_REASON='
+  '(( CHECK8B_REASON = 1 ))'
+  '[[ CHECK8B_REASON = value ]]'
+  ': CHECK8B_REASON='
+)
+check8b_trace_inert_assignment_failures=0
+for check8b_role_form_index in "${!check8b_trace_inert_assignment_texts[@]}"; do
+  if ! check8b_trace_strip_inert_text "${check8b_trace_inert_assignment_texts[$check8b_role_form_index]}"; then
+    check8b_trace_inert_assignment_failures=$((check8b_trace_inert_assignment_failures + 1))
+  elif check8b_trace_has_executable_assignment "$CHECK8B_TRACE_EXECUTABLE_TEXT" "CHECK8B_REASON"; then
+    check8b_trace_inert_assignment_failures=$((check8b_trace_inert_assignment_failures + 1))
+  fi
+done
+check8b_trace_call_form_texts=(
+  '_check8b_mutation_verb direct'
+  'if _check8b_mutation_verb conditional; then :; fi'
+  'if false; then :; elif _check8b_mutation_verb alternative; then :; fi'
+  '! _check8b_mutation_verb negated'
+  ': && _check8b_mutation_verb conjunction'
+  ': || _check8b_mutation_verb disjunction'
+)
+check8b_trace_call_form_failures=0
+for check8b_role_form_index in "${!check8b_trace_call_form_texts[@]}"; do
+  if ! check8b_trace_strip_inert_text "${check8b_trace_call_form_texts[$check8b_role_form_index]}" \
+    || ! check8b_trace_has_executable_call "$CHECK8B_TRACE_EXECUTABLE_TEXT" "_check8b_mutation_verb"; then
+    check8b_trace_call_form_failures=$((check8b_trace_call_form_failures + 1))
+  fi
+done
+if check8b_trace_role_contract_build "$check8b_trace_style_fixture" \
+  && check8b_source_declaration_only_contract "$check8b_trace_style_fixture" \
+  && [[ "${check8b_trace_roles[_check8b_mutation_verb]:-}" == "candidate-semantic" ]] \
+  && [[ "${check8b_trace_roles[_check8b_is_surface]:-}" == "semantic-support" ]] \
+  && [[ "${check8b_trace_roles[_check8b_surface_from]:-}" == "relationship" ]] \
+  && [[ "${check8b_trace_roles[check8b_classify_line]:-}" == "entrypoint" ]] \
+  && [[ "$CHECK8B_TRACE_STYLE_NAME_PARENS" -eq 1 ]] \
+  && [[ "$CHECK8B_TRACE_STYLE_FUNCTION_NAME" -eq 2 ]] \
+  && [[ "$CHECK8B_TRACE_STYLE_FUNCTION_NAME_PARENS" -eq 1 ]] \
+  && [[ "$CHECK8B_TRACE_ROLE_CANDIDATE_DECLARATIONS" -eq 1 ]] \
+  && [[ "$CHECK8B_TRACE_ROLE_SEMANTIC_SUPPORT_DECLARATIONS" -eq 1 ]] \
+  && [[ "$CHECK8B_TRACE_ROLE_RELATIONSHIP_DECLARATIONS" -eq 1 ]] \
+  && [[ "$CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS" -eq 1 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_FUNCTION_COUNT" -eq 4 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_STYLE_NAME_PARENS" -eq 1 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME" -eq 2 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_STYLE_FUNCTION_NAME_PARENS" -eq 1 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_BEGIN_COUNT" -eq 1 ]] \
+  && [[ "$CHECK8B_SOURCE_DECLARATION_END_COUNT" -eq 1 ]] \
+  && [[ "${#check8b_production_functions[@]}" -eq 4 ]] \
+  && [[ "$check8b_trace_assignment_form_failures" -eq 0 ]] \
+  && [[ "$check8b_trace_inert_assignment_failures" -eq 0 ]] \
+  && [[ "$check8b_trace_call_form_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B executable-text inventory recognizes name(), function name, and function name() declarations while nested braces and case syntax stay inside their function bodies"
+else
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  echo "BUG032_TI03_DECLARATION_STYLE_CLASSIFICATION_FAILED unknown=$CHECK8B_TRACE_ROLE_UNKNOWN_NAMES missing=$CHECK8B_TRACE_ROLE_MISSING_NAMES failures=$CHECK8B_TRACE_ROLE_CONTRACT_FAILURES candidateRoles=$CHECK8B_TRACE_ROLE_CANDIDATE_DECLARATIONS semanticSupportRoles=$CHECK8B_TRACE_ROLE_SEMANTIC_SUPPORT_DECLARATIONS relationshipRoles=$CHECK8B_TRACE_ROLE_RELATIONSHIP_DECLARATIONS entrypointRoles=$CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS assignmentFormFailures=$check8b_trace_assignment_form_failures inertAssignmentFailures=$check8b_trace_inert_assignment_failures callFormFailures=$check8b_trace_call_form_failures"
+fi
+
+check8b_trace_inert_role_labels=(comment single-quoted double-quoted rhs-assignment longer-identifier)
+check8b_trace_inert_role_failures=0
+for check8b_index in "${!check8b_trace_inert_role_labels[@]}"; do
+  check8b_trace_inert_role_mutant="$tmp_root/bug032-check8b-trace-role-inert-${check8b_trace_inert_role_labels[$check8b_index]}.sh"
+  cp "$check8b_trace_style_fixture" "$check8b_trace_inert_role_mutant"
+  case "${check8b_trace_inert_role_labels[$check8b_index]}" in
+    comment)
+      cat <<'EOF' >> "$check8b_trace_inert_role_mutant"
+_check8b_inert_comment_role() {
+  # _CHECK8B_WORD_RESULT=role _CHECK8B_SURFACE_RESULT=role case "$1" in
+  :
+}
+EOF
+      check8b_trace_inert_role_name="_check8b_inert_comment_role"
+      ;;
+    single-quoted)
+      cat <<'EOF' >> "$check8b_trace_inert_role_mutant"
+_check8b_inert_single_quoted_role() {
+  local inert='_CHECK8B_WORD_RESULT=role _CHECK8B_SURFACE_RESULT=role case "$1" in'
+  :
+}
+EOF
+      check8b_trace_inert_role_name="_check8b_inert_single_quoted_role"
+      ;;
+    double-quoted)
+      cat <<'EOF' >> "$check8b_trace_inert_role_mutant"
+_check8b_inert_double_quoted_role() {
+  local inert="_CHECK8B_WORD_RESULT=role _CHECK8B_SURFACE_RESULT=role case \"\$1\" in"
+  :
+}
+EOF
+      check8b_trace_inert_role_name="_check8b_inert_double_quoted_role"
+      ;;
+    rhs-assignment)
+      cat <<'EOF' >> "$check8b_trace_inert_role_mutant"
+_check8b_rhs_spoof() { local inert=_CHECK8B_WORD_RESULT=; }
+EOF
+      check8b_trace_inert_role_name="_check8b_rhs_spoof"
+      ;;
+    longer-identifier)
+      cat <<'EOF' >> "$check8b_trace_inert_role_mutant"
+_check8b_longer_identifier_spoof() {
+  local prefix_CHECK8B_WORD_RESULT=value
+  local _CHECK8B_WORD_RESULT_suffix=value
+  local prefix_CHECK8B_SURFACE_RESULT=value
+  local _CHECK8B_SURFACE_RESULT_suffix=value
+  local prefix_CHECK8B_CSV_RESULT=value
+  local _CHECK8B_CSV_RESULT_suffix=value
+}
+EOF
+      check8b_trace_inert_role_name="_check8b_longer_identifier_spoof"
+      ;;
+  esac
+  if check8b_trace_role_contract_build "$check8b_trace_inert_role_mutant" \
+    || [[ "${check8b_trace_roles[$check8b_trace_inert_role_name]:-missing}" != "unknown" ]] \
+    || [[ ",$CHECK8B_TRACE_ROLE_UNKNOWN_NAMES," != *",$check8b_trace_inert_role_name,"* ]]; then
+    check8b_trace_inert_role_failures=$((check8b_trace_inert_role_failures + 1))
+    echo "BUG032_TI03_INERT_ROLE_MARKER_ACCEPTED class=${check8b_trace_inert_role_labels[$check8b_index]} role=${check8b_trace_roles[$check8b_trace_inert_role_name]:-missing} unknown=$CHECK8B_TRACE_ROLE_UNKNOWN_NAMES"
+  fi
+done
+if [[ "$check8b_trace_inert_role_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B role derivation ignores inline comments plus single-quoted and double-quoted literal marker text"
+else
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  fail "BUG-032 Check 8B inert role-marker matrix has $check8b_trace_inert_role_failures false assignment(s)"
+fi
+
+check8b_trace_heredoc_labels=(unquoted quoted tab-stripping)
+check8b_trace_heredoc_failures=0
+for check8b_trace_heredoc_label in "${check8b_trace_heredoc_labels[@]}"; do
+  check8b_trace_heredoc_mutant="$tmp_root/bug032-check8b-trace-role-heredoc-$check8b_trace_heredoc_label.sh"
+  cp "$check8b_trace_style_fixture" "$check8b_trace_heredoc_mutant"
+  case "$check8b_trace_heredoc_label" in
+    unquoted)
+      check8b_trace_heredoc_name="_check8b_heredoc_unquoted_spoof"
+      cat <<'EOF' >> "$check8b_trace_heredoc_mutant"
+_check8b_heredoc_unquoted_spoof() {
+  : <<UNQUOTED_PAYLOAD
+_CHECK8B_WORD_RESULT=spoof
+_CHECK8B_SURFACE_RESULT=spoof
+_check8b_mutation_verb spoof
+UNQUOTED_PAYLOAD
+}
+EOF
+      ;;
+    quoted)
+      check8b_trace_heredoc_name="_check8b_heredoc_quoted_spoof"
+      cat <<'EOF' >> "$check8b_trace_heredoc_mutant"
+_check8b_heredoc_quoted_spoof() {
+  : <<'QUOTED_PAYLOAD'
+_CHECK8B_WORD_RESULT=spoof
+_CHECK8B_SURFACE_RESULT=spoof
+_check8b_surface_from 0 0
+QUOTED_PAYLOAD
+}
+EOF
+      ;;
+    tab-stripping)
+      check8b_trace_heredoc_name="_check8b_heredoc_tab_spoof"
+      cat <<'EOF' >> "$check8b_trace_heredoc_mutant"
+_check8b_heredoc_tab_spoof() {
+  : <<-TAB_PAYLOAD
+_CHECK8B_WORD_RESULT=spoof
+_CHECK8B_SURFACE_RESULT=spoof
+_check8b_target_after 0
+TAB_PAYLOAD
+}
+EOF
+      ;;
+  esac
+  check8b_trace_heredoc_contract_status=0
+  check8b_trace_role_contract_build "$check8b_trace_heredoc_mutant" \
+    || check8b_trace_heredoc_contract_status=$?
+  check8b_trace_heredoc_role="${check8b_trace_roles[$check8b_trace_heredoc_name]:-unknown}"
+  if [[ "$check8b_trace_heredoc_contract_status" -eq 0 ]]; then
+    check8b_trace_heredoc_failures=$((check8b_trace_heredoc_failures + 1))
+    echo "BUG032_TI03_HEREDOC_ROLE_CONTRACT_ACCEPTED class=$check8b_trace_heredoc_label role=$check8b_trace_heredoc_role"
+  fi
+  case "$check8b_trace_heredoc_role" in
+    candidate-semantic|semantic-support|relationship|entrypoint)
+      check8b_trace_heredoc_failures=$((check8b_trace_heredoc_failures + 1))
+      echo "BUG032_TI03_HEREDOC_ROLE_ASSIGNED class=$check8b_trace_heredoc_label role=$check8b_trace_heredoc_role"
+      ;;
+  esac
+done
+if [[ "$check8b_trace_heredoc_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B role derivation rejects quoted, unquoted, and tab-stripping heredoc payload markers"
+else
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  fail "BUG-032 Check 8B heredoc role-marker matrix has $check8b_trace_heredoc_failures false assignment(s)"
+fi
+
+check8b_trace_inert_entrypoint_mutant="$tmp_root/bug032-check8b-trace-role-inert-entrypoint.sh"
+cat <<'EOF' > "$check8b_trace_inert_entrypoint_mutant"
+_check8b_mutation_verb() {
+  _CHECK8B_WORD_RESULT="candidate"
+}
+_check8b_is_surface() {
+  case "$1" in
+    *) return 0 ;;
+  esac
+}
+_check8b_surface_from() {
+  _CHECK8B_SURFACE_RESULT="$1"
+}
+check8b_classify_line() {
+  # CHECK8B_CLASSIFICATION=owned CHECK8B_REASON=owned _check8b_mutation_verb probe
+  local inert_single='CHECK8B_VERB=owned CHECK8B_MUTATION_TARGET=owned _check8b_surface_from 0 0'
+  local inert_double="CHECK8B_DIRECT_SURFACES=owned CHECK8B_PRESERVED_SURFACES=owned CHECK8B_REASON=owned CHECK8B_UNRESOLVED_PHRASE=owned CHECK8B_BOUNDARY=owned CHECK8B_TOKEN_COUNT=0 CHECK8B_CANDIDATE_COUNT=0 _CHECK8B_TOKENS=() _CHECK8B_CANDIDATE_INDEXES=()"
+  local inert_classification=CHECK8B_CLASSIFICATION=owned
+  local inert_verb=CHECK8B_VERB=owned
+  local inert_target=CHECK8B_MUTATION_TARGET=owned
+  local inert_direct=CHECK8B_DIRECT_SURFACES=owned
+  local inert_preserved=CHECK8B_PRESERVED_SURFACES=owned
+  local inert_reason=CHECK8B_REASON=owned
+  local inert_unresolved=CHECK8B_UNRESOLVED_PHRASE=owned
+  local inert_boundary=CHECK8B_BOUNDARY=owned
+  local inert_token_count=CHECK8B_TOKEN_COUNT=0
+  local inert_candidate_count=CHECK8B_CANDIDATE_COUNT=0
+  local inert_tokens=_CHECK8B_TOKENS=owned
+  local inert_candidate_indexes=_CHECK8B_CANDIDATE_INDEXES=owned
+  local inert_candidate_helper=_check8b_mutation_verb
+  local inert_relationship_helper=_check8b_surface_from
+  printf '%s\n' _check8b_mutation_verb _check8b_is_surface _check8b_is_surface_head_at _check8b_surface_from _check8b_passive_surface _check8b_named_surface_before _check8b_target_after
+  return 0
+}
+EOF
+if check8b_trace_role_contract_build "$check8b_trace_inert_entrypoint_mutant" \
+  || [[ "${check8b_trace_roles[check8b_classify_line]:-missing}" != "unknown" ]] \
+  || [[ "$CHECK8B_TRACE_ENTRYPOINT_ASSIGNMENT_COUNT" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_ENTRYPOINT_CANDIDATE_COORDINATION" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_ENTRYPOINT_RELATIONSHIP_COORDINATION" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS" -ne 0 ]]; then
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  echo "BUG032_TI03_INERT_ENTRYPOINT_ACCEPTED role=${check8b_trace_roles[check8b_classify_line]:-missing} assignments=$CHECK8B_TRACE_ENTRYPOINT_ASSIGNMENT_COUNT candidateCoordination=$CHECK8B_TRACE_ENTRYPOINT_CANDIDATE_COORDINATION relationshipCoordination=$CHECK8B_TRACE_ENTRYPOINT_RELATIONSHIP_COORDINATION entrypointRoles=$CHECK8B_TRACE_ROLE_ENTRYPOINT_DECLARATIONS"
+else
+  pass "BUG-032 Check 8B exact entrypoint name remains insufficient without executable closed-result ownership and private-helper coordination"
+fi
+
+check8b_trace_missing_role_mutant="$tmp_root/bug032-check8b-trace-role-missing-role-mutant.sh"
+cat <<'EOF' > "$check8b_trace_missing_role_mutant"
+_check8b_candidate_probe() {
+  _CHECK8B_WORD_RESULT="candidate"
+}
+function _check8b_semantic_probe {
+  case "$1" in
+    *) return 0 ;;
+  esac
+}
+check8b_classify_line() {
+  return 0
+}
+EOF
+if check8b_trace_role_contract_build "$check8b_trace_missing_role_mutant"; then
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  echo 'BUG032_TI03_MISSING_RELATIONSHIP_ROLE_ACCEPTED'
+else
+  pass "BUG-032 Check 8B closed trace-role oracle rejects a source-derived inventory with no relationship role"
+fi
+
+if check8b_trace_role_contract_build "$check8b_classifier_file" \
+  && [[ "$check8b_trace_role_contract_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B trace roles form one closed classification over every production helper declaration"
+else
+  check8b_trace_role_contract_failures=$((check8b_trace_role_contract_failures + 1))
+  fail "BUG-032 Check 8B trace-role contract has $check8b_trace_role_contract_failures discriminator failure(s) (unknown=$CHECK8B_TRACE_ROLE_UNKNOWN_NAMES missing=$CHECK8B_TRACE_ROLE_MISSING_NAMES)"
+fi
+
+check8b_trace_classifier_calls() {
+  local declaration="$1"
+  local trace_file="$2"
+  local options_before=""
+  local options_after=""
+  local shopts_before=""
+  local shopts_after=""
+  local debug_trap_before=""
+  local debug_trap_after=""
+  local ifs_before="$IFS"
+  local pwd_before="$PWD"
+
+  : > "$trace_file"
+  options_before="$(set +o)"
+  shopts_before="$(shopt -p)"
+  debug_trap_before="$(trap -p DEBUG)"
+  (
+    set +e
+    set +u
+    set -T
+    check8b_trace_function=""
+    check8b_trace_role=""
+    check8b_trace_argument=""
+    check8b_trace_classify_status=0
+    # shellcheck disable=SC2154  # DEBUG expands these variables only after the assignments above
+    trap '
+      check8b_trace_function="${FUNCNAME[0]:-}"
+      if [[ "$check8b_trace_function" == _check8b_* ]] \
+        || [[ -n "${check8b_production_functions[$check8b_trace_function]:-}" ]]; then
+        check8b_trace_role="${check8b_trace_roles[$check8b_trace_function]:-unknown}"
+        check8b_trace_argument="${1:-}"
+        printf "TRACE\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+          "$check8b_trace_role" "$check8b_trace_function" "$LINENO" \
+          "${CHECK8B_TOKEN_COUNT:--1}" "${#_CHECK8B_TOKENS[@]}" \
+          "${CHECK8B_CANDIDATE_COUNT:--1}" "${#_CHECK8B_CANDIDATE_INDEXES[@]}" \
+          "${CHECK8B_CLASSIFICATION:-unset}" "${CHECK8B_REASON:-unset}" \
+          "$check8b_trace_argument" >> "$trace_file"
+      fi
+    ' DEBUG
+    bug032_check8b_classify "$declaration" >/dev/null 2>&1
+    check8b_trace_classify_status=$?
+    trap - DEBUG
+    set +T
+    printf 'RESULT\t%s\t%s\t%s\n' "$check8b_trace_classify_status" \
+      "${CHECK8B_CLASSIFICATION:-unset}" "${CHECK8B_REASON:-unset}" >> "$trace_file"
+    exit 0
+  )
+  check8b_trace_subshell_status=$?
+  options_after="$(set +o)"
+  shopts_after="$(shopt -p)"
+  debug_trap_after="$(trap -p DEBUG)"
+  CHECK8B_TRACE_ISOLATION_FAILURES=0
+  [[ "$check8b_trace_subshell_status" -eq 0 ]] \
+    || CHECK8B_TRACE_ISOLATION_FAILURES=$((CHECK8B_TRACE_ISOLATION_FAILURES + 1))
+  [[ "$options_before" == "$options_after" ]] \
+    || CHECK8B_TRACE_ISOLATION_FAILURES=$((CHECK8B_TRACE_ISOLATION_FAILURES + 1))
+  [[ "$shopts_before" == "$shopts_after" ]] \
+    || CHECK8B_TRACE_ISOLATION_FAILURES=$((CHECK8B_TRACE_ISOLATION_FAILURES + 1))
+  [[ "$debug_trap_before" == "$debug_trap_after" ]] \
+    || CHECK8B_TRACE_ISOLATION_FAILURES=$((CHECK8B_TRACE_ISOLATION_FAILURES + 1))
+  [[ "$ifs_before" == "$IFS" ]] \
+    || CHECK8B_TRACE_ISOLATION_FAILURES=$((CHECK8B_TRACE_ISOLATION_FAILURES + 1))
+  [[ "$pwd_before" == "$PWD" ]] \
+    || CHECK8B_TRACE_ISOLATION_FAILURES=$((CHECK8B_TRACE_ISOLATION_FAILURES + 1))
+  [[ "$CHECK8B_TRACE_ISOLATION_FAILURES" -eq 0 ]]
+}
+
+check8b_trace_row_schema_matches() {
+  [[ "$#" -eq 10 ]] || return 1
+  local trace_role="$1"
+  local trace_name="$2"
+  local trace_source_line="$3"
+  local trace_token_count="$4"
+  local trace_retained_tokens="$5"
+  local trace_candidate_count="$6"
+  local trace_retained_candidates="$7"
+  local trace_classification="$8"
+  local trace_reason="$9"
+  local trace_argument="${10}"
+
+  case "$trace_role" in
+    entrypoint|candidate-semantic|semantic-support|relationship|unknown) ;;
+    *) return 1 ;;
+  esac
+  [[ -n "$trace_name" ]] \
+    && [[ "$trace_source_line" =~ ^[0-9]+$ ]] \
+    && [[ "$trace_token_count" =~ ^-?[0-9]+$ ]] \
+    && [[ "$trace_retained_tokens" =~ ^[0-9]+$ ]] \
+    && [[ "$trace_candidate_count" =~ ^-?[0-9]+$ ]] \
+    && [[ "$trace_retained_candidates" =~ ^[0-9]+$ ]] \
+    && [[ -n "$trace_classification" ]] \
+    && [[ -n "$trace_reason" ]] \
+    && { [[ "$trace_role" == "entrypoint" ]] || [[ -n "$trace_argument" ]]; }
+}
+
+check8b_trace_is_calibrated() {
+  local trace_file="$1"
+  local expected_classification="$2"
+  local expected_reason="$3"
+  local trace_tag=""
+  local trace_role=""
+  local trace_function=""
+  local _trace_source_line=""
+  local _trace_token_count=""
+  local _trace_retained_tokens=""
+  local _trace_candidate_count=""
+  local _trace_retained_candidates=""
+  local _trace_classification=""
+  local _trace_reason=""
+  local _trace_argument=""
+  local result_status=""
+  local result_classification=""
+  local result_reason=""
+  local trace_rows=0
+  local entrypoint_rows=0
+  local candidate_rows=0
+  local semantic_support_rows=0
+  local relationship_rows=0
+  local unknown_rows=0
+  local result_rows=0
+  local schema_failures=0
+  local -A observed_functions=()
+
+  while IFS=$'\t' read -r trace_tag trace_role trace_function _trace_source_line \
+    _trace_token_count _trace_retained_tokens _trace_candidate_count \
+    _trace_retained_candidates _trace_classification _trace_reason \
+    _trace_argument; do
+    if [[ "$trace_tag" == "TRACE" ]]; then
+      trace_rows=$((trace_rows + 1))
+      check8b_trace_row_schema_matches \
+        "$trace_role" "$trace_function" "$_trace_source_line" \
+        "$_trace_token_count" "$_trace_retained_tokens" \
+        "$_trace_candidate_count" "$_trace_retained_candidates" \
+        "$_trace_classification" "$_trace_reason" "$_trace_argument" \
+        || schema_failures=$((schema_failures + 1))
+      observed_functions["$trace_function"]=1
+      case "$trace_role" in
+        entrypoint) entrypoint_rows=$((entrypoint_rows + 1)) ;;
+        candidate-semantic) candidate_rows=$((candidate_rows + 1)) ;;
+        semantic-support) semantic_support_rows=$((semantic_support_rows + 1)) ;;
+        relationship) relationship_rows=$((relationship_rows + 1)) ;;
+        unknown) unknown_rows=$((unknown_rows + 1)) ;;
+      esac
+    elif [[ "$trace_tag" == "RESULT" ]]; then
+      result_status="$trace_role"
+      result_classification="$trace_function"
+      result_reason="$_trace_source_line"
+      result_rows=$((result_rows + 1))
+    fi
+  done < "$trace_file"
+
+  [[ "$trace_rows" -gt 0 ]] \
+    && [[ "$entrypoint_rows" -gt 0 ]] \
+    && [[ "$candidate_rows" -gt 0 ]] \
+    && [[ "$semantic_support_rows" -gt 0 ]] \
+    && [[ "$relationship_rows" -gt 0 ]] \
+    && [[ "$unknown_rows" -eq 0 ]] \
+    && [[ "$schema_failures" -eq 0 ]] \
+    && [[ "${#observed_functions[@]}" -ge 3 ]] \
+    && [[ "$result_rows" -eq 1 ]] \
+    && [[ "$result_status" -eq 0 ]] \
+    && [[ "$result_classification" == "$expected_classification" ]] \
+    && [[ "$result_reason" == "$expected_reason" ]]
+}
+
+check8b_trace_schema_calibration_failures=0
+check8b_trace_schema_rejected_rows=0
+if ! check8b_trace_row_schema_matches \
+  candidate-semantic _check8b_mutation_verb 41 128 128 1 1 \
+  direct-positive direct ""; then
+  check8b_trace_schema_rejected_rows=$((check8b_trace_schema_rejected_rows + 1))
+fi
+if ! check8b_trace_row_schema_matches \
+  candidate-semantic _check8b_mutation_verb 41 128 128 1 1 \
+  direct-positive direct remove; then
+  check8b_trace_schema_calibration_failures=$((check8b_trace_schema_calibration_failures + 1))
+  echo 'BUG032_TI03_TRACE_SCHEMA_REJECTED_VALID_SEMANTIC_ROW'
+fi
+if ! check8b_trace_row_schema_matches \
+  entrypoint check8b_classify_line 42 128 128 1 1 \
+  direct-positive direct ""; then
+  check8b_trace_schema_calibration_failures=$((check8b_trace_schema_calibration_failures + 1))
+  echo 'BUG032_TI03_TRACE_SCHEMA_REJECTED_VALID_ENTRYPOINT_ROW'
+fi
+if [[ "$check8b_trace_schema_rejected_rows" -ne 1 ]]; then
+  check8b_trace_schema_calibration_failures=$((check8b_trace_schema_calibration_failures + 1))
+  echo "BUG032_TI03_TRACE_SCHEMA_EMPTY_ARGUMENT_NOT_COUNTED rejectedRows=$check8b_trace_schema_rejected_rows"
+fi
+if [[ "$check8b_trace_schema_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B trace schema counts a synthetic empty-argument semantic row as malformed"
+else
+  fail "BUG-032 Check 8B trace schema calibration has $check8b_trace_schema_calibration_failures failure(s)"
+fi
+
+check8b_trace_calibration_failures=$((
+  check8b_trace_role_contract_failures + check8b_trace_schema_calibration_failures
+))
+check8b_trace_inert_file="$tmp_root/bug032-check8b-inert-trace.log"
+: > "$check8b_trace_inert_file"
+if check8b_trace_is_calibrated "$check8b_trace_inert_file" direct-positive direct; then
+  check8b_trace_calibration_failures=$((check8b_trace_calibration_failures + 1))
+  echo 'BUG032_TI03_INERT_TRACE_ACCEPTED'
+else
+  pass "BUG-032 Check 8B trace calibration rejects an empty or inert trace"
+fi
+check8b_trace_unknown_file="$tmp_root/bug032-check8b-unknown-role-trace.log"
+check8b_trace_unknown_entrypoint=""
+check8b_trace_unknown_candidate=""
+check8b_trace_unknown_semantic=""
+check8b_trace_unknown_relationship=""
+for check8b_trace_unknown_name in "${!check8b_trace_roles[@]}"; do
+  case "${check8b_trace_roles[$check8b_trace_unknown_name]}" in
+    entrypoint) [[ -n "$check8b_trace_unknown_entrypoint" ]] || check8b_trace_unknown_entrypoint="$check8b_trace_unknown_name" ;;
+    candidate-semantic) [[ -n "$check8b_trace_unknown_candidate" ]] || check8b_trace_unknown_candidate="$check8b_trace_unknown_name" ;;
+    semantic-support) [[ -n "$check8b_trace_unknown_semantic" ]] || check8b_trace_unknown_semantic="$check8b_trace_unknown_name" ;;
+    relationship) [[ -n "$check8b_trace_unknown_relationship" ]] || check8b_trace_unknown_relationship="$check8b_trace_unknown_name" ;;
+  esac
+done
+printf 'TRACE\tentrypoint\t%s\t1\t0\t0\t0\t0\tdirect-positive\tdirect\tprobe\n' "$check8b_trace_unknown_entrypoint" > "$check8b_trace_unknown_file"
+printf 'TRACE\tcandidate-semantic\t%s\t2\t0\t0\t0\t0\tdirect-positive\tdirect\tprobe\n' "$check8b_trace_unknown_candidate" >> "$check8b_trace_unknown_file"
+printf 'TRACE\tsemantic-support\t%s\t3\t0\t0\t0\t0\tdirect-positive\tdirect\tprobe\n' "$check8b_trace_unknown_semantic" >> "$check8b_trace_unknown_file"
+printf 'TRACE\trelationship\t%s\t4\t0\t0\t0\t0\tdirect-positive\tdirect\tprobe\n' "$check8b_trace_unknown_relationship" >> "$check8b_trace_unknown_file"
+printf 'TRACE\tunknown\t_check8b_unclassified_runtime_probe\t5\t0\t0\t0\t0\tdirect-positive\tdirect\tprobe\n' >> "$check8b_trace_unknown_file"
+printf 'RESULT\t0\tdirect-positive\tdirect\n' >> "$check8b_trace_unknown_file"
+if check8b_trace_is_calibrated "$check8b_trace_unknown_file" direct-positive direct; then
+  check8b_trace_calibration_failures=$((check8b_trace_calibration_failures + 1))
+  echo 'BUG032_TI03_UNKNOWN_TRACED_HELPER_ACCEPTED'
+else
+  pass "BUG-032 Check 8B trace oracle fails closed when a traced private helper has no source-derived inventory role"
+fi
+check8b_token_admitted_trace_file="$tmp_root/bug032-check8b-token-admitted-trace.log"
+if ! check8b_trace_classifier_calls "$check8b_token_128" "$check8b_token_admitted_trace_file" \
+  || ! check8b_trace_is_calibrated "$check8b_token_admitted_trace_file" direct-positive direct; then
+  check8b_trace_calibration_failures=$((check8b_trace_calibration_failures + 1))
+  echo "BUG032_TI03_ADMITTED_TRACE_NOT_CALIBRATED functions=${#check8b_production_functions[@]} isolationFailures=${CHECK8B_TRACE_ISOLATION_FAILURES:-unavailable}"
+else
+  pass "BUG-032 Check 8B trace calibration observes the real entrypoint plus candidate-semantic, semantic-support, and relationship helpers on admitted direct input without caller DEBUG or functrace leakage"
+fi
+
+check8b_trace_count_semantic_roles_for_argument() {
+  local trace_file="$1"
+  local watched_argument="$2"
+  local trace_label="$3"
+  local trace_tag=""
+  local trace_role=""
+  local trace_name=""
+  local trace_source_line=""
+  local trace_token_count=""
+  local trace_retained_tokens=""
+  local trace_candidate_count=""
+  local trace_retained_candidates=""
+  local trace_classification=""
+  local trace_reason=""
+  local trace_argument=""
+
+  CHECK8B_TRACE_COUNT_CANDIDATE_SEMANTIC=0
+  CHECK8B_TRACE_COUNT_SEMANTIC_SUPPORT=0
+  CHECK8B_TRACE_COUNT_RELATIONSHIP=0
+  CHECK8B_TRACE_COUNT_ARGUMENT_CANDIDATE_SEMANTIC=0
+  CHECK8B_TRACE_COUNT_ARGUMENT_SEMANTIC_SUPPORT=0
+  CHECK8B_TRACE_COUNT_ARGUMENT_RELATIONSHIP=0
+  while IFS=$'\t' read -r trace_tag trace_role trace_name trace_source_line \
+    trace_token_count trace_retained_tokens trace_candidate_count \
+    trace_retained_candidates trace_classification trace_reason trace_argument; do
+    [[ "$trace_tag" == "TRACE" ]] || continue
+    case "$trace_role" in
+      candidate-semantic)
+        CHECK8B_TRACE_COUNT_CANDIDATE_SEMANTIC=$((CHECK8B_TRACE_COUNT_CANDIDATE_SEMANTIC + 1))
+        [[ "$trace_argument" != "$watched_argument" ]] \
+          || CHECK8B_TRACE_COUNT_ARGUMENT_CANDIDATE_SEMANTIC=$((CHECK8B_TRACE_COUNT_ARGUMENT_CANDIDATE_SEMANTIC + 1))
+        ;;
+      semantic-support)
+        CHECK8B_TRACE_COUNT_SEMANTIC_SUPPORT=$((CHECK8B_TRACE_COUNT_SEMANTIC_SUPPORT + 1))
+        [[ "$trace_argument" != "$watched_argument" ]] \
+          || CHECK8B_TRACE_COUNT_ARGUMENT_SEMANTIC_SUPPORT=$((CHECK8B_TRACE_COUNT_ARGUMENT_SEMANTIC_SUPPORT + 1))
+        ;;
+      relationship)
+        CHECK8B_TRACE_COUNT_RELATIONSHIP=$((CHECK8B_TRACE_COUNT_RELATIONSHIP + 1))
+        [[ "$trace_argument" != "$watched_argument" ]] \
+          || CHECK8B_TRACE_COUNT_ARGUMENT_RELATIONSHIP=$((CHECK8B_TRACE_COUNT_ARGUMENT_RELATIONSHIP + 1))
+        ;;
+    esac
+  done < "$trace_file"
+  printf 'BUG032_TI03_SEMANTIC_TRACE_COUNTS label=%s watchedArgument=%s candidateSemantic=%s semanticSupport=%s relationship=%s watchedCandidateSemantic=%s watchedSemanticSupport=%s watchedRelationship=%s\n' \
+    "$trace_label" "$watched_argument" \
+    "$CHECK8B_TRACE_COUNT_CANDIDATE_SEMANTIC" \
+    "$CHECK8B_TRACE_COUNT_SEMANTIC_SUPPORT" \
+    "$CHECK8B_TRACE_COUNT_RELATIONSHIP" \
+    "$CHECK8B_TRACE_COUNT_ARGUMENT_CANDIDATE_SEMANTIC" \
+    "$CHECK8B_TRACE_COUNT_ARGUMENT_SEMANTIC_SUPPORT" \
+    "$CHECK8B_TRACE_COUNT_ARGUMENT_RELATIONSHIP"
+}
+
+check8b_semantic_trace_mutant_failures=0
+check8b_semantic_trace_base="$tmp_root/bug032-check8b-semantic-trace-calibration-base.log"
+printf 'TRACE\tentrypoint\tcheck8b_classify_line\t1\t128\t128\t0\t0\tambiguous\ttoken-limit\tprobe\n' > "$check8b_semantic_trace_base"
+printf 'RESULT\t0\tambiguous\ttoken-limit\n' >> "$check8b_semantic_trace_base"
+check8b_trace_count_semantic_roles_for_argument "$check8b_semantic_trace_base" route base
+if [[ "$CHECK8B_TRACE_COUNT_CANDIDATE_SEMANTIC" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_COUNT_SEMANTIC_SUPPORT" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_COUNT_RELATIONSHIP" -ne 0 ]]; then
+  check8b_semantic_trace_mutant_failures=$((check8b_semantic_trace_mutant_failures + 1))
+  echo 'BUG032_TI03_SEMANTIC_TRACE_EMPTY_BASELINE_FAILED'
+fi
+for check8b_trace_mutant_role in candidate-semantic semantic-support relationship; do
+  check8b_semantic_trace_mutant="$tmp_root/bug032-check8b-semantic-trace-calibration-$check8b_trace_mutant_role.log"
+  cp "$check8b_semantic_trace_base" "$check8b_semantic_trace_mutant"
+  case "$check8b_trace_mutant_role" in
+    candidate-semantic) check8b_trace_mutant_name="${check8b_trace_unknown_candidate:-_check8b_mutation_verb}" ;;
+    semantic-support) check8b_trace_mutant_name="${check8b_trace_unknown_semantic:-_check8b_is_surface}" ;;
+    relationship) check8b_trace_mutant_name="${check8b_trace_unknown_relationship:-_check8b_surface_from}" ;;
+  esac
+  printf 'TRACE\t%s\t%s\t2\t128\t128\t9\t8\tambiguous\ttoken-limit\troute\n' \
+    "$check8b_trace_mutant_role" "$check8b_trace_mutant_name" >> "$check8b_semantic_trace_mutant"
+  check8b_trace_count_semantic_roles_for_argument \
+    "$check8b_semantic_trace_mutant" route "mutant-$check8b_trace_mutant_role"
+  check8b_trace_mutant_total=$((
+    CHECK8B_TRACE_COUNT_ARGUMENT_CANDIDATE_SEMANTIC
+    + CHECK8B_TRACE_COUNT_ARGUMENT_SEMANTIC_SUPPORT
+    + CHECK8B_TRACE_COUNT_ARGUMENT_RELATIONSHIP
+  ))
+  if [[ "$check8b_trace_mutant_total" -ne 1 ]]; then
+    check8b_semantic_trace_mutant_failures=$((check8b_semantic_trace_mutant_failures + 1))
+    echo "BUG032_TI03_SEMANTIC_TRACE_MUTANT_NOT_COUNTED role=$check8b_trace_mutant_role watchedTotal=$check8b_trace_mutant_total"
+  fi
+done
+if [[ "$check8b_semantic_trace_mutant_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B semantic trace counters are calibrated by candidate-semantic, semantic-support, and relationship mutant rows"
+else
+  fail "BUG-032 Check 8B semantic trace mutant calibration has $check8b_semantic_trace_mutant_failures failure(s)"
+fi
+
+bug032_check8b_classify "$check8b_token_128"
+check8b_token_128_array_length="${#_CHECK8B_TOKENS[@]}"
+check8b_token_128_failures=$((check8b_trace_calibration_failures + check8b_semantic_trace_mutant_failures))
+if ! check8b_helper_record_matches \
+  0 direct-positive remove route remove:route none direct none \
+  tokens=128/128 128 1 128 128 1; then
+  check8b_token_128_failures=$((check8b_token_128_failures + 1))
+  echo "BUG032_CR03_EXACT_MISMATCH classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON boundary=$CHECK8B_BOUNDARY tokenCount=$CHECK8B_TOKEN_COUNT retained=$check8b_token_128_array_length mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES"
+fi
+bug032_run_check8b_guard_case "token-exact-128" "$check8b_token_128"
+check8b_direct_correction_for remove:route
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md direct-positive route remove:route none direct tokens=128/128 \
+    run missing missing missing blocked "$CHECK8B_EXPECTED_CORRECTION"; then
+  check8b_token_128_failures=$((check8b_token_128_failures + 1))
+  echo "BUG032_CR03_EXACT_GUARD_RECORD_MISMATCH status=$BUG032_CHECK8B_GUARD_STATUS"
+fi
+
+bug032_check8b_classify "$check8b_token_129"
+check8b_token_129_array_length="${#_CHECK8B_TOKENS[@]}"
+check8b_token_129_route_seen=0
+for check8b_token in "${_CHECK8B_TOKENS[@]}"; do
+  [[ "$check8b_token" == "route" ]] && check8b_token_129_route_seen=1
+done
+if ! check8b_helper_record_matches \
+  0 ambiguous none unresolved none none token-limit none \
+  tokens=129/128:first-overflow 128 0 128 128 0 \
+  || [[ "$check8b_token_129_array_length" -ne 128 ]] \
+  || [[ "$check8b_token_129_route_seen" -ne 0 ]] \
+  || [[ "${_CHECK8B_TOKENS[127]:-}" != "remove" ]] \
+  ; then
+  check8b_token_128_failures=$((check8b_token_128_failures + 1))
+  echo "BUG032_CR03_OVERFLOW_MISMATCH classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON boundary=$CHECK8B_BOUNDARY tokenCount=$CHECK8B_TOKEN_COUNT retained=$check8b_token_129_array_length routeSeen=$check8b_token_129_route_seen lastToken=${_CHECK8B_TOKENS[127]:-none} candidateCount=$CHECK8B_CANDIDATE_COUNT retainedCandidates=${#_CHECK8B_CANDIDATE_INDEXES[@]} mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES"
+fi
+check8b_token_trace_file="$tmp_root/bug032-check8b-token-overflow-trace.log"
+if ! check8b_trace_classifier_calls "$check8b_token_129" "$check8b_token_trace_file"; then
+  check8b_token_128_failures=$((check8b_token_128_failures + 1))
+  echo "BUG032_TI03_TOKEN_TRACE_ISOLATION_FAILURE count=${CHECK8B_TRACE_ISOLATION_FAILURES:-unavailable}"
+fi
+check8b_token_entrypoint_entries=0
+check8b_token_overflow_decision_entries=0
+check8b_token_candidate_entries=0
+check8b_token_semantic_support_entries=0
+check8b_token_relationship_entries=0
+check8b_token_unknown_entries=0
+check8b_token_129_candidate_entries=0
+check8b_token_129_semantic_support_entries=0
+check8b_token_129_relationship_entries=0
+check8b_token_trace_schema_failures=0
+while IFS=$'\t' read -r check8b_trace_tag check8b_trace_role check8b_trace_name \
+  check8b_trace_source_line _check8b_trace_token_count _check8b_trace_retained_tokens \
+  check8b_trace_candidate_count check8b_trace_retained_candidates \
+  check8b_trace_classification check8b_trace_reason check8b_trace_argument; do
+  [[ "$check8b_trace_tag" == "TRACE" ]] || continue
+  if ! check8b_trace_row_schema_matches \
+    "$check8b_trace_role" "$check8b_trace_name" "$check8b_trace_source_line" \
+    "$_check8b_trace_token_count" "$_check8b_trace_retained_tokens" \
+    "$check8b_trace_candidate_count" "$check8b_trace_retained_candidates" \
+    "$check8b_trace_classification" "$check8b_trace_reason" \
+    "$check8b_trace_argument"; then
+    check8b_token_trace_schema_failures=$((check8b_token_trace_schema_failures + 1))
+  fi
+  case "$check8b_trace_role" in
+    entrypoint)
+      check8b_token_entrypoint_entries=$((check8b_token_entrypoint_entries + 1))
+      if [[ "$check8b_trace_classification" == "ambiguous" ]] \
+        && [[ "$check8b_trace_reason" == "token-limit" ]]; then
+        check8b_token_overflow_decision_entries=$((check8b_token_overflow_decision_entries + 1))
+      fi
+      ;;
+    candidate-semantic)
+      check8b_token_candidate_entries=$((check8b_token_candidate_entries + 1))
+      [[ "$check8b_trace_argument" != "route" ]] \
+        || check8b_token_129_candidate_entries=$((check8b_token_129_candidate_entries + 1))
+      ;;
+    semantic-support)
+      check8b_token_semantic_support_entries=$((check8b_token_semantic_support_entries + 1))
+      [[ "$check8b_trace_argument" != "route" ]] \
+        || check8b_token_129_semantic_support_entries=$((check8b_token_129_semantic_support_entries + 1))
+      ;;
+    relationship)
+      check8b_token_relationship_entries=$((check8b_token_relationship_entries + 1))
+      [[ "$check8b_trace_argument" != "route" ]] \
+        || check8b_token_129_relationship_entries=$((check8b_token_129_relationship_entries + 1))
+      ;;
+    unknown) check8b_token_unknown_entries=$((check8b_token_unknown_entries + 1)) ;;
+  esac
+done < "$check8b_token_trace_file"
+if [[ "$check8b_token_entrypoint_entries" -eq 0 ]] \
+  || [[ "$check8b_token_overflow_decision_entries" -eq 0 ]] \
+  || [[ "$check8b_token_candidate_entries" -ne 0 ]] \
+  || [[ "$check8b_token_semantic_support_entries" -ne 0 ]] \
+  || [[ "$check8b_token_relationship_entries" -ne 0 ]] \
+  || [[ "$check8b_token_129_candidate_entries" -ne 0 ]] \
+  || [[ "$check8b_token_129_semantic_support_entries" -ne 0 ]] \
+  || [[ "$check8b_token_129_relationship_entries" -ne 0 ]] \
+  || [[ "$check8b_token_unknown_entries" -ne 0 ]] \
+  || [[ "$check8b_token_trace_schema_failures" -ne 0 ]]; then
+  check8b_token_128_failures=$((check8b_token_128_failures + 1))
+  echo "BUG032_CR03_TOKEN_OVERFLOW_SEMANTIC_ENTRY entrypoint=$check8b_token_entrypoint_entries overflowDecision=$check8b_token_overflow_decision_entries candidateSemantic=$check8b_token_candidate_entries semanticSupport=$check8b_token_semantic_support_entries relationship=$check8b_token_relationship_entries token129CandidateSemantic=$check8b_token_129_candidate_entries token129SemanticSupport=$check8b_token_129_semantic_support_entries token129Relationship=$check8b_token_129_relationship_entries unknown=$check8b_token_unknown_entries schemaFailures=$check8b_token_trace_schema_failures expectedCandidateSemantic=0 expectedSemanticSupport=0 expectedRelationship=0"
+fi
+printf 'BUG032_TI03_TOKEN_OVERFLOW_TRACE_COUNTS entrypoint=%s overflowDecision=%s candidateSemantic=%s semanticSupport=%s relationship=%s token129CandidateSemantic=%s token129SemanticSupport=%s token129Relationship=%s unknown=%s schemaFailures=%s\n' \
+  "$check8b_token_entrypoint_entries" "$check8b_token_overflow_decision_entries" \
+  "$check8b_token_candidate_entries" "$check8b_token_semantic_support_entries" \
+  "$check8b_token_relationship_entries" "$check8b_token_129_candidate_entries" \
+  "$check8b_token_129_semantic_support_entries" "$check8b_token_129_relationship_entries" \
+  "$check8b_token_unknown_entries" "$check8b_token_trace_schema_failures"
+bug032_run_check8b_guard_case "token-overflow-129" "$check8b_token_129"
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md ambiguous unresolved none none token-limit \
+    tokens=129/128:first-overflow skipped skipped skipped skipped blocked \
+    'Split only this declaration before token 129 while preserving its meaning.'; then
+  check8b_token_128_failures=$((check8b_token_128_failures + 1))
+  echo "BUG032_CR03_OVERFLOW_GUARD_RECORD_MISMATCH status=$BUG032_CHECK8B_GUARD_STATUS"
+fi
+if [[ "$check8b_token_128_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B admits exactly 128 tokens and rejects token 129 before semantic scan"
+else
+  fail "BUG-032 Check 8B exact token-boundary matrix has $check8b_token_128_failures mismatch(es)"
+fi
+
+# BUG032-ENG-02 / SCN-032-016: candidate nine is an overflow sentinel. The
+# trailing-tail adversary proves candidate nine never reaches relationship
+# parsing, because candidate-limit must win over surface-tail.
+check8b_candidate_8='remove route remove path remove endpoint remove contract remove api remove url remove slug remove identifier'
+check8b_candidate_9="$check8b_candidate_8 deprecate redirect"
+check8b_candidate_9_tail="$check8b_candidate_8 deprecate route example"
+check8b_candidate_10_sentinel="$check8b_candidate_9 rename symbol"
+check8b_candidate_expected='remove:route,remove:path,remove:endpoint,remove:contract,remove:api,remove:url,remove:slug,remove:identifier'
+check8b_candidate_helper_failures="$check8b_semantic_trace_mutant_failures"
+check8b_candidate_guard_failures=0
+
+check8b_trace_count_after_candidate_discovery() {
+  local trace_file="$1"
+  local discovery_argument="$2"
+  local trace_label="$3"
+  local trace_tag=""
+  local trace_role=""
+  local trace_name=""
+  local trace_source_line=""
+  local trace_token_count=""
+  local trace_retained_tokens=""
+  local trace_candidate_count=""
+  local trace_retained_candidates=""
+  local trace_classification=""
+  local trace_reason=""
+  local trace_argument=""
+  local after_discovery=0
+
+  CHECK8B_TRACE_DISCOVERY_ENTRIES=0
+  CHECK8B_TRACE_PRE_DISCOVERY_SEMANTIC_SUPPORT=0
+  CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS=0
+  CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT=0
+  CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP=0
+  while IFS=$'\t' read -r trace_tag trace_role trace_name trace_source_line \
+    trace_token_count trace_retained_tokens trace_candidate_count \
+    trace_retained_candidates trace_classification trace_reason trace_argument; do
+    [[ "$trace_tag" == "TRACE" ]] || continue
+    if [[ "$trace_role" == "candidate-semantic" ]] \
+      && [[ "$trace_argument" == "$discovery_argument" ]]; then
+      CHECK8B_TRACE_DISCOVERY_ENTRIES=$((CHECK8B_TRACE_DISCOVERY_ENTRIES + 1))
+      after_discovery=1
+      continue
+    fi
+    if [[ "$after_discovery" -eq 0 ]]; then
+      [[ "$trace_role" != "semantic-support" ]] \
+        || CHECK8B_TRACE_PRE_DISCOVERY_SEMANTIC_SUPPORT=$((CHECK8B_TRACE_PRE_DISCOVERY_SEMANTIC_SUPPORT + 1))
+      continue
+    fi
+    case "$trace_role" in
+      candidate-semantic)
+        case "$trace_argument" in
+          rename|renames|renamed|renaming|remove|removes|removed|removing|move|moves|moved|moving|deprecate|deprecates|deprecated|deprecating)
+            CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS=$((CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS + 1))
+            ;;
+        esac
+        ;;
+      semantic-support)
+        CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT=$((CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT + 1))
+        ;;
+      relationship)
+        CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP=$((CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP + 1))
+        ;;
+    esac
+  done < "$trace_file"
+  printf 'BUG032_TI03_CANDIDATE_TRACE_COUNTS label=%s discoveryArgument=%s discoveryEntries=%s preDiscoverySemanticSupport=%s postDiscoveryCandidateVerbs=%s postDiscoverySemanticSupport=%s postDiscoveryRelationship=%s\n' \
+    "$trace_label" "$discovery_argument" "$CHECK8B_TRACE_DISCOVERY_ENTRIES" \
+    "$CHECK8B_TRACE_PRE_DISCOVERY_SEMANTIC_SUPPORT" \
+    "$CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS" \
+    "$CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT" \
+    "$CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP"
+}
+
+check8b_candidate_trace_order_calibration_failures=0
+check8b_candidate_trace_order_base="$tmp_root/bug032-check8b-candidate-trace-order-base.log"
+printf 'TRACE\tcandidate-semantic\t%s\t1\t18\t18\t9\t8\tambiguous\tcandidate-limit\tdeprecate\n' \
+  "${check8b_trace_unknown_candidate:-_check8b_mutation_verb}" > "$check8b_candidate_trace_order_base"
+printf 'TRACE\tentrypoint\tcheck8b_classify_line\t2\t18\t18\t9\t8\tambiguous\tcandidate-limit\tprobe\n' \
+  >> "$check8b_candidate_trace_order_base"
+printf 'RESULT\t0\tambiguous\tcandidate-limit\n' >> "$check8b_candidate_trace_order_base"
+check8b_trace_count_after_candidate_discovery "$check8b_candidate_trace_order_base" deprecate base
+if [[ "$CHECK8B_TRACE_DISCOVERY_ENTRIES" -ne 1 ]] \
+  || [[ "$CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT" -ne 0 ]] \
+  || [[ "$CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP" -ne 0 ]]; then
+  check8b_candidate_trace_order_calibration_failures=$((check8b_candidate_trace_order_calibration_failures + 1))
+  echo 'BUG032_TI03_CANDIDATE_TRACE_ORDER_BASELINE_FAILED'
+fi
+for check8b_trace_mutant_role in candidate-semantic semantic-support relationship; do
+  check8b_candidate_trace_order_mutant="$tmp_root/bug032-check8b-candidate-trace-order-$check8b_trace_mutant_role.log"
+  cp "$check8b_candidate_trace_order_base" "$check8b_candidate_trace_order_mutant"
+  case "$check8b_trace_mutant_role" in
+    candidate-semantic)
+      check8b_trace_mutant_name="${check8b_trace_unknown_candidate:-_check8b_mutation_verb}"
+      check8b_trace_mutant_argument="rename"
+      ;;
+    semantic-support)
+      check8b_trace_mutant_name="${check8b_trace_unknown_semantic:-_check8b_is_surface}"
+      check8b_trace_mutant_argument="route"
+      ;;
+    relationship)
+      check8b_trace_mutant_name="${check8b_trace_unknown_relationship:-_check8b_surface_from}"
+      check8b_trace_mutant_argument="9"
+      ;;
+  esac
+  printf 'TRACE\t%s\t%s\t3\t18\t18\t9\t8\tambiguous\tcandidate-limit\t%s\n' \
+    "$check8b_trace_mutant_role" "$check8b_trace_mutant_name" \
+    "$check8b_trace_mutant_argument" >> "$check8b_candidate_trace_order_mutant"
+  check8b_trace_count_after_candidate_discovery \
+    "$check8b_candidate_trace_order_mutant" deprecate "mutant-$check8b_trace_mutant_role"
+  check8b_trace_mutant_total=$((
+    CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS
+    + CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT
+    + CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP
+  ))
+  if [[ "$check8b_trace_mutant_total" -ne 1 ]]; then
+    check8b_candidate_trace_order_calibration_failures=$((check8b_candidate_trace_order_calibration_failures + 1))
+    echo "BUG032_TI03_CANDIDATE_TRACE_ORDER_MUTANT_NOT_COUNTED role=$check8b_trace_mutant_role postDiscoveryTotal=$check8b_trace_mutant_total"
+  fi
+done
+if [[ "$check8b_candidate_trace_order_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B ordered candidate trace oracle is calibrated by post-ninth candidate-semantic, semantic-support, and relationship mutant rows"
+else
+  check8b_candidate_helper_failures=$((check8b_candidate_helper_failures + check8b_candidate_trace_order_calibration_failures))
+  fail "BUG-032 Check 8B ordered candidate trace calibration has $check8b_candidate_trace_order_calibration_failures failure(s)"
+fi
+
+bug032_check8b_classify "$check8b_candidate_8"
+if ! check8b_helper_record_matches \
+  0 direct-positive remove route "$check8b_candidate_expected" none direct none \
+  candidates=8/8 16 8 16 16 8; then
+  check8b_candidate_helper_failures=$((check8b_candidate_helper_failures + 1))
+  echo "BUG032_ENG02_CANDIDATE_EXACT_MISMATCH classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON boundary=$CHECK8B_BOUNDARY candidateCount=$CHECK8B_CANDIDATE_COUNT retained=${#_CHECK8B_CANDIDATE_INDEXES[@]} mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES"
+fi
+bug032_run_check8b_guard_case "candidate-exact-8" "$check8b_candidate_8"
+check8b_direct_correction_for "$check8b_candidate_expected"
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md direct-positive route "$check8b_candidate_expected" none direct \
+    candidates=8/8 run missing missing missing blocked \
+    "$CHECK8B_EXPECTED_CORRECTION"; then
+  check8b_candidate_guard_failures=$((check8b_candidate_guard_failures + 1))
+  echo "BUG032_ENG02_CANDIDATE_EXACT_GUARD_RECORD_MISMATCH status=$BUG032_CHECK8B_GUARD_STATUS"
+fi
+
+check8b_candidate_admitted_trace_file="$tmp_root/bug032-check8b-candidate-admitted-trace.log"
+if ! check8b_trace_classifier_calls "$check8b_candidate_8" "$check8b_candidate_admitted_trace_file" \
+  || ! check8b_trace_is_calibrated "$check8b_candidate_admitted_trace_file" direct-positive direct; then
+  check8b_candidate_helper_failures=$((check8b_candidate_helper_failures + 1))
+  echo "BUG032_TI03_CANDIDATE_TRACE_NOT_CALIBRATED functions=${#check8b_production_functions[@]} isolationFailures=${CHECK8B_TRACE_ISOLATION_FAILURES:-unavailable}"
+else
+  pass "BUG-032 Check 8B trace calibration observes the real entrypoint plus candidate-semantic and relationship helpers on exactly eight candidates"
+fi
+
+check8b_candidate_overflow_token_counts=(18 19 20)
+for check8b_index in 0 1 2; do
+  if [[ "$check8b_index" -eq 0 ]]; then
+    check8b_line="$check8b_candidate_9"
+    check8b_slug="candidate-overflow-9"
+  elif [[ "$check8b_index" -eq 1 ]]; then
+    check8b_line="$check8b_candidate_9_tail"
+    check8b_slug="candidate-overflow-9-tail"
+  else
+    check8b_line="$check8b_candidate_10_sentinel"
+    check8b_slug="candidate-overflow-10th-sentinel"
+  fi
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 ambiguous remove unresolved none none candidate-limit none \
+    candidates=9/8:first-overflow \
+    "${check8b_candidate_overflow_token_counts[$check8b_index]}" 9 \
+    "${check8b_candidate_overflow_token_counts[$check8b_index]}" \
+    "${check8b_candidate_overflow_token_counts[$check8b_index]}" 8; then
+    check8b_candidate_helper_failures=$((check8b_candidate_helper_failures + 1))
+    echo "BUG032_ENG02_CANDIDATE_OVERFLOW_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON boundary=$CHECK8B_BOUNDARY candidateCount=$CHECK8B_CANDIDATE_COUNT retained=${#_CHECK8B_CANDIDATE_INDEXES[@]} mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES unresolvedPhrase=$CHECK8B_UNRESOLVED_PHRASE"
+  fi
+
+  check8b_candidate_trace_file="$tmp_root/bug032-check8b-$check8b_slug-trace.log"
+  if ! check8b_trace_classifier_calls "$check8b_line" "$check8b_candidate_trace_file"; then
+    check8b_candidate_helper_failures=$((check8b_candidate_helper_failures + 1))
+    echo "BUG032_TI03_CANDIDATE_TRACE_ISOLATION_FAILURE index=$check8b_index count=${CHECK8B_TRACE_ISOLATION_FAILURES:-unavailable}"
+  fi
+  check8b_candidate_entrypoint_entries=0
+  check8b_candidate_limit_decision_entries=0
+  check8b_candidate_semantic_entries=0
+  check8b_candidate_semantic_support_entries=0
+  check8b_candidate_relationship_entries=0
+  check8b_candidate_post_ninth_semantic_support_entries=0
+  check8b_candidate_post_ninth_relationship_entries=0
+  check8b_candidate_unknown_entries=0
+  check8b_candidate_ninth_seen=0
+  check8b_candidate_tenth_seen=0
+  check8b_candidate_ninth_discovered=0
+  check8b_candidate_trace_schema_failures=0
+  while IFS=$'\t' read -r check8b_trace_tag check8b_trace_role _check8b_trace_name \
+    _check8b_trace_source_line _check8b_trace_token_count _check8b_trace_retained_tokens \
+    _check8b_trace_candidate_count _check8b_trace_retained_candidates \
+    check8b_trace_classification check8b_trace_reason check8b_trace_argument; do
+    [[ "$check8b_trace_tag" == "TRACE" ]] || continue
+    if ! check8b_trace_row_schema_matches \
+      "$check8b_trace_role" "$_check8b_trace_name" "$_check8b_trace_source_line" \
+      "$_check8b_trace_token_count" "$_check8b_trace_retained_tokens" \
+      "$_check8b_trace_candidate_count" "$_check8b_trace_retained_candidates" \
+      "$check8b_trace_classification" "$check8b_trace_reason" \
+      "$check8b_trace_argument"; then
+      check8b_candidate_trace_schema_failures=$((check8b_candidate_trace_schema_failures + 1))
+    fi
+    case "$check8b_trace_role" in
+      entrypoint)
+        check8b_candidate_entrypoint_entries=$((check8b_candidate_entrypoint_entries + 1))
+        if [[ "$check8b_trace_classification" == "ambiguous" ]] \
+          && [[ "$check8b_trace_reason" == "candidate-limit" ]]; then
+          check8b_candidate_limit_decision_entries=$((check8b_candidate_limit_decision_entries + 1))
+        fi
+        ;;
+      candidate-semantic)
+        check8b_candidate_semantic_entries=$((check8b_candidate_semantic_entries + 1))
+        if [[ "$check8b_trace_argument" == "deprecate" ]]; then
+          check8b_candidate_ninth_seen=$((check8b_candidate_ninth_seen + 1))
+          check8b_candidate_ninth_discovered=1
+        fi
+        [[ "$check8b_trace_argument" == "rename" ]] \
+          && check8b_candidate_tenth_seen=$((check8b_candidate_tenth_seen + 1))
+        ;;
+      semantic-support)
+        check8b_candidate_semantic_support_entries=$((check8b_candidate_semantic_support_entries + 1))
+        [[ "$check8b_candidate_ninth_discovered" -eq 0 ]] \
+          || check8b_candidate_post_ninth_semantic_support_entries=$((check8b_candidate_post_ninth_semantic_support_entries + 1))
+        ;;
+      relationship)
+        check8b_candidate_relationship_entries=$((check8b_candidate_relationship_entries + 1))
+        [[ "$check8b_candidate_ninth_discovered" -eq 0 ]] \
+          || check8b_candidate_post_ninth_relationship_entries=$((check8b_candidate_post_ninth_relationship_entries + 1))
+        ;;
+      unknown) check8b_candidate_unknown_entries=$((check8b_candidate_unknown_entries + 1)) ;;
+    esac
+  done < "$check8b_candidate_trace_file"
+  check8b_trace_count_after_candidate_discovery \
+    "$check8b_candidate_trace_file" deprecate "$check8b_slug"
+  if [[ "$check8b_candidate_entrypoint_entries" -eq 0 ]] \
+    || [[ "$check8b_candidate_limit_decision_entries" -eq 0 ]] \
+    || [[ "$check8b_candidate_semantic_entries" -eq 0 ]] \
+    || [[ "$check8b_candidate_ninth_seen" -eq 0 ]] \
+    || [[ "$check8b_candidate_relationship_entries" -ne 0 ]] \
+    || [[ "$check8b_candidate_post_ninth_semantic_support_entries" -ne 0 ]] \
+    || [[ "$check8b_candidate_post_ninth_relationship_entries" -ne 0 ]] \
+    || [[ "$CHECK8B_TRACE_DISCOVERY_ENTRIES" -eq 0 ]] \
+    || [[ "$CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS" -ne "$check8b_candidate_tenth_seen" ]] \
+    || [[ "$CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT" -ne "$check8b_candidate_post_ninth_semantic_support_entries" ]] \
+    || [[ "$CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP" -ne "$check8b_candidate_post_ninth_relationship_entries" ]] \
+    || [[ "$check8b_candidate_unknown_entries" -ne 0 ]] \
+    || [[ "$check8b_candidate_trace_schema_failures" -ne 0 ]] \
+    || { [[ "$check8b_index" -eq 2 ]] && [[ "$check8b_candidate_tenth_seen" -ne 0 ]]; }; then
+    check8b_candidate_helper_failures=$((check8b_candidate_helper_failures + 1))
+    echo "BUG032_ENG02_CANDIDATE_OVERFLOW_RELATIONSHIP_ENTRY index=$check8b_index entrypoint=$check8b_candidate_entrypoint_entries limitDecision=$check8b_candidate_limit_decision_entries candidateSemantic=$check8b_candidate_semantic_entries semanticSupport=$check8b_candidate_semantic_support_entries ninthSeen=$check8b_candidate_ninth_seen tenthSeen=$check8b_candidate_tenth_seen postNinthSemanticSupport=$check8b_candidate_post_ninth_semantic_support_entries relationship=$check8b_candidate_relationship_entries postNinthRelationship=$check8b_candidate_post_ninth_relationship_entries orderedDiscovery=$CHECK8B_TRACE_DISCOVERY_ENTRIES orderedPostCandidateVerbs=$CHECK8B_TRACE_AFTER_DISCOVERY_CANDIDATE_VERBS orderedPostSemanticSupport=$CHECK8B_TRACE_AFTER_DISCOVERY_SEMANTIC_SUPPORT orderedPostRelationship=$CHECK8B_TRACE_AFTER_DISCOVERY_RELATIONSHIP unknown=$check8b_candidate_unknown_entries schemaFailures=$check8b_candidate_trace_schema_failures expectedPostNinthSemanticSupport=0 expectedRelationship=0 expectedTenthSeen=0"
+  fi
+  printf 'BUG032_TI03_CANDIDATE_OVERFLOW_TRACE_COUNTS index=%s slug=%s entrypoint=%s limitDecision=%s candidateSemantic=%s semanticSupport=%s ninthCandidateVerb=%s tenthCandidateVerb=%s postNinthSemanticSupport=%s relationship=%s postNinthRelationship=%s unknown=%s schemaFailures=%s\n' \
+    "$check8b_index" "$check8b_slug" "$check8b_candidate_entrypoint_entries" \
+    "$check8b_candidate_limit_decision_entries" "$check8b_candidate_semantic_entries" \
+    "$check8b_candidate_semantic_support_entries" "$check8b_candidate_ninth_seen" \
+    "$check8b_candidate_tenth_seen" "$check8b_candidate_post_ninth_semantic_support_entries" \
+    "$check8b_candidate_relationship_entries" "$check8b_candidate_post_ninth_relationship_entries" \
+    "$check8b_candidate_unknown_entries" "$check8b_candidate_trace_schema_failures"
+
+  bug032_run_check8b_guard_case "$check8b_slug" "$check8b_line"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md ambiguous unresolved none none candidate-limit \
+      candidates=9/8:first-overflow skipped skipped skipped skipped blocked \
+      'Split only this declaration so each declaration has at most eight candidates.'; then
+    check8b_candidate_guard_failures=$((check8b_candidate_guard_failures + 1))
+    echo "BUG032_ENG02_CANDIDATE_OVERFLOW_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+done
+if [[ "$check8b_candidate_helper_failures" -eq 0 ]] \
+  && [[ "$check8b_candidate_guard_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B admits exactly eight candidates and rejects candidate nine before relationship analysis"
+else
+  fail "BUG-032 Check 8B candidate-boundary matrix has helper=$check8b_candidate_helper_failures guard=$check8b_candidate_guard_failures mismatch(es)"
+fi
+
+# Invalid invocation and a real bounded-normalization failure are separate
+# paths. Only the control-byte case drives the real guard.
+CHECK8B_CLASSIFICATION=""
+CHECK8B_VERB=""
+CHECK8B_MUTATION_TARGET=""
+CHECK8B_DIRECT_SURFACES=""
+CHECK8B_PRESERVED_SURFACES=""
+CHECK8B_REASON=""
+CHECK8B_UNRESOLVED_PHRASE=""
+CHECK8B_BOUNDARY=""
+CHECK8B_TOKEN_COUNT=-1
+CHECK8B_CANDIDATE_COUNT=-1
+_CHECK8B_TOKENS=(stale-token-state)
+_CHECK8B_CLAUSE_IDS=(99)
+_CHECK8B_CANDIDATE_INDEXES=(99)
+set +e
+check8b_classify_line
+check8b_invalid_status=$?
+set -e
+CHECK8B_LAST_STATUS="$check8b_invalid_status"
+if check8b_helper_record_matches \
+  2 error none unavailable none none invalid-arguments none \
+  not-applicable 0 0 0 0 0; then
+  pass "BUG-032 Check 8B invalid invocation returns a complete invalid-arguments error record"
+else
+  fail "BUG-032 Check 8B invalid invocation record is incomplete (status=$check8b_invalid_status classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON verb=$CHECK8B_VERB mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES unresolvedPhrase=$CHECK8B_UNRESOLVED_PHRASE boundary=$CHECK8B_BOUNDARY tokenCount=$CHECK8B_TOKEN_COUNT candidateCount=$CHECK8B_CANDIDATE_COUNT retainedTokens=${#_CHECK8B_TOKENS[@]} retainedCandidates=${#_CHECK8B_CANDIDATE_INDEXES[@]})"
+fi
+
+check8b_normalization_error_line=$'Remove the public API route\001'
+set +e
+bug032_check8b_classify "$check8b_normalization_error_line"
+check8b_normalization_status=$?
+set -e
+check8b_normalization_helper_failures=0
+check8b_normalization_guard_failures=0
+if ! check8b_helper_record_matches \
+  2 error none unavailable none none normalization-error none \
+  not-applicable 0 0 0 0 0; then
+  check8b_normalization_helper_failures=$((check8b_normalization_helper_failures + 1))
+  echo "BUG032_ENG02_NORMALIZATION_HELPER_MISMATCH status=$check8b_normalization_status classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON verb=$CHECK8B_VERB mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES unresolvedPhrase=$CHECK8B_UNRESOLVED_PHRASE boundary=$CHECK8B_BOUNDARY tokenCount=$CHECK8B_TOKEN_COUNT candidateCount=$CHECK8B_CANDIDATE_COUNT retainedTokens=${#_CHECK8B_TOKENS[@]} retainedCandidates=${#_CHECK8B_CANDIDATE_INDEXES[@]}"
+fi
+bug032_run_check8b_guard_case "normalization-error" "$check8b_normalization_error_line"
+if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+  || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+    scopes.md error unavailable none none normalization-error not-applicable \
+    skipped skipped skipped skipped blocked \
+    'Rewrite only this declaration as one bounded plain-text sentence. Preserve its meaning, then rerun.'; then
+  check8b_normalization_guard_failures=$((check8b_normalization_guard_failures + 1))
+  echo "BUG032_ENG02_NORMALIZATION_GUARD_RECORD_MISMATCH status=$BUG032_CHECK8B_GUARD_STATUS"
+fi
+if [[ "$check8b_normalization_helper_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B normalization-error helper returns a complete closed error record"
+else
+  fail "BUG-032 Check 8B normalization-error helper has $check8b_normalization_helper_failures incomplete record(s)"
+fi
+
+check8b_combined_counter_gate_is_open() {
+  [[ "$#" -eq 4 ]] \
+    && [[ "$1" -eq 0 ]] \
+    && [[ "$2" -eq 0 ]] \
+    && [[ "$3" -eq 0 ]] \
+    && [[ "$4" -eq 0 ]]
+}
+
+check8b_combined_counter_calibration_failures=0
+if ! check8b_combined_counter_gate_is_open 0 0 0 0; then
+  check8b_combined_counter_calibration_failures=$((check8b_combined_counter_calibration_failures + 1))
+  echo 'BUG032_TI06_ZERO_COUNTER_VECTOR_REJECTED'
+fi
+check8b_combined_counter_vectors=('1 0 0 0' '0 1 0 0' '0 0 1 0' '0 0 0 1')
+for check8b_combined_counter_vector in "${check8b_combined_counter_vectors[@]}"; do
+  read -r check8b_counter_candidate_helper check8b_counter_candidate_guard \
+    check8b_counter_normalization_helper check8b_counter_normalization_guard \
+    <<< "$check8b_combined_counter_vector"
+  if check8b_combined_counter_gate_is_open \
+    "$check8b_counter_candidate_helper" "$check8b_counter_candidate_guard" \
+    "$check8b_counter_normalization_helper" "$check8b_counter_normalization_guard"; then
+    check8b_combined_counter_calibration_failures=$((check8b_combined_counter_calibration_failures + 1))
+    echo "BUG032_TI06_NONZERO_COUNTER_VECTOR_ACCEPTED vector=$check8b_combined_counter_vector"
+  fi
+done
+if [[ "$check8b_combined_counter_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B combined candidate and normalization gate requires all four counters to be zero"
+else
+  fail "BUG-032 Check 8B combined counter-gate calibration has $check8b_combined_counter_calibration_failures failure(s)"
+fi
+
+if check8b_combined_counter_gate_is_open \
+  "$check8b_candidate_helper_failures" "$check8b_candidate_guard_failures" \
+  "$check8b_normalization_helper_failures" "$check8b_normalization_guard_failures"; then
+  pass "BUG-032 Check 8B guard fails closed on candidate-limit and normalization-error"
+else
+  fail "BUG-032 Check 8B candidate-limit/normalization-error matrix has candidateHelper=$check8b_candidate_helper_failures candidateGuard=$check8b_candidate_guard_failures normalizationHelper=$check8b_normalization_helper_failures normalizationGuard=$check8b_normalization_guard_failures mismatch(es)"
+fi
+
+# One- and two-direct-surface mixed declarations must preserve declaration
+# order, keep route only in the preserved set, and run each scope-level impact
+# requirement once for the complete direct set.
+check8b_mixed_lines=(
+  'Preserve the public API route while removing the legacy redirect'
+  'Preserve the public route while removing the legacy redirect and renaming the endpoint from v1 to v2.'
+)
+check8b_mixed_direct_sets=('remove:redirect' 'remove:redirect,rename:endpoint')
+check8b_mixed_token_counts=(10 17)
+check8b_mixed_candidate_counts=(1 2)
+check8b_mixed_failures=0
+for check8b_index in "${!check8b_mixed_lines[@]}"; do
+  check8b_line="${check8b_mixed_lines[$check8b_index]}"
+  check8b_expected_direct="${check8b_mixed_direct_sets[$check8b_index]}"
+  bug032_check8b_classify "$check8b_line"
+  if ! check8b_helper_record_matches \
+    0 mixed-surface remove redirect "$check8b_expected_direct" route mixed none \
+    not-applicable "${check8b_mixed_token_counts[$check8b_index]}" \
+    "${check8b_mixed_candidate_counts[$check8b_index]}" \
+    "${check8b_mixed_token_counts[$check8b_index]}" \
+    "${check8b_mixed_token_counts[$check8b_index]}" \
+    "${check8b_mixed_candidate_counts[$check8b_index]}"; then
+    check8b_mixed_failures=$((check8b_mixed_failures + 1))
+    echo "BUG032_ENG02_MIXED_MISMATCH index=$check8b_index classification=$CHECK8B_CLASSIFICATION reason=$CHECK8B_REASON mutationTarget=$CHECK8B_MUTATION_TARGET directSurfaces=$CHECK8B_DIRECT_SURFACES preservedSurfaces=$CHECK8B_PRESERVED_SURFACES"
+  fi
+  bug032_run_check8b_guard_case "mixed-all-three-$check8b_index" "$check8b_line"
+  check8b_direct_correction_for "$check8b_expected_direct"
+  if [[ "$BUG032_CHECK8B_GUARD_STATUS" -eq 0 ]] \
+    || ! check8b_guard_record_matches "$BUG032_CHECK8B_GUARD_LOG" \
+      scopes.md mixed-surface redirect "$check8b_expected_direct" route mixed \
+      not-applicable run missing missing missing blocked \
+      "$CHECK8B_EXPECTED_CORRECTION"; then
+    check8b_mixed_failures=$((check8b_mixed_failures + 1))
+    echo "BUG032_ENG02_MIXED_GUARD_RECORD_MISMATCH index=$check8b_index status=$BUG032_CHECK8B_GUARD_STATUS"
+  fi
+done
+if [[ "$check8b_mixed_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B mixed surfaces run all three requirements for every direct surface only"
+else
+  fail "BUG-032 Check 8B mixed-surface all-three matrix has $check8b_mixed_failures mismatch(es)"
+fi
+
+# BUG032-ENG-01: inspect the exact extracted production block, not a copied
+# implementation. Arithmetic expansion is allowed; command substitution,
+# process substitution, pipelines, external normalizers, and child shells are
+# forbidden in the per-line helper path.
+check8b_sanitize_structural_line() {
+  local input_line="$1"
+  local input_length="${#input_line}"
+  local index=0
+  local character=""
+  local next_character=""
+  local following_character=""
+  local previous_character=""
+  local quote_state="plain"
+  local arithmetic_depth=0
+  local conditional_depth=0
+
+  CHECK8B_STRUCTURAL_CODE=""
+  CHECK8B_STRUCTURAL_PROCESS_SYNTAX=0
+  CHECK8B_STRUCTURAL_UNCLOSED_QUOTE=0
+  while [[ "$index" -lt "$input_length" ]]; do
+    character="${input_line:$index:1}"
+    next_character=""
+    following_character=""
+    [[ $((index + 1)) -lt "$input_length" ]] && next_character="${input_line:$((index + 1)):1}"
+    [[ $((index + 2)) -lt "$input_length" ]] && following_character="${input_line:$((index + 2)):1}"
+
+    case "$quote_state" in
+      plain)
+        if [[ "$arithmetic_depth" -gt 0 ]]; then
+          if [[ "$character" == '$' && "$next_character" == '(' && "$following_character" != '(' ]] \
+            || [[ "$character" == '<' && "$next_character" == '(' ]] \
+            || [[ "$character" == '>' && "$next_character" == '(' ]] \
+            || [[ "$character" == '`' ]]; then
+            CHECK8B_STRUCTURAL_PROCESS_SYNTAX=1
+          fi
+          if [[ "$character" == '(' ]]; then
+            arithmetic_depth=$((arithmetic_depth + 1))
+          elif [[ "$character" == ')' ]]; then
+            arithmetic_depth=$((arithmetic_depth - 1))
+          fi
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE "
+          index=$((index + 1))
+          continue
+        fi
+        if [[ "$conditional_depth" -gt 0 ]]; then
+          if [[ "$character" == '$' && "$next_character" == '(' && "$following_character" != '(' ]] \
+            || [[ "$character" == '<' && "$next_character" == '(' ]] \
+            || [[ "$character" == '>' && "$next_character" == '(' ]] \
+            || [[ "$character" == '`' ]]; then
+            CHECK8B_STRUCTURAL_PROCESS_SYNTAX=1
+          fi
+          if [[ "$character" == ']' && "$next_character" == ']' ]]; then
+            CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE  "
+            conditional_depth=0
+            index=$((index + 2))
+            continue
+          fi
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE "
+          index=$((index + 1))
+          continue
+        fi
+        if [[ "$character" == "\\" ]]; then
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE  "
+          index=$((index + 2))
+          continue
+        fi
+        if [[ "$character" == "'" ]]; then
+          quote_state="single"
+          index=$((index + 1))
+          continue
+        fi
+        if [[ "$character" == '"' ]]; then
+          quote_state="double"
+          index=$((index + 1))
+          continue
+        fi
+        if [[ "$character" == "#" ]]; then
+          previous_character=""
+          [[ "$index" -gt 0 ]] && previous_character="${input_line:$((index - 1)):1}"
+          if [[ "$index" -eq 0 ]] || [[ "$previous_character" =~ [[:space:]\;\&\|\(\)] ]]; then
+            break
+          fi
+        fi
+        if [[ "$character" == '$' && "$next_character" == '(' ]]; then
+          if [[ "$following_character" == '(' ]]; then
+            arithmetic_depth=2
+            CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE   "
+            index=$((index + 3))
+            continue
+          fi
+          CHECK8B_STRUCTURAL_PROCESS_SYNTAX=1
+        elif [[ "$character" == '(' && "$next_character" == '(' ]]; then
+          arithmetic_depth=2
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE  "
+          index=$((index + 2))
+          continue
+        elif [[ "$character" == '[' && "$next_character" == '[' ]]; then
+          conditional_depth=1
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE  "
+          index=$((index + 2))
+          continue
+        elif [[ "$character" == '<' && "$next_character" == '(' ]] \
+          || [[ "$character" == '>' && "$next_character" == '(' ]] \
+          || [[ "$character" == '`' ]]; then
+          CHECK8B_STRUCTURAL_PROCESS_SYNTAX=1
+        fi
+        CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE$character"
+        ;;
+      single)
+        if [[ "$character" == "'" ]]; then
+          quote_state="plain"
+        elif [[ "$character" =~ [[:space:]\;\&\|\(\)\{\}] ]]; then
+          CHECK8B_STRUCTURAL_CODE="${CHECK8B_STRUCTURAL_CODE}_"
+        else
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE$character"
+        fi
+        ;;
+      double)
+        if [[ "$character" == "\\" ]]; then
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE  "
+          index=$((index + 2))
+          continue
+        fi
+        if [[ "$character" == '"' ]]; then
+          quote_state="plain"
+        elif [[ "$character" == '`' ]]; then
+          CHECK8B_STRUCTURAL_PROCESS_SYNTAX=1
+        elif [[ "$character" == '$' && "$next_character" == '(' && "$following_character" != '(' ]]; then
+          CHECK8B_STRUCTURAL_PROCESS_SYNTAX=1
+        elif [[ "$character" =~ [[:space:]\;\&\|\(\)\{\}] ]]; then
+          CHECK8B_STRUCTURAL_CODE="${CHECK8B_STRUCTURAL_CODE}_"
+        else
+          CHECK8B_STRUCTURAL_CODE="$CHECK8B_STRUCTURAL_CODE$character"
+        fi
+        ;;
+    esac
+    index=$((index + 1))
+  done
+  [[ "$quote_state" == "plain" ]] || CHECK8B_STRUCTURAL_UNCLOSED_QUOTE=1
+}
+
+declare -A check8b_structural_allowed_builtins=()
+declare -A check8b_structural_allowed_keywords=()
+for check8b_structural_word in \
+  : true false printf read return break continue shift local declare typeset readonly unset; do
+  check8b_structural_allowed_builtins["$check8b_structural_word"]=1
+done
+check8b_structural_keyword_words=(
+  'if' 'then' 'elif' 'else' 'fi' 'case' 'in' 'esac' 'for' 'select'
+  'while' 'until' 'do' 'done' 'function' '{' '}'
+)
+for check8b_structural_word in "${check8b_structural_keyword_words[@]}"; do
+  check8b_structural_allowed_keywords["$check8b_structural_word"]=1
+done
+unset check8b_structural_word check8b_structural_keyword_words
+
+check8b_structural_command_is_allowed() {
+  local command_word="$1"
+
+  [[ "$command_word" != */* ]] || return 1
+  if [[ -n "${check8b_production_functions[$command_word]:-}" ]]; then
+    return 0
+  fi
+  [[ -n "${check8b_structural_allowed_builtins[$command_word]:-}" ]] && return 0
+  return 1
+}
+
+check8b_structural_segment_is_clean() {
+  local segment="$1"
+  local allow_case_arm="${2:-0}"
+  local function_prefix=""
+  local syntax_prefix=""
+  local command_word=""
+  local case_header_pattern='^case[[:space:]]+.+[[:space:]]+in([[:space:]]+|$)'
+  local case_arm_pattern='^[^[:space:]()=|]+([[:space:]]*\|[[:space:]]*[^[:space:]()=|]+)*[[:space:]]*\)[[:space:]]*'
+  local assignment_pattern='^[a-zA-Z_][a-zA-Z0-9_]*(\[[^]]+\])?[[:space:]]*\+?=[^[:space:]]*([[:space:]]+|$)'
+
+  segment="${segment#"${segment%%[![:space:]]*}"}"
+  segment="${segment%"${segment##*[![:space:]]}"}"
+  [[ -n "$segment" ]] || return 0
+
+  if check8b_parse_function_declaration "$segment"; then
+    function_prefix="${segment%"$CHECK8B_DECLARATION_REMAINDER"}"
+    segment="${segment#"$function_prefix"}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    [[ -n "$segment" ]] || return 0
+  fi
+
+  if [[ "$segment" =~ $case_header_pattern ]]; then
+    syntax_prefix="${BASH_REMATCH[0]}"
+    segment="${segment#"$syntax_prefix"}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    [[ -n "$segment" ]] || return 0
+  fi
+  if [[ "$allow_case_arm" -eq 1 ]] && [[ "$segment" =~ $case_arm_pattern ]]; then
+    syntax_prefix="${BASH_REMATCH[0]}"
+    segment="${segment#"$syntax_prefix"}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    [[ -n "$segment" ]] || return 0
+  fi
+
+  if [[ "${segment//||/}" == *'|'* ]]; then
+    CHECK8B_STRUCTURAL_REASON="pipeline"
+    return 1
+  fi
+  if [[ "${segment//&&/}" == *'&'* ]]; then
+    CHECK8B_STRUCTURAL_REASON="background-process"
+    return 1
+  fi
+
+  while :; do
+    if [[ -n "${check8b_structural_allowed_keywords[$segment]:-}" ]]; then
+      return 0
+    fi
+    case "$segment" in
+      '!'[[:space:]]*) segment="${segment#!}" ;;
+      if[[:space:]]*|elif[[:space:]]*|while[[:space:]]*|until[[:space:]]*) segment="${segment#* }" ;;
+      then[[:space:]]*|else[[:space:]]*|do[[:space:]]*) segment="${segment#* }" ;;
+      '{'[[:space:]]*) segment="${segment#\{}" ;;
+      '}'[[:space:]]*) segment="${segment#\}}" ;;
+      for[[:space:]]*|select[[:space:]]*) return 0 ;;
+      '}'|'{'|'[['*|'(('*|'$(( '*|'$((('*|'')
+        return 0
+        ;;
+      *) break ;;
+    esac
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+  done
+
+  while [[ "$segment" =~ $assignment_pattern ]]; do
+    segment="${segment#"${BASH_REMATCH[0]}"}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+  done
+  [[ -n "$segment" ]] || return 0
+  command_word="${segment%%[[:space:]]*}"
+  command_word="${command_word%;}"
+  command_word="${command_word#\{}"
+  command_word="${command_word%\}}"
+  [[ -n "$command_word" ]] || return 0
+  if [[ "$command_word" == '$'* ]]; then
+    CHECK8B_STRUCTURAL_REASON="dynamic-command-head:$command_word"
+    return 1
+  fi
+  while [[ "$command_word" == "command" || "$command_word" == "builtin" ]]; do
+    segment="${segment#"$command_word"}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    if [[ -z "$segment" ]]; then
+      CHECK8B_STRUCTURAL_REASON="incomplete-command-prefix:$command_word"
+      return 1
+    fi
+    command_word="${segment%%[[:space:]]*}"
+    command_word="${command_word%;}"
+  done
+  if ! check8b_structural_command_is_allowed "$command_word"; then
+    CHECK8B_STRUCTURAL_REASON="command-not-allowlisted:$command_word"
+    return 1
+  fi
+  return 0
+}
+
+check8b_structural_line_is_clean() {
+  local source_line="$1"
+  local code=""
+  local index=0
+  local character=""
+  local next_character=""
+  local previous_nonspace=""
+  local remaining_code=""
+  local function_parens_pattern='^\([[:space:]]*\)[[:space:]]*\{'
+  local standalone_case_arm_pattern='^[[:space:]]*[^[:space:]()=|]+([[:space:]]*\|[[:space:]]*[^[:space:]()=|]+)*[[:space:]]*\)([[:space:]]+|$)'
+  local segment=""
+  local case_context=0
+  local segment_trimmed=""
+  local -a segments=()
+
+  CHECK8B_STRUCTURAL_REASON=""
+  check8b_sanitize_structural_line "$source_line"
+  code="$CHECK8B_STRUCTURAL_CODE"
+  if [[ "$CHECK8B_STRUCTURAL_PROCESS_SYNTAX" -ne 0 ]]; then
+    CHECK8B_STRUCTURAL_REASON="command-or-process-substitution"
+    return 1
+  fi
+  if [[ "$CHECK8B_STRUCTURAL_UNCLOSED_QUOTE" -ne 0 ]]; then
+    CHECK8B_STRUCTURAL_REASON="unclosed-quote"
+    return 1
+  fi
+  [[ "$code" =~ $standalone_case_arm_pattern ]] && case_context=1
+
+  for ((index = 0; index < ${#code}; index++)); do
+    character="${code:$index:1}"
+    next_character=""
+    [[ $((index + 1)) -lt ${#code} ]] && next_character="${code:$((index + 1)):1}"
+    if [[ "$character" == '(' ]]; then
+      previous_nonspace="${code:0:$index}"
+      previous_nonspace="${previous_nonspace%"${previous_nonspace##*[![:space:]]}"}"
+      previous_nonspace="${previous_nonspace: -1}"
+      remaining_code="${code:$index}"
+      if [[ "$previous_nonspace" != '=' ]] \
+        && [[ "$next_character" != ')' ]] \
+        && [[ ! "$remaining_code" =~ $function_parens_pattern ]]; then
+        CHECK8B_STRUCTURAL_REASON="subshell-group"
+        return 1
+      fi
+    fi
+  done
+
+  segment=""
+  for ((index = 0; index < ${#code}; index++)); do
+    character="${code:$index:1}"
+    next_character=""
+    [[ $((index + 1)) -lt ${#code} ]] && next_character="${code:$((index + 1)):1}"
+    if [[ "$character" == ';' ]]; then
+      segments+=("$segment")
+      segment=""
+      [[ "$next_character" == ';' ]] && index=$((index + 1))
+    elif [[ "$character" == '&' && "$next_character" == '&' ]] \
+      || [[ "$character" == '|' && "$next_character" == '|' ]]; then
+      segments+=("$segment")
+      segment=""
+      index=$((index + 1))
+    else
+      segment="$segment$character"
+    fi
+  done
+  segments+=("$segment")
+  for segment in "${segments[@]}"; do
+    segment_trimmed="${segment#"${segment%%[![:space:]]*}"}"
+    if [[ "$segment_trimmed" =~ ^case[[:space:]]+.+[[:space:]]+in([[:space:]]+|$) ]]; then
+      case_context=1
+    fi
+    check8b_structural_segment_is_clean "$segment" "$case_context" || return 1
+    if [[ "$case_context" -eq 1 ]] && [[ "$segment_trimmed" != case\ * ]]; then
+      case_context=0
+    fi
+  done
+  return 0
+}
+
+check8b_structural_oracle_failures=0
+check8b_structural_safe_lines=(
+  '    # /usr/bin/tr input | /usr/bin/sed output'
+  '# /usr/bin/tr input|/usr/bin/sed output'
+  'local value=plain # /opt/homebrew/bin/awk input | grep marker'
+  '    local value=plain # inline /usr/bin/mystery input $(forbidden)'
+  'route|path|endpoint) return 0 ;;'
+  'route | path) return 0 ;;'
+  'while|before|after|when|using|via|through|unless|during|because|and|or|but|yet|however|although|from|to|into|onto|as)'
+  'route) return 0 ;;'
+  '*) return 1 ;;'
+  'case "$token" in route | path) return 0 ;; esac'
+  'local count=$((count + 1))'
+  'local masked=$(( (mask | 4) & 7 ^ 2 ))'
+  'local masked=$((mask | 4)) # bitwise pipe is arithmetic, not a process pipeline'
+  'local count="${#values[@]}"'
+  'local values=(one two three)'
+  'elif [[ -n "$left" && ( -n "$right" || -n "$other" ) ]]; then'
+  '_check8b_helper() {'
+  'printf -v result "%s" value'
+  'LC_ALL=C read -r token'
+  '_check8b_mutation_verb "$token"'
+)
+for check8b_source_line in "${check8b_structural_safe_lines[@]}"; do
+  if ! check8b_structural_line_is_clean "$check8b_source_line"; then
+    check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_SAFE_REJECTED reason=$CHECK8B_STRUCTURAL_REASON source=$check8b_source_line"
+  fi
+done
+
+check8b_structural_bad_labels=(
+  spaced-pipeline
+  compact-pipeline
+  standalone-case-arm-pipeline
+  standalone-subshell
+  line-only-open-parenthesis
+  conditional-followed-subshell
+  conditional-semicolon-subshell
+  command-substitution
+  backtick-substitution
+  input-process-substitution
+  output-process-substitution
+  quoted-unknown-command
+  quoted-absolute-executable
+  assignment-prefixed-external
+  command-prefix-external
+  builtin-prefix-external
+  variable-command-head
+  unknown-external-command
+  indented-external-before-comment
+  inline-external-before-comment
+  brace-group-external
+  inline-case-absolute-external
+  inline-function-absolute-external
+  inline-function-parens-unknown-external
+  command-argument-closing-paren-pipeline
+)
+check8b_structural_bad_lines=(
+  'printf x | tr x y'
+  'printf x|/usr/bin/tr x y'
+  'route|path) printf x | tr x y'
+  '( printf x )'
+  '('
+  '[[ -n "$value" ]] && ( printf x )'
+  'if true; then ( printf x ); fi'
+  'value="$(printf x)"'
+  'value=`printf x`'
+  'consume <(printf x)'
+  'consume >(printf x)'
+  "'mystery-normalizer' input"
+  '"/usr/bin/printf" input'
+  'LC_ALL=C tr input'
+  'command tr input'
+  'builtin tr input'
+  '"$normalizer" input'
+  'mystery-normalizer input'
+  '    mystery-normalizer input # an inline comment cannot hide the command head'
+  'local value=plain; mystery-normalizer input # command before inline comment'
+  '{ mystery-normalizer input; }'
+  'case "$token" in route | path) /usr/bin/tr input output ;; esac'
+  'function _check8b_inline_probe { /usr/bin/tr input output; }'
+  'function _check8b_inline_probe() { mystery-normalizer input; }'
+  'printf "value)" | tr x y'
+)
+if [[ "${#check8b_structural_bad_labels[@]}" -ne "${#check8b_structural_bad_lines[@]}" ]]; then
+  check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+  echo "BUG032_ENG01_STRUCTURAL_MUTANT_SHAPE labels=${#check8b_structural_bad_labels[@]} lines=${#check8b_structural_bad_lines[@]}"
+fi
+for check8b_index in "${!check8b_structural_bad_lines[@]}"; do
+  check8b_source_line="${check8b_structural_bad_lines[$check8b_index]}"
+  if check8b_structural_line_is_clean "$check8b_source_line"; then
+    check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_BAD_ACCEPTED class=${check8b_structural_bad_labels[$check8b_index]:-missing-label} source=$check8b_source_line"
+  elif [[ -z "$CHECK8B_STRUCTURAL_REASON" ]]; then
+    check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_BAD_UNCLASSIFIED class=${check8b_structural_bad_labels[$check8b_index]:-missing-label} source=$check8b_source_line"
+  fi
+done
+
+check8b_forbidden_families=(tr sed awk grep perl python python3 cut xargs bash sh zsh dash ksh fish env mystery_normalizer)
+for check8b_forbidden_family in "${check8b_forbidden_families[@]}"; do
+  if check8b_structural_line_is_clean "$check8b_forbidden_family input"; then
+    check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_FAMILY_ACCEPTED family=$check8b_forbidden_family form=bare"
+  fi
+  if check8b_structural_line_is_clean "/usr/bin/$check8b_forbidden_family input"; then
+    check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_FAMILY_ACCEPTED family=$check8b_forbidden_family form=absolute"
+  fi
+  if check8b_structural_line_is_clean "'$check8b_forbidden_family' input"; then
+    check8b_structural_oracle_failures=$((check8b_structural_oracle_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_FAMILY_ACCEPTED family=$check8b_forbidden_family form=quoted"
+  fi
+done
+if [[ "$check8b_structural_oracle_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B closed structural oracle accepts comments, spaced case alternation, controls, arrays, and bitwise arithmetic while rejecting substitutions, real pipelines, subshells, inline case/function execution, quoted or absolute executables, grouped commands, and unknown heads"
+else
+  fail "BUG-032 Check 8B allowlist structural oracle has $check8b_structural_oracle_failures discriminator failure(s)"
+fi
+
+check8b_structural_failures=0
+check8b_structural_line_number=0
+while IFS= read -r check8b_source_line || [[ -n "$check8b_source_line" ]]; do
+  check8b_structural_line_number=$((check8b_structural_line_number + 1))
+  if ! check8b_structural_line_is_clean "$check8b_source_line"; then
+    check8b_structural_failures=$((check8b_structural_failures + 1))
+    echo "BUG032_ENG01_STRUCTURAL_MATCH line=$check8b_structural_line_number reason=$CHECK8B_STRUCTURAL_REASON source=$check8b_source_line"
+  fi
+done < "$check8b_classifier_file"
+if [[ "$check8b_structural_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B exact marked source has no statically admitted process-capable syntax or executable command head"
+else
+  fail "BUG-032 Check 8B marked helper contains $check8b_structural_failures forbidden process mechanism(s)"
+fi
+
+# Hostile command shadows provide the dynamic half of the no-process proof for
+# shell-resolved heads. Their private PATH children make spawned execution
+# observable. The static mutant oracle separately owns absolute executable
+# heads. The matrix itself calls only the exact sourced production entry point.
+check8b_shadow_log="$tmp_root/bug032-check8b-hostile-shadow.log"
+check8b_shadow_calibration_log="$tmp_root/bug032-check8b-hostile-shadow-calibration.log"
+check8b_shadow_bin="$tmp_root/bug032-check8b-hostile-shadow-bin"
+mkdir -p "$check8b_shadow_bin"
+: > "$check8b_shadow_log"
+check8b_forbidden_families=(tr sed awk grep perl python python3 cut xargs bash sh zsh dash ksh fish env mystery_normalizer)
+for check8b_forbidden_family in "${check8b_forbidden_families[@]}"; do
+  check8b_shadow_wrapper="$check8b_shadow_bin/$check8b_forbidden_family"
+  printf '%s\n' \
+    '#!/bin/sh' \
+    "printf '%s\\n' 'path:$check8b_forbidden_family' >> \"\$CHECK8B_SHADOW_LOG\"" \
+    'exit 97' > "$check8b_shadow_wrapper"
+  chmod 0700 "$check8b_shadow_wrapper"
+done
+
+check8b_define_hostile_shadows() {
+  tr() { printf '%s\n' function:tr >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  sed() { printf '%s\n' function:sed >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  awk() { printf '%s\n' function:awk >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  grep() { printf '%s\n' function:grep >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  perl() { printf '%s\n' function:perl >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  python() { printf '%s\n' function:python >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  python3() { printf '%s\n' function:python3 >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  cut() { printf '%s\n' function:cut >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  xargs() { printf '%s\n' function:xargs >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  bash() { printf '%s\n' function:bash >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  sh() { printf '%s\n' function:sh >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  zsh() { printf '%s\n' function:zsh >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  dash() { printf '%s\n' function:dash >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  ksh() { printf '%s\n' function:ksh >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  fish() { printf '%s\n' function:fish >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  env() { printf '%s\n' function:env >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  mystery_normalizer() { printf '%s\n' function:mystery_normalizer >> "$CHECK8B_SHADOW_LOG"; return 97; }
+  command_not_found_handle() {
+    printf '%s\n' "missing:${1:-unnamed}" >> "$CHECK8B_SHADOW_LOG"
+    return 97
+  }
+}
+
+: > "$check8b_shadow_calibration_log"
+check8b_shadow_calibration_failures=0
+if (
+  CHECK8B_SHADOW_LOG="$check8b_shadow_calibration_log"
+  export CHECK8B_SHADOW_LOG
+  PATH="$check8b_shadow_bin"
+  export PATH
+  check8b_define_hostile_shadows
+  for check8b_forbidden_family in "${check8b_forbidden_families[@]}"; do
+    if "$check8b_forbidden_family" calibration; then
+      check8b_shadow_function_status=0
+    else
+      check8b_shadow_function_status=$?
+    fi
+    if command "$check8b_forbidden_family" calibration; then
+      check8b_shadow_path_status=0
+    else
+      check8b_shadow_path_status=$?
+    fi
+    [[ "$check8b_shadow_function_status" -eq 97 ]] \
+      && [[ "$check8b_shadow_path_status" -eq 97 ]] \
+      || exit 1
+  done
+  if unlisted_check8b_probe calibration; then
+    check8b_shadow_missing_status=0
+  else
+    check8b_shadow_missing_status=$?
+  fi
+  [[ "$check8b_shadow_missing_status" -eq 97 ]] || exit 1
+); then
+  :
+else
+  check8b_shadow_calibration_failures=$((check8b_shadow_calibration_failures + 1))
+fi
+declare -A check8b_shadow_calibration_counts=()
+while IFS= read -r check8b_shadow_name || [[ -n "$check8b_shadow_name" ]]; do
+  check8b_shadow_calibration_counts["$check8b_shadow_name"]=$((
+    ${check8b_shadow_calibration_counts["$check8b_shadow_name"]:-0} + 1
+  ))
+done < "$check8b_shadow_calibration_log"
+for check8b_forbidden_family in "${check8b_forbidden_families[@]}"; do
+  [[ "${check8b_shadow_calibration_counts["function:$check8b_forbidden_family"]:-0}" -eq 1 ]] \
+    && [[ "${check8b_shadow_calibration_counts["path:$check8b_forbidden_family"]:-0}" -eq 1 ]] \
+    || check8b_shadow_calibration_failures=$((check8b_shadow_calibration_failures + 1))
+done
+[[ "${check8b_shadow_calibration_counts[missing:unlisted_check8b_probe]:-0}" -eq 1 ]] \
+  || check8b_shadow_calibration_failures=$((check8b_shadow_calibration_failures + 1))
+if [[ "$check8b_shadow_calibration_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 8B hostile shadows calibrate function, closed-PATH child, and command-not-found interception while the static mutant oracle owns absolute executable rejection"
+else
+  fail "BUG-032 Check 8B hostile shadow calibration has $check8b_shadow_calibration_failures failure(s)"
+fi
+
+if (
+  CHECK8B_SHADOW_LOG="$check8b_shadow_log"
+  export CHECK8B_SHADOW_LOG
+  PATH="$check8b_shadow_bin"
+  export PATH
+  check8b_define_hostile_shadows
+
+  check8b_shadow_failures=0
+  check8b_shadow_lines=(
+    'The provider implementation is replaced.'
+    'Remove the public API route'
+    "${check8b_negation_direct_lines[0]}"
+    "${check8b_negation_direct_lines[1]}"
+    "${check8b_negation_direct_lines[2]}"
+    "${check8b_negation_direct_lines[3]}"
+    "${check8b_owned_negation_lines[0]}"
+    "${check8b_owned_negation_lines[1]}"
+    "${check8b_owned_negation_lines[2]}"
+    "${check8b_owned_negation_lines[3]}"
+    "${check8b_tail_lines[0]}"
+    "${check8b_tail_lines[1]}"
+    "${check8b_tail_lines[2]}"
+    "${check8b_tail_lines[3]}"
+    "${check8b_tail_direct_lines[0]}"
+    "${check8b_tail_direct_lines[1]}"
+    "${check8b_tail_direct_lines[2]}"
+    "${check8b_tail_direct_lines[3]}"
+    "${check8b_tail_preserved_lines[0]}"
+    "${check8b_tail_preserved_lines[1]}"
+    "${check8b_tail_preserved_lines[2]}"
+    "${check8b_tail_preserved_lines[3]}"
+    "$check8b_token_128"
+    "$check8b_token_129"
+    "$check8b_candidate_8"
+    "$check8b_candidate_9"
+    "$check8b_candidate_9_tail"
+    "$check8b_candidate_10_sentinel"
+    "${check8b_mixed_lines[0]}"
+    "${check8b_mixed_lines[1]}"
+    "$check8b_scn013_conflict"
+    "$check8b_scn013_unresolved"
+    "$check8b_normalization_error_line"
+  )
+  check8b_shadow_expectations=(
+    '0|irrelevant|none|none|none|none|none|none|not-applicable|5|0|5|5|0'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|not-applicable|5|1|5|5|1'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|not-applicable|9|1|9|9|1'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|not-applicable|10|1|10|10|1'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|not-applicable|6|1|6|6|1'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|not-applicable|7|1|7|7|1'
+    '0|negative|remove|route|none|route|preserved-surface|none|not-applicable|6|1|6|6|1'
+    '0|negative|remove|route|none|route|preserved-surface|none|not-applicable|6|1|6|6|1'
+    '0|negative|remove|route|none|route|preserved-surface|none|not-applicable|9|1|9|9|1'
+    '0|negative|remove|route|none|route|preserved-surface|none|not-applicable|5|1|5|5|1'
+    '0|ambiguous|remove|unresolved|none|none|surface-tail|route example|not-applicable|6|1|6|6|1'
+    '0|ambiguous|remove|unresolved|none|none|surface-tail|endpoint test|not-applicable|4|1|4|4|1'
+    '0|ambiguous|remove|unresolved|none|none|surface-tail|contract fixture|not-applicable|4|1|4|4|1'
+    '0|ambiguous|remove|unresolved|none|none|surface-tail|link documentation|not-applicable|4|1|4|4|1'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|not-applicable|5|1|5|5|1'
+    '0|direct-positive|remove|endpoint|remove:endpoint|none|direct|none|not-applicable|3|1|3|3|1'
+    '0|direct-positive|remove|contract|remove:contract|none|direct|none|not-applicable|3|1|3|3|1'
+    '0|direct-positive|remove|link|remove:link|none|direct|none|not-applicable|3|1|3|3|1'
+    '0|negative|remove|route example|none|route|preserved-surface|none|not-applicable|10|1|10|10|1'
+    '0|negative|remove|endpoint test|none|endpoint|preserved-surface|none|not-applicable|8|1|8|8|1'
+    '0|negative|remove|contract fixture|none|contract|preserved-surface|none|not-applicable|8|1|8|8|1'
+    '0|negative|remove|link documentation|none|link|preserved-surface|none|not-applicable|8|1|8|8|1'
+    '0|direct-positive|remove|route|remove:route|none|direct|none|tokens=128/128|128|1|128|128|1'
+    '0|ambiguous|none|unresolved|none|none|token-limit|none|tokens=129/128:first-overflow|128|0|128|128|0'
+    '0|direct-positive|remove|route|remove:route,remove:path,remove:endpoint,remove:contract,remove:api,remove:url,remove:slug,remove:identifier|none|direct|none|candidates=8/8|16|8|16|16|8'
+    '0|ambiguous|remove|unresolved|none|none|candidate-limit|none|candidates=9/8:first-overflow|18|9|18|18|8'
+    '0|ambiguous|remove|unresolved|none|none|candidate-limit|none|candidates=9/8:first-overflow|19|9|19|19|8'
+    '0|ambiguous|remove|unresolved|none|none|candidate-limit|none|candidates=9/8:first-overflow|20|9|20|20|8'
+    '0|mixed-surface|remove|redirect|remove:redirect|route|mixed|none|not-applicable|10|1|10|10|1'
+    '0|mixed-surface|remove|redirect|remove:redirect,rename:endpoint|route|mixed|none|not-applicable|17|2|17|17|2'
+    '0|ambiguous|remove|unresolved|none|route|conflict|none|not-applicable|9|1|9|9|1'
+    '0|ambiguous|remove|unresolved|none|none|unresolved|public api route|not-applicable|9|1|9|9|1'
+    '2|error|none|unavailable|none|none|normalization-error|none|not-applicable|0|0|0|0|0'
+  )
+  declare -A check8b_shadow_observed_outcomes=()
+  if [[ "${#check8b_shadow_lines[@]}" -ne "${#check8b_shadow_expectations[@]}" ]]; then
+    check8b_shadow_failures=$((check8b_shadow_failures + 1))
+    printf 'BUG032_ENG01_SHADOW_MATRIX_SHAPE lines=%s expectations=%s\n' \
+      "${#check8b_shadow_lines[@]}" "${#check8b_shadow_expectations[@]}"
+  fi
+  for check8b_index in "${!check8b_shadow_lines[@]}"; do
+    IFS='|' read -r check8b_expected_status check8b_expected_classification \
+      check8b_expected_verb check8b_expected_target check8b_expected_direct \
+      check8b_expected_preserved check8b_expected_reason \
+      check8b_expected_unresolved check8b_expected_boundary \
+      check8b_expected_token_count check8b_expected_candidate_count \
+      check8b_expected_retained_tokens check8b_expected_retained_clause_ids \
+      check8b_expected_retained_candidates \
+      <<< "${check8b_shadow_expectations[$check8b_index]}"
+    set +e
+    bug032_check8b_classify "${check8b_shadow_lines[$check8b_index]}"
+    check8b_shadow_status=$?
+    set -e
+    if ! check8b_helper_record_matches \
+      "$check8b_expected_status" "$check8b_expected_classification" \
+      "$check8b_expected_verb" "$check8b_expected_target" \
+      "$check8b_expected_direct" "$check8b_expected_preserved" \
+      "$check8b_expected_reason" "$check8b_expected_unresolved" \
+      "$check8b_expected_boundary" "$check8b_expected_token_count" \
+      "$check8b_expected_candidate_count" "$check8b_expected_retained_tokens" \
+      "$check8b_expected_retained_clause_ids" "$check8b_expected_retained_candidates"; then
+      check8b_shadow_failures=$((check8b_shadow_failures + 1))
+      printf 'BUG032_ENG01_SHADOW_MATRIX_MISMATCH index=%s status=%s expectedStatus=%s classification=%s expectedClassification=%s reason=%s expectedReason=%s tokenCount=%s candidateCount=%s retainedTokens=%s retainedClauseIds=%s retainedCandidates=%s\n' \
+        "$check8b_index" "$check8b_shadow_status" "$check8b_expected_status" \
+        "$CHECK8B_CLASSIFICATION" "$check8b_expected_classification" \
+        "$CHECK8B_REASON" "$check8b_expected_reason" "$CHECK8B_TOKEN_COUNT" \
+        "$CHECK8B_CANDIDATE_COUNT" "${#_CHECK8B_TOKENS[@]}" \
+        "${#_CHECK8B_CLAUSE_IDS[@]}" "${#_CHECK8B_CANDIDATE_INDEXES[@]}"
+    fi
+      check8b_shadow_observed_outcomes["${CHECK8B_CLASSIFICATION:-unset}:${CHECK8B_REASON:-unset}"]=1
+  done
+
+  CHECK8B_CLASSIFICATION="__check8b_unset__"
+  CHECK8B_VERB="__check8b_unset__"
+  CHECK8B_MUTATION_TARGET="__check8b_unset__"
+  CHECK8B_DIRECT_SURFACES="__check8b_unset__"
+  CHECK8B_PRESERVED_SURFACES="__check8b_unset__"
+  CHECK8B_REASON="__check8b_unset__"
+  CHECK8B_UNRESOLVED_PHRASE="__check8b_unset__"
+  CHECK8B_BOUNDARY="__check8b_unset__"
+  CHECK8B_TOKEN_COUNT=-1
+  CHECK8B_CANDIDATE_COUNT=-1
+  _CHECK8B_TOKENS=(__check8b_stale_token__)
+  _CHECK8B_CLAUSE_IDS=(99)
+  _CHECK8B_CANDIDATE_INDEXES=(99)
+  set +e
+  check8b_classify_line
+  check8b_shadow_invalid_status=$?
+  set -e
+  CHECK8B_LAST_STATUS="$check8b_shadow_invalid_status"
+  if ! check8b_helper_record_matches \
+    2 error none unavailable none none invalid-arguments none \
+    not-applicable 0 0 0 0 0; then
+    check8b_shadow_failures=$((check8b_shadow_failures + 1))
+    printf 'BUG032_ENG01_SHADOW_INVALID_ARGUMENT_MISMATCH status=%s classification=%s reason=%s\n' \
+      "$check8b_shadow_invalid_status" "$CHECK8B_CLASSIFICATION" "$CHECK8B_REASON"
+  fi
+  check8b_shadow_observed_outcomes["${CHECK8B_CLASSIFICATION:-unset}:${CHECK8B_REASON:-unset}"]=1
+
+  check8b_shadow_required_outcomes=(
+    irrelevant:none
+    direct-positive:direct
+    negative:preserved-surface
+    ambiguous:surface-tail
+    ambiguous:token-limit
+    ambiguous:candidate-limit
+    ambiguous:conflict
+    ambiguous:unresolved
+    mixed-surface:mixed
+    error:normalization-error
+    error:invalid-arguments
+  )
+  for check8b_shadow_required_outcome in "${check8b_shadow_required_outcomes[@]}"; do
+    if [[ -z "${check8b_shadow_observed_outcomes[$check8b_shadow_required_outcome]:-}" ]]; then
+      check8b_shadow_failures=$((check8b_shadow_failures + 1))
+      printf 'BUG032_ENG01_SHADOW_BRANCH_NOT_EXERCISED outcome=%s\n' "$check8b_shadow_required_outcome"
+    fi
+  done
+
+  check8b_shadow_invocation_count=0
+  while IFS= read -r check8b_shadow_name || [[ -n "$check8b_shadow_name" ]]; do
+    check8b_shadow_invocation_count=$((check8b_shadow_invocation_count + 1))
+    printf 'BUG032_ENG01_SHADOW_INVOCATION observed=%s\n' "$check8b_shadow_name"
+  done < "$check8b_shadow_log"
+  printf 'BUG032_ENG01_SHADOW_COUNTS observedInvocations=%s observedOutcomes=%s requiredOutcomes=%s matrixFailures=%s\n' \
+    "$check8b_shadow_invocation_count" "${#check8b_shadow_observed_outcomes[@]}" \
+    "${#check8b_shadow_required_outcomes[@]}" "$check8b_shadow_failures"
+  [[ "$check8b_shadow_invocation_count" -eq 0 ]] \
+    && [[ "$check8b_shadow_failures" -eq 0 ]]
+); then
+  pass "BUG-032 Check 8B hostile shadow command counts remain zero"
+else
+  fail "BUG-032 Check 8B hostile shadow matrix observed a forbidden command invocation or classification mismatch"
 fi
 
 # BUG-032 D2: execute the real guard over an otherwise-passing fixture whose
@@ -4104,6 +10320,229 @@ run_capture "$bug032_sla_comparator_log" bash "$GUARD_SCRIPT" "$bug032_sla_compa
 assert_log_contains "$bug032_sla_comparator_log" \
   "SLA-sensitive scope is missing explicit stress coverage" \
   "BUG-032 Check 5A still treats 'no more than 200 ms p95 latency' as an affirmative performance contract"
+
+# BUG032-HARDEN9-C5A-CONTEXT-005 / SCN-032-021: quoted performance
+# fixture prose in fenced Gherkin, Examples, and Test Plan cells is not an
+# active contract. The byte-identical active declaration remains affirmative,
+# so ignoring fixture context cannot become a blanket performance exemption.
+bug032_scn021_contexts=(gherkin examples test-plan)
+bug032_scn021_context_failures=0
+for bug032_scn021_context in "${bug032_scn021_contexts[@]}"; do
+  bug032_scn021_dir="$tmp_root/specs/956-bug032-scn021-$bug032_scn021_context"
+  cp -R "$positive_feature_dir" "$bug032_scn021_dir"
+  case "$bug032_scn021_context" in
+    gherkin)
+      cat <<'EOF' >> "$bug032_scn021_dir/scopes.md"
+
+### Fixture Gherkin
+
+```gherkin
+Given fixture prose says "The p95 latency budget is 200 ms."
+```
+EOF
+      ;;
+    examples)
+      cat <<'EOF' >> "$bug032_scn021_dir/scopes.md"
+
+### Examples
+
+| performance fixture |
+| --- |
+| The p95 latency budget is 200 ms. |
+EOF
+      ;;
+    test-plan)
+      cat <<'EOF' >> "$bug032_scn021_dir/scopes.md"
+
+### Test Plan
+
+| Test Type | Description | Expected Result |
+| --- | --- | --- |
+| Functional fixture | The p95 latency budget is 200 ms. | The quoted fixture remains inert. |
+EOF
+      ;;
+  esac
+  bug032_scn021_log="$tmp_root/bug032-scn021-$bug032_scn021_context.log"
+  bug032_scn021_status="$(run_capture "$bug032_scn021_log" bash "$GUARD_SCRIPT" "$bug032_scn021_dir")"
+  if [[ "$bug032_scn021_status" -ne 0 ]] \
+    || grep -Fq -- 'SLA-sensitive scope is missing explicit stress coverage' "$bug032_scn021_log" \
+    || grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$bug032_scn021_log"; then
+    bug032_scn021_context_failures=$((bug032_scn021_context_failures + 1))
+    printf 'BUG032_SCN021_CONTEXT_MISMATCH context=%s status=%s legacyMissing=%s canonicalMissing=%s\n' \
+      "$bug032_scn021_context" "$bug032_scn021_status" \
+      "$(grep -cF -- 'SLA-sensitive scope is missing explicit stress coverage' "$bug032_scn021_log" || true)" \
+      "$(grep -cF -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$bug032_scn021_log" || true)"
+  fi
+done
+if [[ "$bug032_scn021_context_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 5A ignores quoted Gherkin Examples and Test Plan performance fixtures"
+else
+  fail "BUG-032 Check 5A performance fixture-context matrix has $bug032_scn021_context_failures mismatch(es)"
+fi
+
+bug032_scn021_active_dir="$tmp_root/specs/956-bug032-scn021-active"
+cp -R "$positive_feature_dir" "$bug032_scn021_active_dir"
+cat <<'EOF' >> "$bug032_scn021_active_dir/scopes.md"
+
+### Performance Contract
+
+The p95 latency budget is 200 ms.
+EOF
+bug032_scn021_active_log="$tmp_root/bug032-scn021-active.log"
+bug032_scn021_active_status="$(run_capture "$bug032_scn021_active_log" bash "$GUARD_SCRIPT" "$bug032_scn021_active_dir")"
+if [[ "$bug032_scn021_active_status" -ne 0 ]] \
+  && { grep -Fq -- 'SLA-sensitive scope is missing explicit stress coverage' "$bug032_scn021_active_log" \
+    || grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$bug032_scn021_active_log"; }; then
+  pass "BUG-032 Check 5A still evaluates identical active performance contracts"
+else
+  fail "BUG-032 Check 5A active performance twin has unexpected status=$bug032_scn021_active_status"
+fi
+
+# Insert a multi-line fixture fragment before one exact section heading without
+# relying on GNU/BSD-divergent sed insertion syntax.
+bug032_insert_before_exact_line() {
+  local target_file="$1"
+  local marker="$2"
+  local payload="$3"
+  local temp_file=""
+  local source_line=""
+  local inserted=0
+
+  temp_file="$(mktemp)"
+  : > "$temp_file"
+  while IFS= read -r source_line || [[ -n "$source_line" ]]; do
+    if [[ "$inserted" -eq 0 && "$source_line" == "$marker" ]]; then
+      printf '%s\n' "$payload" >> "$temp_file"
+      inserted=1
+    fi
+    printf '%s\n' "$source_line" >> "$temp_file"
+  done < "$target_file"
+  if [[ "$inserted" -ne 1 ]]; then
+    rm -f "$temp_file"
+    return 1
+  fi
+  mv "$temp_file" "$target_file"
+}
+
+# BUG032-HARDEN9-C5A-COVERAGE-PROXY-006 / SCN-032-022: the bare word
+# `stress` in narrative is not coverage. An active contract needs both a
+# canonical Stress Test Plan row and a faithful stress DoD item. The structural
+# control carries both in their real sections and must remain accepted.
+bug032_scn022_proxy_dir="$tmp_root/specs/957-bug032-scn022-stress-proxy"
+cp -R "$positive_feature_dir" "$bug032_scn022_proxy_dir"
+cat <<'EOF' >> "$bug032_scn022_proxy_dir/scopes.md"
+
+### Performance Contract
+
+The p95 latency budget is 200 ms.
+
+### Coverage Narrative
+
+The design prose discusses stress behavior but declares no executable Stress row or matching DoD proof.
+EOF
+bug032_scn022_proxy_log="$tmp_root/bug032-scn022-stress-proxy.log"
+bug032_scn022_proxy_status="$(run_capture "$bug032_scn022_proxy_log" bash "$GUARD_SCRIPT" "$bug032_scn022_proxy_dir")"
+bug032_scn022_proxy_failures=0
+[[ "$bug032_scn022_proxy_status" -ne 0 ]] \
+  || bug032_scn022_proxy_failures=$((bug032_scn022_proxy_failures + 1))
+grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$bug032_scn022_proxy_log" \
+  || bug032_scn022_proxy_failures=$((bug032_scn022_proxy_failures + 1))
+grep -Fq -- 'SLA-sensitive scope is missing faithful stress DoD item' "$bug032_scn022_proxy_log" \
+  || bug032_scn022_proxy_failures=$((bug032_scn022_proxy_failures + 1))
+if [[ "$bug032_scn022_proxy_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 5A rejects stress-word coverage without a canonical Stress Test Plan row and DoD"
+else
+  fail "BUG-032 Check 5A stress-proxy matrix has status=$bug032_scn022_proxy_status mismatches=$bug032_scn022_proxy_failures"
+fi
+
+bug032_scn022_control_dir="$tmp_root/specs/957-bug032-scn022-structural-control"
+cp -R "$positive_feature_dir" "$bug032_scn022_control_dir"
+bug032_scn022_control_setup_failures=0
+if ! bug032_insert_before_exact_line \
+  "$bug032_scn022_control_dir/scopes.md" \
+  '### Test Plan' \
+  $'### Performance Contract\n\nThe p95 latency budget is 200 ms.\n'; then
+  bug032_scn022_control_setup_failures=$((bug032_scn022_control_setup_failures + 1))
+fi
+if ! bug032_insert_before_exact_line \
+  "$bug032_scn022_control_dir/scopes.md" \
+  "| Regression E2E | \`e2e-ui\` | \`$positive_feature_dir/tests/docs-broader-regression.e2e.spec.ts\` | Broader regression row required by the guard. | \`selftest:broader-regression\` | Yes |" \
+  "| Stress | \`stress\` | $bug032_scn022_control_dir/tests/docs-scenario-regression.e2e.spec.ts | Exercise the active p95 latency budget under pressure. | \`selftest:stress-regression\` | No |"; then
+  bug032_scn022_control_setup_failures=$((bug032_scn022_control_setup_failures + 1))
+fi
+cat <<'EOF' >> "$bug032_scn022_control_dir/scopes.md"
+- [x] SCN-032-022 stress test verifies the active p95 latency budget of 200 ms. -> Evidence: report.md#test-evidence
+EOF
+bug032_scn022_control_log="$tmp_root/bug032-scn022-structural-control.log"
+bug032_scn022_control_status="$(run_capture "$bug032_scn022_control_log" bash "$GUARD_SCRIPT" "$bug032_scn022_control_dir")"
+if [[ "$bug032_scn022_control_setup_failures" -eq 0 ]] \
+  && [[ "$bug032_scn022_control_status" -eq 0 ]] \
+  && ! grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$bug032_scn022_control_log" \
+  && ! grep -Fq -- 'SLA-sensitive scope is missing faithful stress DoD item' "$bug032_scn022_control_log"; then
+  pass "BUG-032 Check 5A accepts a canonical Stress row with faithful DoD"
+else
+  fail "BUG-032 Check 5A canonical Stress control has setup=$bug032_scn022_control_setup_failures status=$bug032_scn022_control_status"
+fi
+run_bug032_c5a_type_column_regression "$positive_feature_dir" "$tmp_root"
+unset -f run_bug032_c5a_type_column_regression
+unset -f bug032_insert_before_exact_line
+
+# Regression: bugs/BUG-032-planning-maturity-guard-false-positives,
+# SCN-032-004/005. Spec 045 Scopes 05, 06, and 14 discuss or measure latency
+# without approving a performance threshold. Those statements must not create
+# a stress obligation. Each fixture has a numeric target twin so this cannot be
+# satisfied by disabling G026 or treating all latency prose as non-affirmative.
+bug032_spec045_labels=("Scope 05" "Scope 06" "Scope 14")
+bug032_spec045_slugs=("scope05" "scope06" "scope14")
+bug032_spec045_discussions=(
+  $'Cold admission and warm latency are separate.\nReport Qwen 3.8 warm decode independently from reasoning volume and cold load.'
+  $'No operator-approved latency threshold exists.\nProfile B improves latency while changing non-gating quality.\nLatency cannot rescue a quality gate failure.'
+  $'The report answers whether controlled tuning changes Qwen 3.8 latency for each role.\nLatency measurements remain separate from quality evidence.'
+)
+bug032_spec045_targets=(
+  "The warm p95 latency budget is 200 ms."
+  "The operator-approved p95 latency threshold is 250 ms."
+  "The per-role p99 response-time guarantee is under 500 ms."
+)
+
+for bug032_spec045_index in "${!bug032_spec045_labels[@]}"; do
+  bug032_spec045_label="${bug032_spec045_labels[$bug032_spec045_index]}"
+  bug032_spec045_slug="${bug032_spec045_slugs[$bug032_spec045_index]}"
+
+  bug032_spec045_discussion_dir="$tmp_root/specs/952-bug032-${bug032_spec045_slug}-discussion"
+  cp -R "$positive_feature_dir" "$bug032_spec045_discussion_dir"
+  {
+    printf '\n### Performance Evidence Context\n\n'
+    printf '%s\n' "${bug032_spec045_discussions[$bug032_spec045_index]}"
+  } >> "$bug032_spec045_discussion_dir/scopes.md"
+  bug032_spec045_discussion_log="$tmp_root/bug032-${bug032_spec045_slug}-discussion.log"
+  bug032_spec045_discussion_status="$(run_capture "$bug032_spec045_discussion_log" bash "$GUARD_SCRIPT" "$bug032_spec045_discussion_dir")"
+  if [[ "$bug032_spec045_discussion_status" -eq 0 ]]; then
+    pass "BUG-032 G026 accepts Spec 045 $bug032_spec045_label latency measurement/discussion without stress coverage"
+  else
+    fail "BUG-032 G026 should accept Spec 045 $bug032_spec045_label latency measurement/discussion (observed $bug032_spec045_discussion_status)"
+  fi
+  assert_log_not_contains "$bug032_spec045_discussion_log" \
+    "SLA-sensitive scope is missing explicit stress coverage" \
+    "BUG-032 G026 does not infer an affirmative contract from Spec 045 $bug032_spec045_label prose"
+
+  bug032_spec045_target_dir="$tmp_root/specs/953-bug032-${bug032_spec045_slug}-numeric-target"
+  cp -R "$positive_feature_dir" "$bug032_spec045_target_dir"
+  {
+    printf '\n### Performance Contract\n\n'
+    printf '%s\n' "${bug032_spec045_targets[$bug032_spec045_index]}"
+  } >> "$bug032_spec045_target_dir/scopes.md"
+  bug032_spec045_target_log="$tmp_root/bug032-${bug032_spec045_slug}-numeric-target.log"
+  bug032_spec045_target_status="$(run_capture "$bug032_spec045_target_log" bash "$GUARD_SCRIPT" "$bug032_spec045_target_dir")"
+  if [[ "$bug032_spec045_target_status" -ne 0 ]]; then
+    pass "BUG-032 G026 still requires stress coverage for the Spec 045 $bug032_spec045_label numeric target twin"
+  else
+    fail "BUG-032 G026 must require stress coverage for the Spec 045 $bug032_spec045_label numeric target twin"
+  fi
+  assert_log_contains "$bug032_spec045_target_log" \
+    "SLA-sensitive scope is missing explicit stress coverage" \
+    "BUG-032 G026 reports the missing stress obligation for the Spec 045 $bug032_spec045_label numeric target twin"
+done
 
 # Check 5A (Gate G026) decides whether a scope is SLA-sensitive and therefore owes
 # stress coverage. Its trigger list mixes long unambiguous terms (latency,
@@ -4159,6 +10598,7 @@ EOF
     grep -niE "$check5a_regex" "$check5a_must_flag" || true
     echo "--- end ---"
   fi
+fi
 fi
 
 echo "Running Check 43 empty-stdout receipt-clone exemption (BUG-007)..."
@@ -4274,9 +10714,10 @@ fi
 
 # BUG-032 D3: drive the real Check 43 through an isolated tool-call log. Equal
 # non-empty stdout is content equality, not execution identity: deterministic
-# sibling validator runs are independent only when family/category/exit agree
-# and both target plus execution provenance distinguish the runs. Incompatible
-# commands and provenance-poor collisions remain conservative failures.
+# sibling validator runs are independent when normalized program, numeric exit,
+# distinct target, and execution provenance agree. Known non-mixed category
+# labels are diagnostic only and may differ. Incompatible commands and
+# provenance-poor collisions remain conservative failures.
 echo "Running BUG-032 Check 43 receipt execution-identity matrix..."
 bug032_receipt_repo="$tmp_root/bug032-receipt-repo"
 bug032_receipt_feature="$bug032_receipt_repo/specs/950-bug032-receipt-identity"
@@ -4302,10 +10743,10 @@ else
   fail "BUG-032 Check 43 should accept independent deterministic validator siblings (observed $bug032_receipt_sibling_status)"
 fi
 assert_log_not_contains "$bug032_receipt_sibling_log" \
-  "Evidence receipt CLONE" \
+  "check=43 verdict=REFUSED" \
   "BUG-032 Check 43 does not classify deterministic sibling validators as cloned evidence"
-assert_log_contains "$bug032_receipt_sibling_log" \
-  "deterministic sibling hash collision(s) accepted" \
+assert_check43_contains "$bug032_receipt_sibling_log" \
+  "reason=deterministic-siblings" \
   "BUG-032 Check 43 sibling acceptance is earned by the multi-field identity path, not an empty analysis result"
 
 cat > "$bug032_receipt_log" <<EOF
@@ -4320,7 +10761,7 @@ else
   fail "BUG-032 Check 43 should preserve BUG-019 equivalent command-spelling normalization (observed $bug032_receipt_spelling_status)"
 fi
 assert_log_not_contains "$bug032_receipt_spelling_log" \
-  "Evidence receipt CLONE" \
+  "check=43 verdict=REFUSED" \
   "BUG-032 Check 43 does not classify equivalent command spellings over one target as cloned evidence"
 
 cat > "$bug032_receipt_log" <<EOF
@@ -4334,14 +10775,20 @@ if [[ "$bug032_receipt_same_identity_category_status" -ne 0 ]]; then
 else
   fail "BUG032-IV-F4 Check 43 must block npm-run lint versus npm-run test receipt reuse even though both normalize to 'npm run'"
 fi
-assert_log_contains "$bug032_receipt_same_identity_category_log" \
-  "Evidence receipt CLONE" \
+assert_check43_contains "$bug032_receipt_same_identity_category_log" \
+  "check=43 verdict=REFUSED" \
   "BUG032-IV-F4 Check 43 reports the same-identity incompatible-category receipt clone"
-assert_log_contains "$bug032_receipt_same_identity_category_log" \
-  "family=npm category=lint" \
+assert_check43_contains "$bug032_receipt_same_identity_category_log" \
+  "identity_a=npm run lint" \
+  "BUG032-IV-F4 Check 43 diagnostic names the npm lint identity"
+assert_check43_contains "$bug032_receipt_same_identity_category_log" \
+  "category_a=lint" \
   "BUG032-IV-F4 Check 43 clone diagnostic names the npm lint category"
-assert_log_contains "$bug032_receipt_same_identity_category_log" \
-  "family=npm category=test" \
+assert_check43_contains "$bug032_receipt_same_identity_category_log" \
+  "identity_b=npm run test" \
+  "BUG032-IV-F4 Check 43 diagnostic names the npm test identity"
+assert_check43_contains "$bug032_receipt_same_identity_category_log" \
+  "category_b=test" \
   "BUG032-IV-F4 Check 43 clone diagnostic names the npm test category"
 
 cat > "$bug032_receipt_log" <<EOF
@@ -4355,15 +10802,18 @@ if [[ "$bug032_receipt_incompatible_status" -ne 0 ]]; then
 else
   fail "BUG-032 Check 43 must block cargo-test versus npm-lint receipt reuse"
 fi
-assert_log_contains "$bug032_receipt_incompatible_log" \
-  "Evidence receipt CLONE" \
+assert_check43_contains "$bug032_receipt_incompatible_log" \
+  "reason=command-identity-mismatch" \
   "BUG-032 Check 43 reports the incompatible-command receipt clone"
-assert_log_contains "$bug032_receipt_incompatible_log" \
-  "family=cargo category=test" \
+assert_check43_contains "$bug032_receipt_incompatible_log" \
+  "identity_a=cargo test" \
   "BUG-032 Check 43 clone diagnostic names the cargo test identity"
-assert_log_contains "$bug032_receipt_incompatible_log" \
-  "family=npm category=lint" \
+assert_check43_contains "$bug032_receipt_incompatible_log" \
+  "identity_b=npm run lint" \
   "BUG-032 Check 43 clone diagnostic names the npm lint identity"
+assert_check43_contains "$bug032_receipt_incompatible_log" \
+  "effect=TRANSITION_BLOCKED" \
+  "BUG-032 Check 43 incompatible-command diagnostic remains blocking"
 
 cat > "$bug032_receipt_log" <<EOF
 {"ts":"2026-08-15T10:02:01Z","sessionId":"receipt-empty-a","cmd":"grep -rn TODO src/","exitCode":1,"durationMs":11,"stdoutHash":"$bug032_empty_hash","tags":["lint"]}
@@ -4377,7 +10827,7 @@ else
   fail "BUG-032 Check 43 must preserve empty-stdout exemption without stdoutBytes (observed $bug032_receipt_empty_status)"
 fi
 assert_log_not_contains "$bug032_receipt_empty_log" \
-  "Evidence receipt CLONE" \
+  "check=43 verdict=REFUSED" \
   "BUG-032 Check 43 does not treat empty stdout as substantive cloned evidence"
 
 cat > "$bug032_receipt_log" <<EOF
@@ -4391,9 +10841,43 @@ if [[ "$bug032_receipt_ambiguous_status" -ne 0 ]]; then
 else
   fail "BUG-032 Check 43 must not grant a blanket exemption when receipt provenance is missing"
 fi
-assert_log_contains "$bug032_receipt_ambiguous_log" \
-  "Evidence receipt CLONE" \
+assert_check43_contains "$bug032_receipt_ambiguous_log" \
+  "reason=provenance-conflict" \
   "BUG-032 Check 43 reports provenance-poor substantive collisions"
+
+# BUG032-HARDEN9-TEST-PROSE-015 / Scope 4 verification: inspect the bounded
+# source-adjacent comment above, not this assertion's own text. A calibrated
+# stale-comment mutant proves that the check rejects category-equality wording
+# while leaving every adjacent executable receipt expectation untouched.
+bug032_check43_comment_is_current() {
+  local comment_block="$1"
+
+  [[ "$comment_block" == *'normalized program'* ]] \
+    && [[ "$comment_block" == *'numeric exit'* ]] \
+    && [[ "$comment_block" == *'distinct target'* ]] \
+    && [[ "$comment_block" == *'execution provenance'* ]] \
+    && [[ "$comment_block" == *'category'*'diagnostic only and may differ'* ]] \
+    && [[ "$comment_block" != *'family/category/exit agree'* ]]
+}
+
+bug032_check43_comment_block="$(awk '
+  $0 == "# BUG-032 D3: drive the real Check 43 through an isolated tool-call log. Equal" { capture = 1 }
+  capture { print }
+  capture && $0 == "echo \"Running BUG-032 Check 43 receipt execution-identity matrix...\"" { exit }
+' "${BASH_SOURCE[0]}")"
+bug032_check43_comment_mutant="$tmp_root/bug032-check43-comment-stale-mutant.txt"
+printf '%s\n' "$bug032_check43_comment_block" > "$bug032_check43_comment_mutant"
+bubbles_sed_inplace \
+  's/# sibling validator runs are independent when normalized program, numeric exit,/# sibling validator runs are independent only when family\/category\/exit agree/' \
+  "$bug032_check43_comment_mutant"
+bug032_check43_comment_mutant_text="$(cat "$bug032_check43_comment_mutant")"
+if bug032_check43_comment_is_current "$bug032_check43_comment_block" \
+  && ! bug032_check43_comment_is_current "$bug032_check43_comment_mutant_text"; then
+  pass "BUG-032 test comments describe current Check 43 and G101 assertion groups"
+else
+  fail "BUG-032 test comments describe current Check 43 and G101 assertion groups (Check 43 comment truth or stale-mutant rejection failed)"
+fi
+unset -f bug032_check43_comment_is_current
 
 # BUG-033: Check 43 accused honest re-runs of forgery through two independent
 # identity-normalization defects. Facet 1 measured target distinctness PER
@@ -4421,13 +10905,19 @@ EOF
 bug033_rerun_log="$tmp_root/bug033-receipt-rerun.log"
 bug033_rerun_status="$(run_capture "$bug033_rerun_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
 if [[ "$bug033_rerun_status" -eq 0 ]]; then
-  pass "BUG-033 facet 1: Check 43 accepts repeated honest re-runs of one validator over two targets"
+  pass "SCN-B033-001: the real guard accepts repeated honest re-runs of one validator over two targets"
 else
-  fail "BUG-033 facet 1: Check 43 must accept repeated honest re-runs (observed $bug033_rerun_status)"
+  fail "SCN-B033-001: the real guard must accept repeated honest re-runs (observed $bug033_rerun_status)"
 fi
+assert_check43_contains "$bug033_rerun_log" \
+  "check=43 verdict=ACCEPTED" \
+  "SCN-B033-001: repeated honest re-runs emit an accepted Check 43 verdict"
+assert_check43_contains "$bug033_rerun_log" \
+  "reason=deterministic-siblings" \
+  "SCN-B033-001: repeated honest re-runs earn the deterministic-sibling reason"
 assert_log_not_contains "$bug033_rerun_log" \
-  "Evidence receipt CLONE" \
-  "BUG-033 facet 1: Check 43 does not report cloned evidence for repeated honest re-runs"
+  "check=43 verdict=REFUSED" \
+  "SCN-B033-001: repeated honest re-runs produce no clone refusal"
 
 # Facet 1 adversarial partner: two DIFFERENT command identities over ONE target,
 # sharing one stdout. Grouping targets by identity must not make this pass.
@@ -4438,13 +10928,22 @@ EOF
 bug033_onetarget_log="$tmp_root/bug033-receipt-one-target.log"
 bug033_onetarget_status="$(run_capture "$bug033_onetarget_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
 if [[ "$bug033_onetarget_status" -ne 0 ]]; then
-  pass "BUG-033 facet 1 bound: Check 43 still refuses two identities sharing one target and one stdout"
+  pass "SCN-B033-002: the real guard refuses two command identities sharing one target and one stdout"
 else
-  fail "BUG-033 facet 1 bound: identity-grouped targets must not admit two commands over ONE target"
+  fail "SCN-B033-002: identity-grouped targets must not admit two commands over one target"
 fi
-assert_log_contains "$bug033_onetarget_log" \
-  "Evidence receipt CLONE" \
-  "BUG-033 facet 1 bound: Check 43 reports the single-target multi-identity clone"
+assert_check43_contains "$bug033_onetarget_log" \
+  "reason=command-identity-mismatch" \
+  "SCN-B033-002: refusal reports reason=command-identity-mismatch"
+assert_check43_contains "$bug033_onetarget_log" \
+  "identity_a=npm run lint" \
+  "SCN-B033-002: refusal names identity_a=npm run lint"
+assert_check43_contains "$bug033_onetarget_log" \
+  "identity_b=npm run test" \
+  "SCN-B033-002: refusal names identity_b=npm run test"
+assert_check43_contains "$bug033_onetarget_log" \
+  "effect=TRANSITION_BLOCKED" \
+  "SCN-B033-002: refusal ends with effect=TRANSITION_BLOCKED"
 
 # Facet 2 acceptance: one command spelled three ordinary ways. After wrapper
 # normalization all three resolve to family=node over one target, so the group
@@ -4455,17 +10954,62 @@ cat > "$bug032_receipt_log" <<EOF
 {"ts":"2026-08-16T09:20:03Z","sessionId":"bug033-wrap-c","spec":"specs/alpha","scope":"SCOPE-1","cmd":"zsh -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":303,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
 {"ts":"2026-08-16T09:20:04Z","sessionId":"bug033-wrap-d","spec":"specs/alpha","scope":"SCOPE-1","cmd":"PAGE=alpha node scripts/check-page.mjs alpha","exitCode":0,"durationMs":304,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
 {"ts":"2026-08-16T09:20:05Z","sessionId":"bug033-wrap-e","spec":"specs/alpha","scope":"SCOPE-1","cmd":"bash -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":305,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-16T09:20:06Z","sessionId":"bug033-wrap-f","spec":"specs/alpha","scope":"SCOPE-1","cmd":"sh -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":306,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
 EOF
 bug033_wrapper_log="$tmp_root/bug033-receipt-wrapper.log"
 bug033_wrapper_status="$(run_capture "$bug033_wrapper_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
 if [[ "$bug033_wrapper_status" -eq 0 ]]; then
-  pass "BUG-033 facet 2: Check 43 accepts one command spelled through shell, env and assignment wrappers"
+  pass "SCN-B033-003: the real guard accepts all six direct, shell, env, and assignment spellings"
 else
-  fail "BUG-033 facet 2: Check 43 must normalize wrapper spellings to one identity (observed $bug033_wrapper_status)"
+  fail "SCN-B033-003: the real guard must normalize all six wrapper spellings to one identity (observed $bug033_wrapper_status)"
 fi
 assert_log_not_contains "$bug033_wrapper_log" \
-  "Evidence receipt CLONE" \
-  "BUG-033 facet 2: Check 43 does not report cloned evidence for equivalent wrapper spellings"
+  "check=43 verdict=REFUSED" \
+  "SCN-B033-003: equivalent wrapper spellings produce no clone refusal"
+
+# T25 requires an externally observable family assertion through the real guard.
+# Pair each planned spelling with a second direct node command so Check 43 must
+# render an accepted multi-identity panel. Any unstripped wrapper changes the
+# common program family and turns that panel into a refusal.
+for wrapper_case in direct env zsh assignment bash sh; do
+  case "$wrapper_case" in
+    direct)
+      wrapper_cmd="node scripts/check-page.mjs alpha"
+      ;;
+    env)
+      wrapper_cmd="env PAGE=alpha node scripts/check-page.mjs alpha"
+      ;;
+    zsh)
+      wrapper_cmd="zsh -c node scripts/check-page.mjs alpha"
+      ;;
+    assignment)
+      wrapper_cmd="PAGE=alpha node scripts/check-page.mjs alpha"
+      ;;
+    bash)
+      wrapper_cmd="bash -c node scripts/check-page.mjs alpha"
+      ;;
+    sh)
+      wrapper_cmd="sh -c node scripts/check-page.mjs alpha"
+      ;;
+  esac
+  cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-16T09:25:01Z","sessionId":"bug033-family-$wrapper_case-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"$wrapper_cmd","exitCode":0,"durationMs":351,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-16T09:25:03Z","sessionId":"bug033-family-$wrapper_case-b","spec":"specs/beta","scope":"SCOPE-1","cmd":"node scripts/control-$wrapper_case.mjs beta","exitCode":0,"durationMs":353,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+EOF
+  bug033_family_log="$tmp_root/bug033-receipt-family-$wrapper_case.log"
+  bug033_family_status="$(run_capture "$bug033_family_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+  if [[ "$bug033_family_status" -eq 0 ]]; then
+    pass "SCN-B033-003: $wrapper_case spelling resolves to family node through the real guard"
+  else
+    fail "SCN-B033-003: $wrapper_case spelling did not resolve to family node through the real guard"
+  fi
+  assert_check43_contains "$bug033_family_log" \
+    "identity=node" \
+    "SCN-B033-003: accepted panel proves $wrapper_case spelling resolves to family node"
+  assert_log_not_contains "$bug033_family_log" \
+    "check=43 verdict=REFUSED" \
+    "SCN-B033-003: $wrapper_case spelling produces no wrapper-only clone allegation"
+done
 
 # Facet 2 adversarial partner: the SAME wrappers over two genuinely different
 # programs. Unwrapping must reveal the difference, not hide it.
@@ -4476,16 +11020,257 @@ EOF
 bug033_wrapper_adv_log="$tmp_root/bug033-receipt-wrapper-adversarial.log"
 bug033_wrapper_adv_status="$(run_capture "$bug033_wrapper_adv_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
 if [[ "$bug033_wrapper_adv_status" -ne 0 ]]; then
-  pass "BUG-033 facet 2 bound: Check 43 still refuses two different programs behind identical wrappers"
+  pass "SCN-B033-004: the real guard refuses two different programs behind transparent wrappers"
 else
-  fail "BUG-033 facet 2 bound: wrapper normalization must not collapse cargo-test and npm-lint into one identity"
+  fail "SCN-B033-004: wrapper normalization must not collapse cargo-test and npm-lint into one identity"
 fi
-assert_log_contains "$bug033_wrapper_adv_log" \
-  "family=cargo category=test" \
-  "BUG-033 facet 2 bound: unwrapping reveals the cargo identity behind the shell wrapper"
-assert_log_contains "$bug033_wrapper_adv_log" \
-  "family=npm category=lint" \
-  "BUG-033 facet 2 bound: unwrapping reveals the npm identity behind the env wrapper"
+assert_check43_contains "$bug033_wrapper_adv_log" \
+  "reason=command-identity-mismatch" \
+  "SCN-B033-004: refusal reports reason=command-identity-mismatch"
+assert_check43_contains "$bug033_wrapper_adv_log" \
+  "identity_a=cargo test" \
+  "SCN-B033-004: unwrapping reveals the cargo identity behind the shell wrapper"
+assert_check43_contains "$bug033_wrapper_adv_log" \
+  "identity_b=npm run lint" \
+  "SCN-B033-004: unwrapping reveals the npm identity behind the env wrapper"
+assert_check43_contains "$bug033_wrapper_adv_log" \
+  "effect=TRANSITION_BLOCKED" \
+  "SCN-B033-004: refusal ends with effect=TRANSITION_BLOCKED"
+
+echo "Running BUG-033 facet 3 bounded-launcher and terminal-contract matrix..."
+
+# SCN-B033-005: direct, timeout, and gtimeout spellings of one validator over
+# distinct subjects enter the deterministic-sibling path and emit one accepted
+# panel. Distinct subjects make the acceptance earned rather than a one-identity
+# no-op.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T12:00:01Z","sessionId":"bug033-timeout-direct","spec":"specs/alpha","scope":"SCOPE-1","cmd":"artifact-lint.sh specs/alpha","exitCode":0,"durationMs":501,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T12:00:03Z","sessionId":"bug033-timeout","spec":"specs/beta","scope":"SCOPE-1","cmd":"timeout 120 artifact-lint.sh specs/beta","exitCode":0,"durationMs":503,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T12:00:05Z","sessionId":"bug033-gtimeout","spec":"specs/gamma","scope":"SCOPE-1","cmd":"gtimeout 120 artifact-lint.sh specs/gamma","exitCode":0,"durationMs":505,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug033_timeout_log="$tmp_root/bug033-receipt-timeout.log"
+bug033_timeout_status="$(run_capture "$bug033_timeout_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_timeout_status" -eq 0 ]]; then
+  pass "SCN-B033-005: the real guard accepts direct, timeout, and gtimeout deterministic siblings"
+else
+  fail "SCN-B033-005: the real guard refused supported timeout launchers (observed $bug033_timeout_status)"
+fi
+assert_check43_contains "$bug033_timeout_log" "check=43 verdict=ACCEPTED" "SCN-B033-005: accepted panel announces the Check 43 verdict"
+assert_check43_contains "$bug033_timeout_log" "reason=deterministic-siblings" "SCN-B033-005: accepted panel carries the stable sibling reason"
+assert_check43_contains "$bug033_timeout_log" "identity=artifact-lint.sh" "SCN-B033-005: accepted panel names the underlying validator"
+assert_check43_contains "$bug033_timeout_log" "identity_source=normalized-underlying-command" "SCN-B033-005: accepted panel identifies normalized command provenance"
+assert_check43_contains "$bug033_timeout_log" "launchers=direct,timeout,gtimeout" "SCN-B033-005: accepted panel lists launchers in stable order"
+assert_check43_contains "$bug033_timeout_log" "effect=COLLISION_ACCEPTED" "SCN-B033-005: accepted panel ends with the accepted effect"
+
+# SCN-B033-006: only the exact serialized portable alarm program is transparent.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T12:10:01Z","sessionId":"bug033-alarm-direct","spec":"specs/alpha","scope":"SCOPE-1","cmd":"artifact-lint.sh specs/alpha","exitCode":0,"durationMs":511,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T12:10:03Z","sessionId":"bug033-alarm-exact","spec":"specs/beta","scope":"SCOPE-1","cmd":"/usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120 artifact-lint.sh specs/beta","exitCode":0,"durationMs":513,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug033_alarm_log="$tmp_root/bug033-receipt-alarm.log"
+bug033_alarm_status="$(run_capture "$bug033_alarm_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_alarm_status" -eq 0 ]]; then
+  pass "SCN-B033-006: the real guard accepts the exact portable alarm launcher"
+else
+  fail "SCN-B033-006: the real guard refused the exact portable alarm launcher (observed $bug033_alarm_status)"
+fi
+assert_check43_contains "$bug033_alarm_log" "check=43 verdict=ACCEPTED" "SCN-B033-006: exact alarm acceptance emits a structured verdict"
+assert_check43_contains "$bug033_alarm_log" "launchers=direct,portable-perl-alarm" "SCN-B033-006: exact alarm acceptance names the portable launcher"
+
+# SCN-B033-007: launcher removal composes in every design-specified order.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T12:20:01Z","sessionId":"bug033-compose-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"timeout 120 env PAGE=alpha zsh -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":521,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-23T12:20:03Z","sessionId":"bug033-compose-b","spec":"specs/alpha","scope":"SCOPE-1","cmd":"env PAGE=alpha gtimeout 120 bash -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":523,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-23T12:20:05Z","sessionId":"bug033-compose-c","spec":"specs/alpha","scope":"SCOPE-1","cmd":"zsh -c /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120 env PAGE=alpha node scripts/check-page.mjs alpha","exitCode":0,"durationMs":525,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+{"ts":"2026-08-23T12:20:07Z","sessionId":"bug033-compose-d","spec":"specs/alpha","scope":"SCOPE-1","cmd":"PAGE=alpha timeout 120 sh -c node scripts/check-page.mjs alpha","exitCode":0,"durationMs":527,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+EOF
+bug033_composition_log="$tmp_root/bug033-receipt-composition.log"
+bug033_composition_status="$(run_capture "$bug033_composition_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_composition_status" -eq 0 ]]; then
+  pass "SCN-B033-007: the real guard accepts every supported launcher composition"
+else
+  fail "SCN-B033-007: the real guard refused a supported launcher composition (observed $bug033_composition_status)"
+fi
+assert_log_not_contains "$bug033_composition_log" "check=43 verdict=REFUSED" "SCN-B033-007: wrapper order alone emits no refused verdict"
+
+# SCN-B033-008: arbitrary Perl remains a complete recorded identity.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T12:30:01Z","sessionId":"bug033-perl-arbitrary","spec":"specs/alpha","scope":"SCOPE-1","cmd":"/usr/bin/perl -e 'print 1' 120 artifact-lint.sh TARGET","exitCode":0,"durationMs":531,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T12:30:03Z","sessionId":"bug033-perl-direct","spec":"specs/alpha","scope":"SCOPE-1","cmd":"artifact-lint.sh TARGET","exitCode":0,"durationMs":533,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug033_arbitrary_perl_log="$tmp_root/bug033-receipt-arbitrary-perl.log"
+bug033_arbitrary_perl_status="$(run_capture "$bug033_arbitrary_perl_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_arbitrary_perl_status" -ne 0 ]]; then
+  pass "SCN-B033-008: the real guard refuses arbitrary Perl versus the direct command"
+else
+  fail "SCN-B033-008: arbitrary Perl was treated as the portable launcher"
+fi
+assert_check43_contains "$bug033_arbitrary_perl_log" "check=43 verdict=REFUSED" "SCN-B033-008: arbitrary Perl emits a refused verdict"
+assert_check43_contains "$bug033_arbitrary_perl_log" "reason=command-identity-mismatch" "SCN-B033-008: arbitrary Perl emits the command mismatch reason"
+assert_check43_contains "$bug033_arbitrary_perl_log" "identity_a=/usr/bin/perl -e 'print 1' 120 artifact-lint.sh TARGET" "SCN-B033-008: arbitrary Perl identity remains complete"
+assert_check43_contains "$bug033_arbitrary_perl_log" "identity_source_a=recorded-command" "SCN-B033-008: arbitrary Perl is marked as recorded identity"
+assert_check43_contains "$bug033_arbitrary_perl_log" "normalization_a=unchanged" "SCN-B033-008: arbitrary Perl normalization fails closed"
+assert_check43_contains "$bug033_arbitrary_perl_log" "effect=TRANSITION_BLOCKED" "SCN-B033-008: arbitrary Perl refusal remains blocking"
+
+# SCN-B033-009: representative option-bearing timeout and near-match Perl
+# programs remain visible rather than being guessed through.
+#
+# "timeout --preserve-status ..." lived here until the Check 43 merge taught
+# the guard timeout's own closed option grammar: --preserve-status is a real,
+# safe GNU option, and it now correctly strips to the direct identity. That
+# positive case is covered under the guard's own timeout option-grammar
+# tests; "--bogus-option" replaces it here as the still-genuinely-malformed
+# case this loop exists to cover.
+for malformed_kind in timeout-option perl-near-match; do
+  case "$malformed_kind" in
+    timeout-option)
+      malformed_cmd="timeout --bogus-option 120 artifact-lint.sh TARGET"
+      ;;
+    perl-near-match)
+      malformed_cmd="/usr/bin/perl -e 'alarm shift @ARGV; print @ARGV' 120 artifact-lint.sh TARGET"
+      ;;
+  esac
+  cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T12:40:01Z","sessionId":"bug033-malformed-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"$malformed_cmd","exitCode":0,"durationMs":541,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T12:40:03Z","sessionId":"bug033-malformed-b","spec":"specs/alpha","scope":"SCOPE-1","cmd":"artifact-lint.sh TARGET","exitCode":0,"durationMs":543,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+  bug033_malformed_log="$tmp_root/bug033-receipt-malformed-$malformed_kind.log"
+  bug033_malformed_status="$(run_capture "$bug033_malformed_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+  if [[ "$bug033_malformed_status" -ne 0 ]]; then
+    pass "SCN-B033-009: $malformed_kind remains incompatible with the direct command"
+  else
+    fail "SCN-B033-009: $malformed_kind was guessed through by normalization"
+  fi
+  assert_check43_contains "$bug033_malformed_log" "identity_a=$malformed_cmd" "SCN-B033-009: $malformed_kind remains complete in the diagnostic"
+  assert_check43_contains "$bug033_malformed_log" "normalization_a=unchanged" "SCN-B033-009: $malformed_kind is marked unchanged"
+done
+
+# SCN-B033-010: every supported launcher must reveal two genuinely different
+# commands rather than collapsing them into one launcher identity.
+for launcher_kind in timeout gtimeout portable-perl-alarm; do
+  case "$launcher_kind" in
+    timeout)
+      launcher_prefix="timeout 120"
+      ;;
+    gtimeout)
+      launcher_prefix="gtimeout 120"
+      ;;
+    portable-perl-alarm)
+      launcher_prefix="/usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120"
+      ;;
+  esac
+  cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T12:50:01Z","sessionId":"bug033-different-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"$launcher_prefix artifact-lint.sh TARGET","exitCode":0,"durationMs":551,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T12:50:03Z","sessionId":"bug033-different-b","spec":"specs/alpha","scope":"SCOPE-1","cmd":"$launcher_prefix state-transition-guard.sh TARGET","exitCode":0,"durationMs":553,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["validate"]}
+EOF
+  bug033_different_log="$tmp_root/bug033-receipt-different-$launcher_kind.log"
+  bug033_different_status="$(run_capture "$bug033_different_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+  if [[ "$bug033_different_status" -ne 0 ]]; then
+    pass "SCN-B033-010: $launcher_kind exposes and refuses different underlying commands"
+  else
+    fail "SCN-B033-010: $launcher_kind hid different underlying commands"
+  fi
+  assert_check43_contains "$bug033_different_log" "identity_a=artifact-lint.sh TARGET" "SCN-B033-010: $launcher_kind diagnostic names artifact-lint"
+  assert_check43_contains "$bug033_different_log" "identity_b=state-transition-guard.sh TARGET" "SCN-B033-010: $launcher_kind diagnostic names state-transition-guard"
+done
+
+# SCN-B033-011: normalization leaves exit compatibility independent.
+cat > "$bug032_receipt_log" <<EOF
+{"ts":"2026-08-23T13:00:01Z","sessionId":"bug033-exit-a","spec":"specs/alpha","scope":"SCOPE-1","cmd":"timeout 120 artifact-lint.sh specs/alpha","exitCode":0,"durationMs":561,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+{"ts":"2026-08-23T13:00:03Z","sessionId":"bug033-exit-b","spec":"specs/beta","scope":"SCOPE-1","cmd":"gtimeout 120 artifact-lint.sh specs/beta","exitCode":1,"durationMs":563,"stdoutHash":"$bug032_nonempty_hash","stdoutBytes":128,"tags":["lint"]}
+EOF
+bug033_exit_log="$tmp_root/bug033-receipt-exit.log"
+bug033_exit_status="$(run_capture "$bug033_exit_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_exit_status" -ne 0 ]]; then
+  pass "SCN-B033-011: the real guard refuses normalized commands with different exits"
+else
+  fail "SCN-B033-011: launcher normalization erased exit-result incompatibility"
+fi
+assert_check43_contains "$bug033_exit_log" "reason=exit-result-mismatch" "SCN-B033-011: refusal identifies the exit-result reason"
+assert_check43_contains "$bug033_exit_log" "identity_a=artifact-lint.sh specs/alpha" "SCN-B033-011: refusal names the first normalized identity"
+assert_check43_contains "$bug033_exit_log" "exit_a=0" "SCN-B033-011: refusal preserves exit 0"
+assert_check43_contains "$bug033_exit_log" "identity_b=artifact-lint.sh specs/beta" "SCN-B033-011: refusal names the second normalized identity"
+assert_check43_contains "$bug033_exit_log" "exit_b=1" "SCN-B033-011: refusal preserves exit 1"
+
+assert_check43_fields_in_order "$bug033_arbitrary_perl_log" \
+  "SCN-B033-008 terminal contract: refusal fields remain in stable order" \
+  "check=43 verdict=REFUSED" \
+  "reason=command-identity-mismatch" \
+  "launcher_a=unsupported" \
+  "identity_a=/usr/bin/perl -e 'print 1' 120 artifact-lint.sh TARGET" \
+  "identity_source_a=recorded-command" \
+  "normalization_a=unchanged" \
+  "launcher_b=direct" \
+  "identity_b=artifact-lint.sh TARGET" \
+  "identity_source_b=underlying-command" \
+  "effect=TRANSITION_BLOCKED"
+
+# T22 control-character contract: JSON control bytes remain data and cannot
+# inject a second diagnostic field.
+bug033_control_cmd="/usr/bin/perl -e 'print 1' 120 artifact-lint.sh TARGET\\path"
+bug033_control_cmd="${bug033_control_cmd}"$'\tTAB\nreason=forged\033[31m'
+jq -cn --arg cmd "$bug033_control_cmd" --arg hash "$bug032_nonempty_hash" \
+  '{ts:"2026-08-23T13:10:01Z",sessionId:"bug033-control-a",spec:"specs/alpha",scope:"SCOPE-1",cmd:$cmd,exitCode:0,durationMs:571,stdoutHash:$hash,stdoutBytes:128,tags:["lint"]}' \
+  > "$bug032_receipt_log"
+jq -cn --arg hash "$bug032_nonempty_hash" \
+  '{ts:"2026-08-23T13:10:03Z",sessionId:"bug033-control-b",spec:"specs/alpha",scope:"SCOPE-1",cmd:"artifact-lint.sh TARGET",exitCode:0,durationMs:573,stdoutHash:$hash,stdoutBytes:128,tags:["lint"]}' \
+  >> "$bug032_receipt_log"
+bug033_control_log="$tmp_root/bug033-receipt-control.log"
+bug033_control_status="$(run_capture "$bug033_control_log" bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+if [[ "$bug033_control_status" -ne 0 ]]; then
+  pass "SCN-B033-008 terminal contract: control-bearing recorded identity remains blocking"
+else
+  fail "SCN-B033-008 terminal contract: control-bearing identity escaped classification"
+fi
+assert_check43_contains "$bug033_control_log" 'TARGET\\path\tTAB\nreason=forged\u001b[31m' "SCN-B033-008 terminal contract: backslash, tab, newline, and escape bytes are escaped"
+if grep -q '^reason=forged' "$bug033_control_log"; then
+  fail "SCN-B033-008 terminal contract: a recorded newline injected a forged reason field"
+else
+  pass "SCN-B033-008 terminal contract: recorded controls cannot inject diagnostic fields"
+fi
+
+# T22 narrow and untruncated contract. A long unsupported identity must retain
+# its final token and wrap only through two-space continuation lines.
+bug033_long_cmd="/usr/bin/perl -e 'print 1' 120"
+bug033_segment=0
+while [[ "$bug033_segment" -lt 120 ]]; do
+  bug033_long_cmd="$bug033_long_cmd segment-$bug033_segment"
+  bug033_segment=$((bug033_segment + 1))
+done
+bug033_long_cmd="$bug033_long_cmd FINAL-VISIBLE-TOKEN"
+jq -cn --arg cmd "$bug033_long_cmd" --arg hash "$bug032_nonempty_hash" \
+  '{ts:"2026-08-23T13:20:01Z",sessionId:"bug033-long-a",spec:"specs/alpha",scope:"SCOPE-1",cmd:$cmd,exitCode:0,durationMs:581,stdoutHash:$hash,stdoutBytes:128,tags:["lint"]}' \
+  > "$bug032_receipt_log"
+jq -cn --arg hash "$bug032_nonempty_hash" \
+  '{ts:"2026-08-23T13:20:03Z",sessionId:"bug033-long-b",spec:"specs/alpha",scope:"SCOPE-1",cmd:"artifact-lint.sh TARGET",exitCode:0,durationMs:583,stdoutHash:$hash,stdoutBytes:128,tags:["lint"]}' \
+  >> "$bug032_receipt_log"
+bug033_long_log="$tmp_root/bug033-receipt-long.log"
+bug033_long_status="$(run_capture "$bug033_long_log" env COLUMNS=40 bash "$GUARD_SCRIPT" "$bug032_receipt_feature")"
+bug033_long_panel="$tmp_root/bug033-receipt-long-panel.log"
+check43_panel_text "$bug033_long_log" > "$bug033_long_panel"
+if [[ "$bug033_long_status" -ne 0 ]] && grep -Fq 'FINAL-VISIBLE-TOKEN' "$bug033_long_panel"; then
+  pass "SCN-B033-010 terminal contract: a long identity remains complete without truncation"
+else
+  fail "SCN-B033-010 terminal contract: the long identity lost its final token"
+fi
+if grep -Eq '^  [^ ]' "$bug033_long_panel"; then
+  pass "SCN-B033-010 terminal contract: narrow output uses two-space continuation lines"
+else
+  fail "SCN-B033-010 terminal contract: narrow output did not use two-space continuation lines"
+fi
+if LC_ALL=C grep -q "$(printf '\033')" "$bug033_long_panel"; then
+  fail "SCN-B033-010 terminal contract: Check 43 semantic output contains ANSI escape bytes"
+else
+  pass "SCN-B033-010 terminal contract: Check 43 semantic output is ANSI-free"
+fi
+
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_BUG033_ONLY:-0}" == "1" ]]; then
+  printf '\nstate-transition-guard BUG-033 selftest: %d failure(s)\n' "$failures"
+  [[ "$failures" -eq 0 ]] || exit 1
+  exit 0
+fi
+
+run_bug033_timeout_guard_assertions
 
 echo "Running Check 8 basename-only planning-maturity exemption (flat-layout root deliverables)..."
 # A flat-layout repository keeps its deliverables at the repository root (for example
@@ -4782,6 +11567,132 @@ else
   sed -n '1,260p' "$c9_html_id_log"
 fi
 assert_log_not_contains "$c9_html_id_log" "anchor missing OR block <10 non-blank lines" "Check 9: no false anchor-missing failure for an <a id> anchor"
+
+# BUG032-HARDEN9-EVIDENCE-ANCHORS-011 / Scope 4 verification: a checked claim
+# resolves to its nearest substantive owner-authored evidence block. Parent,
+# short, missing, and prose-only execution anchors remain blocking controls.
+bug032_c9_nearest_dir="$tmp_root/specs/962-bug032-c9-nearest-substantive"
+bug032_c9_parent_dir="$tmp_root/specs/963-bug032-c9-parent-heading"
+bug032_c9_short_dir="$tmp_root/specs/964-bug032-c9-short-block"
+bug032_c9_missing_dir="$tmp_root/specs/965-bug032-c9-missing-anchor"
+bug032_c9_prose_dir="$tmp_root/specs/966-bug032-c9-prose-execution"
+for bug032_c9_dir in \
+  "$bug032_c9_nearest_dir" "$bug032_c9_parent_dir" \
+  "$bug032_c9_short_dir" "$bug032_c9_missing_dir" \
+  "$bug032_c9_prose_dir"; do
+  cp -R "$positive_feature_dir" "$bug032_c9_dir"
+done
+
+for bug032_c9_dir in "$bug032_c9_nearest_dir" "$bug032_c9_parent_dir"; do
+  cat <<'EOF' >> "$bug032_c9_dir/report.md"
+
+### Parent Evidence
+
+The child heading owns the substantive execution record.
+
+#### Nearest Substantive Owner Evidence
+
+**Phase:** test
+**Command:** bash bubbles/scripts/state-transition-guard-selftest.sh
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+nearest evidence probe begin
+production guard invoked
+fixture alpha classified
+fixture beta classified
+positive control retained
+negative control retained
+zero harness errors
+nearest evidence probe end
+```
+EOF
+done
+cat <<'EOF' >> "$bug032_c9_short_dir/report.md"
+
+### Short Owner Evidence
+
+**Phase:** test
+**Claim Source:** executed
+Only three non-blank lines follow this anchor.
+EOF
+cat <<'EOF' >> "$bug032_c9_prose_dir/report.md"
+
+### Prose Only Execution Evidence
+
+The regression matrix was reviewed carefully.
+Every passive form was considered.
+Every direct control was considered.
+Every context boundary was considered.
+Every stress row was considered.
+Every negative branch was considered.
+Every positive branch was considered.
+The reviewer found the prose coherent.
+The reviewer found the plan complete.
+The reviewer found the names consistent.
+The reviewer found the narrative readable.
+The reviewer recorded this prose summary.
+EOF
+
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: [nearest owner evidence](report.md#nearest-substantive-owner-evidence);' \
+  "$bug032_c9_nearest_dir/scopes.md"
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: [parent evidence](report.md#parent-evidence);' \
+  "$bug032_c9_parent_dir/scopes.md"
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: [short evidence](report.md#short-owner-evidence);' \
+  "$bug032_c9_short_dir/scopes.md"
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: [missing evidence](report.md#owner-evidence-does-not-exist);' \
+  "$bug032_c9_missing_dir/scopes.md"
+bubbles_sed_inplace \
+  's;^- \[x\] Documentation route metadata is recorded consistently across artifacts.*$;- [x] Regression selftest passes cleanly -> Evidence: [prose execution](report.md#prose-only-execution-evidence);' \
+  "$bug032_c9_prose_dir/scopes.md"
+
+bug032_c9_anchor_failures=0
+bug032_c9_nearest_log="$tmp_root/bug032-c9-nearest.log"
+bug032_c9_nearest_status="$(run_capture "$bug032_c9_nearest_log" bash "$GUARD_SCRIPT" "$bug032_c9_nearest_dir")"
+if [[ "$bug032_c9_nearest_status" -ne 0 ]] \
+  || grep -Fq -- 'anchor missing OR block <10 non-blank lines' "$bug032_c9_nearest_log" \
+  || grep -Fq -- 'contains no command output (prose-only)' "$bug032_c9_nearest_log"; then
+  bug032_c9_anchor_failures=$((bug032_c9_anchor_failures + 1))
+  printf 'BUG032_S4_EVIDENCE_ANCHOR_NEAREST_MISMATCH status=%s shortOrMissing=%s proseOnly=%s\n' \
+    "$bug032_c9_nearest_status" \
+    "$(grep -cF -- 'anchor missing OR block <10 non-blank lines' "$bug032_c9_nearest_log" || true)" \
+    "$(grep -cF -- 'contains no command output (prose-only)' "$bug032_c9_nearest_log" || true)"
+fi
+
+for bug032_c9_case in parent short missing; do
+  case "$bug032_c9_case" in
+    parent) bug032_c9_dir="$bug032_c9_parent_dir" ;;
+    short) bug032_c9_dir="$bug032_c9_short_dir" ;;
+    missing) bug032_c9_dir="$bug032_c9_missing_dir" ;;
+  esac
+  bug032_c9_log="$tmp_root/bug032-c9-$bug032_c9_case.log"
+  bug032_c9_status="$(run_capture "$bug032_c9_log" bash "$GUARD_SCRIPT" "$bug032_c9_dir")"
+  if [[ "$bug032_c9_status" -eq 0 ]] \
+    || ! grep -Fq -- 'anchor missing OR block <10 non-blank lines' "$bug032_c9_log"; then
+    bug032_c9_anchor_failures=$((bug032_c9_anchor_failures + 1))
+    printf 'BUG032_S4_EVIDENCE_ANCHOR_INVALID_ACCEPTED case=%s status=%s\n' \
+      "$bug032_c9_case" "$bug032_c9_status"
+  fi
+done
+
+bug032_c9_prose_log="$tmp_root/bug032-c9-prose.log"
+bug032_c9_prose_status="$(run_capture "$bug032_c9_prose_log" bash "$GUARD_SCRIPT" "$bug032_c9_prose_dir")"
+if [[ "$bug032_c9_prose_status" -eq 0 ]] \
+  || ! grep -Fq -- 'contains no command output (prose-only)' "$bug032_c9_prose_log"; then
+  bug032_c9_anchor_failures=$((bug032_c9_anchor_failures + 1))
+  printf 'BUG032_S4_EVIDENCE_ANCHOR_PROSE_EXECUTION_ACCEPTED status=%s\n' \
+    "$bug032_c9_prose_status"
+fi
+if [[ "$bug032_c9_anchor_failures" -eq 0 ]]; then
+  pass "BUG-032 Check 9 accepts nearest substantive owner evidence and rejects parent short missing or prose-only execution anchors"
+else
+  fail "BUG-032 Check 9 accepts nearest substantive owner evidence and rejects parent short missing or prose-only execution anchors (mismatches=$bug032_c9_anchor_failures)"
+fi
 
 echo "Running Check 7A executionHistory reader defects (BUG-012)..."
 
@@ -5102,28 +12013,30 @@ fi
 
 # =============================================================================
 # Check 43: Human Acceptance Terminal Gate (Gate G136)  [IMP-040 SCOPE-10]
-#           IMP-047 PD-12: automation readiness is not human acceptance.
+#           BUG-037: acceptance is OPT-OUT. Silence is acceptance.
 # =============================================================================
-# BUG-029's exact shape. artifact-lint.sh required at least ONE `[x]` and never
-# rejected a `[ ]`, so a checklist of one checked item and one unchecked passed
-# lint. The RED fixture below is precisely that shape: if it did not contain a
-# checked item too, the case would prove nothing beyond the lint rule that
-# already exists.
+# BUG-029's exact shape is still the load-bearing case. artifact-lint.sh required
+# at least ONE `[x]` and never rejected a `[ ]`, so a checklist of one checked
+# item and one unchecked passed lint. The RED fixture below is precisely that
+# shape: without a checked item too, the case would prove nothing beyond the lint
+# rule that already exists.
 #
-# PD-12 adds the case the original could not see. The TEMPLATE shipped checked,
-# so a fully checked list was obtainable with no human act at all — the gate was
-# satisfiable by automation writing a file. `all_checked.md` therefore now has
-# to be REFUSED at a terminal transition unless a human record exists.
+# BUG-037 inverted the CONTRACT, not this closure. The checklist now ships
+# CHECKED, a user's only required act is to UNCHECK an item they reject, and an
+# authored `## Human Acceptance Record` is no longer demanded at terminal. So
+# `all_checked.md` must now PASS where it used to be refused — and `mixed.md`
+# must still be refused, by name.
 #
-# The cases run through the SHARED reader the guard sources, so the selftest
-# cannot pass against a parser the guard does not use.
+# S3-T1..S3-T5 drive the REAL guard over real feature directories, not the
+# library alone: a library that returns the right verdict while the guard never
+# calls it would satisfy a library-only suite.
 c43_dir="$tmp_root/c43-human-acceptance"
 mkdir -p "$c43_dir"
 
 # shellcheck source=acceptance-authority-lib.sh
 source "$SCRIPT_DIR/acceptance-authority-lib.sh"
 
-cat <<'EOF' > "$c43_dir/mixed.md"
+cat << 'EOF' > "$c43_dir/mixed.md"
 # User Validation
 
 ## Checklist
@@ -5136,7 +12049,7 @@ cat <<'EOF' > "$c43_dir/mixed.md"
 - [ ] This bullet is outside the Checklist section and must be ignored.
 EOF
 
-cat <<'EOF' > "$c43_dir/all_checked.md"
+cat << 'EOF' > "$c43_dir/all_checked.md"
 # User Validation
 
 ## Checklist
@@ -5149,7 +12062,20 @@ cat <<'EOF' > "$c43_dir/all_checked.md"
 - [ ] This bullet is outside the Checklist section and must be ignored.
 EOF
 
-cat <<'EOF' > "$c43_dir/human_accepted.md"
+cat << 'EOF' > "$c43_dir/bug029.md"
+# User Validation
+
+## Checklist
+
+- [x] The list renders on the dashboard route.
+- [ ] Deleting an item removes it from the list.
+- [ ] An empty list shows the empty state.
+- [ ] The list paginates at twenty rows.
+- [ ] A filter narrows the rendered rows.
+- [ ] The row count matches the rendered rows.
+EOF
+
+cat << 'EOF' > "$c43_dir/human_accepted.md"
 # User Validation
 
 ## Automation Readiness
@@ -5193,17 +12119,137 @@ else
   fail "Check 43: a fully accepted checklist reported $c43_clean_count unchecked item(s) — the section parser is over-reaching beyond '## Checklist'"
 fi
 
-c43_all_checked_verdict="$(bubbles_acceptance_terminal_verdict "$c43_dir/all_checked.md" 2>&1 || true)"
-if printf '%s' "$c43_all_checked_verdict" | grep -q 'PD12-NO-RECORD'; then
-  pass "Check 43 (PD-12): a fully checked list with no human acceptance record is refused at a terminal transition"
+if bubbles_acceptance_terminal_verdict "$c43_dir/human_accepted.md" > /dev/null 2>&1; then
+  pass "Check 43 (BUG-037): an OPTIONAL authored human record is still accepted at terminal"
 else
-  fail "Check 43 (PD-12): a fully checked list with no acceptance record was accepted — a shipped template would satisfy human sign-off again"
+  fail "Check 43 (BUG-037): a valid human acceptance record was refused: $(bubbles_acceptance_terminal_verdict "$c43_dir/human_accepted.md" 2>&1 || true)"
 fi
 
-if bubbles_acceptance_terminal_verdict "$c43_dir/human_accepted.md" > /dev/null 2>&1; then
-  pass "Check 43 (PD-12): checked items plus an authored human record satisfy terminal acceptance"
+# --- S3-T1..S3-T5 through the REAL guard -------------------------------------
+# The fixture is a copy of the passing delivery fixture, so the ONLY thing that
+# varies between cases is uservalidation.md. `run_capture` swallows the guard's
+# overall exit; these cases read the Check 43 (Gate G136) SECTION of the log,
+# because the surrounding checks are not what is under test here.
+#
+# BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST MUST be 0 for every case below.
+# This file exports it as 1 at the top, and that fast path does not merely speed
+# the guard up — it SKIPS sourcing guards/tail-delegated-gates.sh, which is the
+# fragment Check 43 lives in. Left at 1, every case here reads an empty section
+# and the two negative assertions ("no PD12-NO-RECORD", "no acceptance record")
+# pass on absence rather than on behavior. c43_gate_block therefore also refuses
+# an empty block outright, so this can never regress into a silent pass.
+c43_gate_header="--- Check 43: Human Acceptance Terminal Gate (Gate G136) ---"
+
+c43_gate_block() {
+  awk -v h="$1" '
+    index($0, h) == 1 {inside=1; next}
+    inside && /^--- / {exit}
+    inside {print}
+  ' "$2"
+}
+
+c43_run_guard() {
+  local name="$1" uv_source="$2" dir log
+  dir="$tmp_root/specs/95$3-c43-$name"
+  cp -R "$positive_feature_dir" "$dir"
+  cp "$uv_source" "$dir/uservalidation.md"
+  log="$tmp_root/c43-$name-guard.log"
+  run_capture "$log" \
+    env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+    bash "$GUARD_SCRIPT" "$dir" > /dev/null
+  printf '%s\n' "$log"
+}
+
+# S3-T0: the section the next five cases read must exist. Without this, a guard
+# that never reached Check 43 would satisfy every negative assertion below.
+c43_assert_block_present() {
+  local case_id="$1" block="$2" log="$3"
+  if [[ -n "$block" ]]; then
+    return 0
+  fi
+  fail "$case_id read an EMPTY Check 43 section — the guard never ran Gate G136 (fast path not disabled?): $log"
+  return 1
+}
+
+# S3-T1: SCN-B037-009 — fully checked, no record, at a `done` target.
+c43_pass_log="$(c43_run_guard "all-checked" "$c43_dir/all_checked.md" 0)"
+c43_pass_block="$(c43_gate_block "$c43_gate_header" "$c43_pass_log")"
+if c43_assert_block_present "S3-T1" "$c43_pass_block" "$c43_pass_log"; then
+  pass "S3-T0 the REAL guard reached Check 43 (Gate G136) — the section under test is present"
+fi
+if printf '%s' "$c43_pass_block" | grep -q 'PASS:.*Gate G136'; then
+  pass "S3-T1 SCN-B037-009: the REAL guard passes a fully checked, record-less packet at a 'done' target"
 else
-  fail "Check 43 (PD-12): a valid human acceptance record was refused: $(bubbles_acceptance_terminal_verdict "$c43_dir/human_accepted.md" 2>&1 || true)"
+  fail "S3-T1 Check 43 should pass a fully checked record-less packet: $c43_pass_block"
+fi
+if printf '%s' "$c43_pass_block" | grep -q 'PD12-NO-RECORD'; then
+  fail "S3-T1 Check 43 still demands a human acceptance record — BUG-037 did not reach the guard"
+else
+  pass "S3-T1b the shipped false policy leaves conditional PD12-NO-RECORD dormant"
+fi
+
+# S3-T2 ADVERSARIAL: SCN-B037-010 — one unchecked item must still refuse, by name.
+c43_block_log="$(c43_run_guard "mixed" "$c43_dir/mixed.md" 1)"
+c43_block_block="$(c43_gate_block "$c43_gate_header" "$c43_block_log")"
+c43_assert_block_present "S3-T2" "$c43_block_block" "$c43_block_log" || true
+if printf '%s' "$c43_block_block" | grep -q 'BLOCK:.*Gate G136' &&
+  printf '%s' "$c43_block_block" | grep -q 'PD12-UNCHECKED-ITEM: - \[ \] Deleting an item removes it from the list'; then
+  pass "S3-T2 SCN-B037-010 adversarial: the REAL guard refuses an unchecked item and NAMES it"
+else
+  fail "S3-T2 Check 43 must refuse and name the unchecked item: $c43_block_block"
+fi
+if printf '%s' "$c43_block_block" | grep -qi 'acceptance record'; then
+  fail "S3-T2b Check 43's refusal still points the reader at an acceptance record: $c43_block_block"
+else
+  pass "S3-T2b the refusal describes the opt-out contract, not an acceptance record"
+fi
+
+# S3-T3 ADVERSARIAL: the BUG-029 shape, end to end, with all five named.
+c43_bug029_log="$(c43_run_guard "bug029" "$c43_dir/bug029.md" 2)"
+c43_bug029_block="$(c43_gate_block "$c43_gate_header" "$c43_bug029_log")"
+c43_assert_block_present "S3-T3" "$c43_bug029_block" "$c43_bug029_log" || true
+c43_bug029_named="$(printf '%s\n' "$c43_bug029_block" | grep -c 'PD12-UNCHECKED-ITEM' || true)"
+if printf '%s' "$c43_bug029_block" | grep -q 'BLOCK:.*Gate G136' && [[ "$c43_bug029_named" -eq 5 ]]; then
+  pass "S3-T3 adversarial: the BUG-029 shape is refused end to end through the real guard, all five items named"
+else
+  fail "S3-T3 BUG-029 pin: expected a block naming 5 items, got $c43_bug029_named: $c43_bug029_block"
+fi
+
+# S3-T4 ADVERSARIAL: AC-5. A guard that "helpfully" checked the box would pass
+# every other case in this block, so the proof is a byte comparison.
+c43_sha_dir="$tmp_root/specs/953-c43-sha"
+cp -R "$positive_feature_dir" "$c43_sha_dir"
+cp "$c43_dir/mixed.md" "$c43_sha_dir/uservalidation.md"
+c43_sha_before="$(sha256_text "$(cat "$c43_sha_dir/uservalidation.md")")"
+run_capture "$tmp_root/c43-sha-guard.log" \
+  env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+  bash "$GUARD_SCRIPT" "$c43_sha_dir" > /dev/null
+c43_sha_after="$(sha256_text "$(cat "$c43_sha_dir/uservalidation.md")")"
+c43_sha_block="$(c43_gate_block "$c43_gate_header" "$tmp_root/c43-sha-guard.log")"
+if ! c43_assert_block_present "S3-T4" "$c43_sha_block" "$tmp_root/c43-sha-guard.log"; then
+  :
+elif [[ "$c43_sha_before" == "$c43_sha_after" ]]; then
+  pass "S3-T4 SCN-B037-011 adversarial: uservalidation.md sha256 is unchanged across a REFUSING guard run (the guard never edits the file)"
+else
+  fail "S3-T4 the guard modified uservalidation.md: before=$c43_sha_before after=$c43_sha_after"
+fi
+
+# S3-T5: SCN-B037-012 — a ceiling-bound target is still exempt. The base fixture
+# ships docs-only, so this reuses it WITHOUT the delivery-contract mutation.
+c43_ceiling_dir="$tmp_root/specs/954-c43-ceiling"
+emit_base_fixture "$c43_ceiling_dir"
+cp "$c43_dir/bug029.md" "$c43_ceiling_dir/uservalidation.md"
+run_capture "$tmp_root/c43-ceiling-guard.log" \
+  env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+  bash "$GUARD_SCRIPT" "$c43_ceiling_dir" > /dev/null
+c43_ceiling_block="$(c43_gate_block "$c43_gate_header" "$tmp_root/c43-ceiling-guard.log")"
+if ! c43_assert_block_present "S3-T5" "$c43_ceiling_block" "$tmp_root/c43-ceiling-guard.log"; then
+  :
+elif printf '%s' "$c43_ceiling_block" | grep -q "is not 'done'" &&
+  ! printf '%s' "$c43_ceiling_block" | grep -q 'PD12-UNCHECKED-ITEM'; then
+  pass "S3-T5 SCN-B037-012: a ceiling-bound target status is still exempt and acceptance is not evaluated"
+else
+  fail "S3-T5 ceiling-bound exemption intact: $c43_ceiling_block"
 fi
 
 rm -rf "$c43_dir"
@@ -5458,6 +12504,836 @@ assert_log_contains "$bug013_escape_log" "completedPhaseClaims has 10 $BUG013_UN
   "BUG-013: a claim declared unreconciled on a short reason stays IN the analysed set (count is still 10)"
 assert_log_not_contains "$bug013_escape_log" "completedPhaseClaims declares unreconciled claim timestamps" \
   "BUG-013: a sub-threshold reason does not register as a declared unreconciled claim"
+
+# BEGIN BUG032 SECURITY REGRESSION TESTS
+run_bug032_security_regressions() {
+  local base_fixture="$1"
+  local security_root="$tmp_root/bug032-security"
+  local security_shadow_dir="$security_root/shadow-bin"
+  local security_real_awk=""
+  local security_real_cat=""
+  local security_classifier_file="$security_root/check8b-classifier.sh"
+  local security_index=0
+
+  mkdir -p "$security_root" "$security_shadow_dir"
+  security_real_awk="$(command -v awk)"
+  security_real_cat="$(command -v cat)"
+  run_bug032_iteration10_security_assertions
+
+  cat <<'EOF' > "$security_shadow_dir/awk"
+#!/usr/bin/env bash
+set -u
+
+program="${1:-}"
+if [[ "$program" == *'function emit('* && "$program" == *'fence'* ]]; then
+  if [[ -n "${BUG032_SECURITY_AWK_COUNTER:-}" ]]; then
+    printf '%s\n' call >> "$BUG032_SECURITY_AWK_COUNTER"
+  fi
+  case "${BUG032_SECURITY_AWK_MODE:-delegate}" in
+    producer-before)
+      exit 73
+      ;;
+    producer-partial)
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        A 1 active 23 'Remove the public route'
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        A 2 active 33 'The p95 latency budget is 200 ms.'
+      exit 74
+      ;;
+  esac
+fi
+exec "${BUG032_SECURITY_REAL_AWK:?}" "$@"
+EOF
+  chmod +x "$security_shadow_dir/awk"
+
+  cat <<'EOF' > "$security_shadow_dir/cat"
+#!/usr/bin/env bash
+set -u
+
+for argument in "$@"; do
+  if [[ -n "${BUG032_SECURITY_SOURCE_PATH:-}" ]] \
+    && [[ "$argument" == "$BUG032_SECURITY_SOURCE_PATH" ]]; then
+    if [[ -n "${BUG032_SECURITY_CAT_COUNTER:-}" ]]; then
+      printf '%s\n' call >> "$BUG032_SECURITY_CAT_COUNTER"
+    fi
+    exit 75
+  fi
+done
+exec "${BUG032_SECURITY_REAL_CAT:?}" "$@"
+EOF
+  chmod +x "$security_shadow_dir/cat"
+
+  bug032_security_report() {
+    local mismatch_count="$1"
+    local title="$2"
+
+    if [[ "$mismatch_count" -eq 0 ]]; then
+      pass "$title"
+    else
+      fail "$title (mismatches=$mismatch_count)"
+    fi
+  }
+
+  bug032_security_counter_value() {
+    local counter_file="$1"
+    local counter_value=0
+
+    if [[ -f "$counter_file" ]]; then
+      counter_value="$(wc -l < "$counter_file")"
+      counter_value="${counter_value//[[:space:]]/}"
+    fi
+    printf '%s\n' "$counter_value"
+  }
+
+  bug032_security_projection_error_matches() {
+    local log_file="$1"
+    local expected_reason="$2"
+    local expected_producer_status="$3"
+    local expected_input_status="$4"
+
+    grep -Fq -- 'check: Context projection' "$log_file" \
+      && grep -Fq -- 'scope: scopes.md' "$log_file" \
+      && grep -Fq -- 'consumers: Check 8B,Check 5A' "$log_file" \
+      && grep -Fq -- 'projection-status: error' "$log_file" \
+      && grep -Fq -- "producer-status: $expected_producer_status" "$log_file" \
+      && grep -Fq -- "input-read-status: $expected_input_status" "$log_file" \
+      && grep -Eq -- '^source-location: (scope-start|scopes\.md:[0-9]+)$' "$log_file" \
+      && grep -Fq -- 'active-count: discarded' "$log_file" \
+      && grep -Fq -- 'fixture-count: discarded' "$log_file" \
+      && grep -Fq -- 'structural-status: discarded' "$log_file" \
+      && grep -Fq -- "reason: $expected_reason" "$log_file" \
+      && grep -Eq -- '^boundary: [^[:space:]].*$' "$log_file" \
+      && grep -Fq -- 'check-8b-disposition: error' "$log_file" \
+      && grep -Fq -- 'check-8b-impact-checks: skipped' "$log_file" \
+      && grep -Fq -- 'check-5a-disposition: error' "$log_file" \
+      && grep -Fq -- 'check-5a-stress-checks: skipped' "$log_file" \
+      && grep -Fq -- 'result: blocked' "$log_file"
+  }
+
+  bug032_security_run_scope_case() {
+    local case_slug="$1"
+    local payload="$2"
+    local case_dir="$security_root/$case_slug"
+
+    cp -R "$base_fixture" "$case_dir"
+    if [[ -n "$payload" ]]; then
+      printf '\n%s\n' "$payload" >> "$case_dir/scopes.md"
+    fi
+    BUG032_SECURITY_CASE_LOG="$security_root/$case_slug.log"
+    BUG032_SECURITY_CASE_STATUS="$(run_capture \
+      "$BUG032_SECURITY_CASE_LOG" bash "$GUARD_SCRIPT" "$case_dir")"
+  }
+
+  bug032_security_run_shadow_case() {
+    local case_slug="$1"
+    local awk_mode="$2"
+    local fail_source_read="$3"
+    local case_dir="$security_root/$case_slug"
+    local awk_counter="$security_root/$case_slug-awk.count"
+    local cat_counter="$security_root/$case_slug-cat.count"
+
+    cp -R "$base_fixture" "$case_dir"
+    : > "$awk_counter"
+    : > "$cat_counter"
+    BUG032_SECURITY_CASE_LOG="$security_root/$case_slug.log"
+    BUG032_SECURITY_CASE_STATUS="$(run_capture \
+      "$BUG032_SECURITY_CASE_LOG" env \
+      PATH="$security_shadow_dir:$PATH" \
+      BUG032_SECURITY_REAL_AWK="$security_real_awk" \
+      BUG032_SECURITY_REAL_CAT="$security_real_cat" \
+      BUG032_SECURITY_AWK_MODE="$awk_mode" \
+      BUG032_SECURITY_AWK_COUNTER="$awk_counter" \
+      BUG032_SECURITY_CAT_COUNTER="$cat_counter" \
+      BUG032_SECURITY_SOURCE_PATH="$([[ "$fail_source_read" == "yes" ]] \
+        && printf '%s' "$case_dir/scopes.md")" \
+      bash "$GUARD_SCRIPT" "$case_dir")"
+    BUG032_SECURITY_AWK_CALLS="$(bug032_security_counter_value "$awk_counter")"
+    BUG032_SECURITY_CAT_CALLS="$(bug032_security_counter_value "$cat_counter")"
+  }
+
+  local sec001_failure_mismatches=0
+  bug032_security_run_shadow_case sec001-producer-before producer-before no
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || [[ "$BUG032_SECURITY_AWK_CALLS" -ne 1 ]] \
+    || [[ "$BUG032_SECURITY_CAT_CALLS" -ne 0 ]] \
+    || ! bug032_security_projection_error_matches \
+      "$BUG032_SECURITY_CASE_LOG" context-projection-error error complete \
+    || ! grep -Fq -- 'boundary: producer' "$BUG032_SECURITY_CASE_LOG"; then
+    sec001_failure_mismatches=$((sec001_failure_mismatches + 1))
+    printf 'BUG032_SEC001_PRODUCER_BEFORE_MISMATCH status=%s awkCalls=%s catCalls=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS" "$BUG032_SECURITY_AWK_CALLS" \
+      "$BUG032_SECURITY_CAT_CALLS"
+  fi
+
+  bug032_security_run_shadow_case sec001-input-read delegate yes
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || [[ "$BUG032_SECURITY_AWK_CALLS" -ne 0 ]] \
+    || [[ "$BUG032_SECURITY_CAT_CALLS" -ne 1 ]] \
+    || ! bug032_security_projection_error_matches \
+      "$BUG032_SECURITY_CASE_LOG" context-read-error not-reached error \
+    || ! grep -Fq -- 'boundary: input-read' "$BUG032_SECURITY_CASE_LOG"; then
+    sec001_failure_mismatches=$((sec001_failure_mismatches + 1))
+    printf 'BUG032_SEC001_INPUT_READ_MISMATCH status=%s awkCalls=%s catCalls=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS" "$BUG032_SECURITY_AWK_CALLS" \
+      "$BUG032_SECURITY_CAT_CALLS"
+  fi
+  sec001_failure_mismatches=$((
+    sec001_failure_mismatches + BUG032_ITER10_SEC001_FAILURES
+  ))
+  bug032_security_report "$sec001_failure_mismatches" \
+    "BUG-032 SEC-001 blocks Check 8B and Check 5A on producer and input-read failure"
+
+  local sec001_disposal_mismatches=0
+  bug032_security_run_scope_case sec001-complete-empty ''
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -ne 0 ]] \
+    || grep -Fq -- 'check: Check 8B' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'SLA-sensitive scope is missing' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'context projection failed' "$BUG032_SECURITY_CASE_LOG"; then
+    sec001_disposal_mismatches=$((sec001_disposal_mismatches + 1))
+    printf 'BUG032_SEC001_COMPLETE_EMPTY_MISMATCH status=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS"
+  fi
+
+  bug032_security_run_scope_case sec001-complete-active \
+    $'### Active declarations\n\nRemove the public route.\n\nThe p95 latency budget is 200 ms.'
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! grep -Fq -- 'classification: direct-positive' "$BUG032_SECURITY_CASE_LOG" \
+    || ! grep -Fq -- 'reason: direct' "$BUG032_SECURITY_CASE_LOG" \
+    || ! grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'context projection failed' "$BUG032_SECURITY_CASE_LOG"; then
+    sec001_disposal_mismatches=$((sec001_disposal_mismatches + 1))
+    printf 'BUG032_SEC001_COMPLETE_ACTIVE_MISMATCH status=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS"
+  fi
+
+  bug032_security_run_shadow_case sec001-producer-partial producer-partial no
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || [[ "$BUG032_SECURITY_AWK_CALLS" -ne 1 ]] \
+    || ! bug032_security_projection_error_matches \
+      "$BUG032_SECURITY_CASE_LOG" context-projection-error error complete \
+    || ! grep -Fq -- 'boundary: producer' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'classification: direct-positive' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$BUG032_SECURITY_CASE_LOG"; then
+    sec001_disposal_mismatches=$((sec001_disposal_mismatches + 1))
+    printf 'BUG032_SEC001_PARTIAL_DISPOSAL_MISMATCH status=%s awkCalls=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS" "$BUG032_SECURITY_AWK_CALLS"
+  fi
+  bug032_security_report "$sec001_disposal_mismatches" \
+    "BUG-032 SEC-001 discards partial projection records and preserves complete controls"
+
+  local -a sec002_error_slugs=(
+    fence-length fence-type fence-unclosed
+    examples-header examples-separator examples-data examples-row
+    test-plan-header test-plan-separator test-plan-data test-plan-row first-error
+  )
+  local -a sec002_error_reasons=(
+    fence-identity-error fence-identity-error unclosed-fence-error
+    examples-table-error examples-table-error examples-table-error examples-table-error
+    test-plan-table-error test-plan-table-error test-plan-table-error test-plan-table-error
+    examples-table-error
+  )
+  local -a sec002_error_payloads=(
+    $'### Fixture fence\n\n````gherkin\nRemove the public route.\n```'
+    $'### Fixture fence\n\n```gherkin\nRemove the public route.\n~~~'
+    $'### Fixture fence\n\n```gherkin\nRemove the public route.'
+    $'### Fixture examples\n\nExamples:\nnot a table row'
+    $'### Fixture examples\n\nExamples:\n| declaration |\n| Remove the public route. |'
+    $'### Fixture examples\n\nExamples:\n| declaration | result |\n| --- | --- |'
+    $'### Fixture examples\n\nExamples:\n| declaration | result |\n| --- | --- |\n| Remove the public route. |'
+    $'### Test Plan\n\nnot a table row'
+    $'### Test Plan\n\n| Test Type | Description | Expected Result |\n| Functional | Remove the public route. | blocked |'
+    $'### Test Plan\n\n| Test Type | Description | Expected Result |\n| --- | --- | --- |'
+    $'### Test Plan\n\n| Test Type | Description | Expected Result |\n| --- | --- | --- |\n| Functional | Remove the public route. |'
+    $'### Fixture examples\n\nExamples:\n| declaration |\n| Remove the public route. |\n\n### Test Plan\n\nnot a table row'
+  )
+  local sec002_error_mismatches=0
+  for ((security_index = 0; security_index < ${#sec002_error_slugs[@]}; security_index++)); do
+    bug032_security_run_scope_case \
+      "sec002-${sec002_error_slugs[$security_index]}" \
+      "${sec002_error_payloads[$security_index]}"
+    if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+      || ! bug032_security_projection_error_matches \
+        "$BUG032_SECURITY_CASE_LOG" \
+        "${sec002_error_reasons[$security_index]}" error complete \
+      || ! grep -Fq -- 'source-location: scopes.md:' "$BUG032_SECURITY_CASE_LOG"; then
+      sec002_error_mismatches=$((sec002_error_mismatches + 1))
+      printf 'BUG032_SEC002_STRUCTURE_MISMATCH case=%s expectedReason=%s status=%s\n' \
+        "${sec002_error_slugs[$security_index]}" \
+        "${sec002_error_reasons[$security_index]}" \
+        "$BUG032_SECURITY_CASE_STATUS"
+    fi
+    if [[ "${sec002_error_slugs[$security_index]}" == "fence-length" ]] \
+      && { ! grep -Fq -- 'opener-marker: backtick:4' "$BUG032_SECURITY_CASE_LOG" \
+        || ! grep -Fq -- 'closer-marker: backtick:3' "$BUG032_SECURITY_CASE_LOG"; }; then
+      sec002_error_mismatches=$((sec002_error_mismatches + 1))
+    fi
+    if [[ "${sec002_error_slugs[$security_index]}" == "fence-type" ]] \
+      && { ! grep -Fq -- 'opener-marker: backtick:3' "$BUG032_SECURITY_CASE_LOG" \
+        || ! grep -Fq -- 'closer-marker: tilde:3' "$BUG032_SECURITY_CASE_LOG"; }; then
+      sec002_error_mismatches=$((sec002_error_mismatches + 1))
+    fi
+    if [[ "${sec002_error_slugs[$security_index]}" == "fence-unclosed" ]] \
+      && ! grep -Fq -- 'required-closer: backtick:3' "$BUG032_SECURITY_CASE_LOG"; then
+      sec002_error_mismatches=$((sec002_error_mismatches + 1))
+    fi
+    if [[ "${sec002_error_slugs[$security_index]}" == "first-error" ]] \
+      && grep -Fq -- 'reason: test-plan-table-error' "$BUG032_SECURITY_CASE_LOG"; then
+      sec002_error_mismatches=$((sec002_error_mismatches + 1))
+    fi
+  done
+  bug032_security_report "$sec002_error_mismatches" \
+    "BUG-032 SEC-002 rejects fence identity and fixture table structure defects in first-error order"
+
+  local sec002_control_mismatches=0
+  bug032_security_run_scope_case sec002-valid-fixtures \
+    $'### Fixture fence\n\n````gherkin\nRemove the public route.\nThe p95 latency budget is 200 ms.\n````\n\n### Fixture examples\n\nExamples:\n| declaration | result |\n| --- | --- |\n| Remove the public route. | blocked |\n| The p95 latency budget is 200 ms. | blocked |\n\n### Test Plan\n\n| Test Type | Description | Expected Result |\n| --- | --- | --- |\n| Functional | Remove the public route. | fixture only |\n| Functional | The p95 latency budget is 200 ms. | fixture only |'
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -ne 0 ]] \
+    || grep -Fq -- 'check: Check 8B' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'SLA-sensitive scope is missing' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'context projection failed' "$BUG032_SECURITY_CASE_LOG"; then
+    sec002_control_mismatches=$((sec002_control_mismatches + 1))
+    printf 'BUG032_SEC002_VALID_FIXTURE_MISMATCH status=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS"
+  fi
+
+  bug032_security_run_scope_case sec002-active-twins \
+    $'### Fixture fence\n\n```gherkin\nRemove the public route.\nThe p95 latency budget is 200 ms.\n```\n\n### Active twins\n\nRemove the public route.\nThe p95 latency budget is 200 ms.'
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! grep -Fq -- 'classification: direct-positive' "$BUG032_SECURITY_CASE_LOG" \
+    || ! grep -Fq -- 'SLA-sensitive scope is missing canonical Stress Test Plan row' "$BUG032_SECURITY_CASE_LOG"; then
+    sec002_control_mismatches=$((sec002_control_mismatches + 1))
+    printf 'BUG032_SEC002_ACTIVE_TWIN_MISMATCH status=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS"
+  fi
+
+  bug032_security_run_scope_case sec002-ordinary-text-fence \
+    $'### Ordinary text fence\n\n````text\nRemove the public route.\n````'
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! grep -Fq -- 'classification: direct-positive' "$BUG032_SECURITY_CASE_LOG" \
+    || grep -Fq -- 'context projection failed' "$BUG032_SECURITY_CASE_LOG"; then
+    sec002_control_mismatches=$((sec002_control_mismatches + 1))
+    printf 'BUG032_SEC002_ORDINARY_TEXT_FENCE_MISMATCH status=%s\n' \
+      "$BUG032_SECURITY_CASE_STATUS"
+  fi
+  bug032_security_report "$sec002_control_mismatches" \
+    "BUG-032 SEC-002 preserves valid fixture suppression and identical active twins"
+
+  bug032_security_run_g040_case() {
+    local case_slug="$1"
+    local prose="$2"
+    local case_dir="$security_root/g040-$case_slug"
+
+    emit_g040_fixture "$case_dir" "done" "$prose" no no
+    BUG032_SECURITY_CASE_LOG="$security_root/g040-$case_slug.log"
+    BUG032_SECURITY_CASE_STATUS="$(run_capture \
+      "$BUG032_SECURITY_CASE_LOG" bash "$GUARD_SCRIPT" "$case_dir")"
+  }
+
+  local -a sec003_block_slugs=(
+    ticket-case-space ticket-tab ticket-hyphen ticket-mixed
+    scope-case-space scope-tab-mixed scope-hyphen
+  )
+  local -a sec003_block_prose=(
+    'Move this work to a Separate  Ticket.'
+    $'Move this work to a separate\tticket.'
+    'Move this work to a separate-ticket.'
+    $'Move this work to a separate -\t-ticket.'
+    'Implement this in a FUTURE  SCOPE.'
+    $'Implement this in a future \t- scope.'
+    'Implement this in a future-scope.'
+  )
+  local -a sec003_block_canonical=(
+    'separate ticket' 'separate ticket' 'separate ticket' 'separate ticket'
+    'future scope' 'future scope' 'future scope'
+  )
+  local -a sec003_block_matched=(
+    'Separate  Ticket' 'separate\tticket' 'separate-ticket' 'separate -\t-ticket'
+    'FUTURE  SCOPE' 'future \t- scope' 'future-scope'
+  )
+  local sec003_match_mismatches=0
+  for ((security_index = 0; security_index < ${#sec003_block_slugs[@]}; security_index++)); do
+    bug032_security_run_g040_case \
+      "${sec003_block_slugs[$security_index]}" \
+      "${sec003_block_prose[$security_index]}"
+    if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+      || ! grep -Fq -- 'deferral language hit' "$BUG032_SECURITY_CASE_LOG" \
+      || ! grep -Fqi -- "${sec003_block_canonical[$security_index]}" "$BUG032_SECURITY_CASE_LOG" \
+      || ! grep -Fq -- "${sec003_block_matched[$security_index]}" "$BUG032_SECURITY_CASE_LOG"; then
+      sec003_match_mismatches=$((sec003_match_mismatches + 1))
+      printf 'BUG032_SEC003_MATCH_MISMATCH case=%s status=%s canonical=%s matched=%s\n' \
+        "${sec003_block_slugs[$security_index]}" \
+        "$BUG032_SECURITY_CASE_STATUS" \
+        "${sec003_block_canonical[$security_index]}" \
+        "${sec003_block_matched[$security_index]}"
+    fi
+  done
+  sec003_match_mismatches=$((
+    sec003_match_mismatches + BUG032_ITER10_SEC003_FAILURES
+  ))
+  bug032_security_report "$sec003_match_mismatches" \
+    "BUG-032 SEC-003 matches exact G040 phrases across case and horizontal separators"
+
+  local sec003_boundary_mismatches=0
+  local -a sec003_punctuation_prose=(
+    'Move this work to (separate ticket), now.'
+    'Implement this in [future scope!].'
+  )
+  for ((security_index = 0; security_index < ${#sec003_punctuation_prose[@]}; security_index++)); do
+    bug032_security_run_g040_case \
+      "punctuation-$security_index" \
+      "${sec003_punctuation_prose[$security_index]}"
+    if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+      || ! grep -Fq -- 'deferral language hit' "$BUG032_SECURITY_CASE_LOG"; then
+      sec003_boundary_mismatches=$((sec003_boundary_mismatches + 1))
+    fi
+  done
+  local -a sec003_benign_prose=(
+    'A separate preservation clause stays negative.'
+    'These are future workflow obligations.'
+    'The text says separately ticketed.'
+    'The text says future scoped analysis.'
+    'The identifier aseparate ticket remains inert.'
+    'The plural separate tickets remains inert.'
+    $'The words remain on distinct lines: separate\nticket.'
+    $'The words remain on distinct lines: future\nscope.'
+  )
+  for ((security_index = 0; security_index < ${#sec003_benign_prose[@]}; security_index++)); do
+    bug032_security_run_g040_case \
+      "benign-$security_index" \
+      "${sec003_benign_prose[$security_index]}"
+    if grep -Fq -- 'deferral language hit' "$BUG032_SECURITY_CASE_LOG" \
+      || ! grep -Fq -- 'Zero deferral language found in scope and report artifacts (Gate G040)' "$BUG032_SECURITY_CASE_LOG"; then
+      sec003_boundary_mismatches=$((sec003_boundary_mismatches + 1))
+      printf 'BUG032_SEC003_BENIGN_MISMATCH case=%s status=%s\n' \
+        "$security_index" "$BUG032_SECURITY_CASE_STATUS"
+    fi
+  done
+  bug032_security_report "$sec003_boundary_mismatches" \
+    "BUG-032 SEC-003 preserves punctuation boundaries and benign near-miss twins"
+
+  awk '
+    $0 == "# BEGIN CHECK8B FINITE CLASSIFIER" { capture = 1 }
+    capture { print }
+    $0 == "# END CHECK8B FINITE CLASSIFIER" { exit }
+  ' "$PLANNING_CHECKS_SCRIPT" > "$security_classifier_file"
+  local security_classifier_ready=0
+  # shellcheck disable=SC1090  # marker-derived copy of the production classifier block
+  if bash -n "$security_classifier_file" && source "$security_classifier_file"; then
+    security_classifier_ready=1
+  fi
+
+  bug032_security_classify() {
+    local declaration="$1"
+
+    CHECK8B_CLASSIFICATION="__unset__"
+    CHECK8B_VERB="__unset__"
+    CHECK8B_MUTATION_TARGET="__unset__"
+    CHECK8B_DIRECT_SURFACES="__unset__"
+    CHECK8B_PRESERVED_SURFACES="__unset__"
+    CHECK8B_REASON="__unset__"
+    CHECK8B_UNRESOLVED_PHRASE="__unset__"
+    CHECK8B_BOUNDARY="__unset__"
+    CHECK8B_TOKEN_COUNT=-1
+    CHECK8B_CANDIDATE_COUNT=-1
+    unset CHECK8B_LINE_BYTE_COUNT CHECK8B_TOKEN_BYTE_COUNT || true
+    BUG032_SECURITY_CLASSIFY_STATUS=2
+    if [[ "$security_classifier_ready" -eq 1 ]]; then
+      if check8b_classify_line "$declaration"; then
+        BUG032_SECURITY_CLASSIFY_STATUS=0
+      else
+        BUG032_SECURITY_CLASSIFY_STATUS=$?
+      fi
+    fi
+  }
+
+  bug032_security_guard_record_has() {
+    local log_file="$1"
+    local expected_classification="$2"
+    local expected_reason="$3"
+    local expected_boundary="$4"
+    local expected_impact="$5"
+    local expected_result="$6"
+    local expected_correction="$7"
+
+    grep -Fq -- 'check: Check 8B' "$log_file" \
+      && grep -Fq -- "classification: $expected_classification" "$log_file" \
+      && grep -Fq -- "reason: $expected_reason" "$log_file" \
+      && grep -Fq -- "boundary: $expected_boundary" "$log_file" \
+      && grep -Fq -- "impact-checks: $expected_impact" "$log_file" \
+      && grep -Fq -- "result: $expected_result" "$log_file" \
+      && grep -Fq -- "correction: $expected_correction" "$log_file"
+  }
+
+  local security_line_4096='Remove the public route'
+  while [[ "${#security_line_4096}" -lt 4096 ]]; do
+    security_line_4096="${security_line_4096}."
+  done
+  local security_line_4097="${security_line_4096}."
+  local sec004_line_mismatches=0
+  bug032_security_classify "$security_line_4096"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "direct-positive" ]] \
+    || [[ "$CHECK8B_REASON" != "direct" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "line-bytes=4096/4096" ]] \
+    || [[ "${CHECK8B_LINE_BYTE_COUNT:-missing}" != "4096" ]] \
+    || [[ "$CHECK8B_TOKEN_COUNT" -ne 4 ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 1 ]]; then
+    sec004_line_mismatches=$((sec004_line_mismatches + 1))
+    printf 'BUG032_SEC004_LINE_4096_MISMATCH status=%s classification=%s reason=%s boundary=%s lineBytes=%s tokens=%s candidates=%s\n' \
+      "$BUG032_SECURITY_CLASSIFY_STATUS" "$CHECK8B_CLASSIFICATION" \
+      "$CHECK8B_REASON" "$CHECK8B_BOUNDARY" \
+      "${CHECK8B_LINE_BYTE_COUNT:-missing}" "$CHECK8B_TOKEN_COUNT" \
+      "$CHECK8B_CANDIDATE_COUNT"
+  fi
+  bug032_security_run_scope_case sec004-line-4096 "$security_line_4096"
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! bug032_security_guard_record_has \
+      "$BUG032_SECURITY_CASE_LOG" direct-positive direct \
+      line-bytes=4096/4096 run blocked \
+      'Add only the missing Consumer Impact Sweep section, completion item, and affected-consumer inventory for direct surfaces: remove:route.'; then
+    sec004_line_mismatches=$((sec004_line_mismatches + 1))
+  fi
+
+  bug032_security_classify "$security_line_4097"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "ambiguous" ]] \
+    || [[ "$CHECK8B_REASON" != "line-byte-limit" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "line-bytes=4097/4096:first-overflow" ]] \
+    || [[ "${CHECK8B_LINE_BYTE_COUNT:-missing}" != "4097" ]] \
+    || [[ "$CHECK8B_TOKEN_COUNT" -ne 0 ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 0 ]] \
+    || [[ "${#_CHECK8B_TOKENS[@]}" -ne 0 ]] \
+    || [[ "${#_CHECK8B_CANDIDATE_INDEXES[@]}" -ne 0 ]]; then
+    sec004_line_mismatches=$((sec004_line_mismatches + 1))
+    printf 'BUG032_SEC004_LINE_4097_MISMATCH status=%s classification=%s reason=%s boundary=%s lineBytes=%s tokens=%s candidates=%s retainedTokens=%s retainedCandidates=%s\n' \
+      "$BUG032_SECURITY_CLASSIFY_STATUS" "$CHECK8B_CLASSIFICATION" \
+      "$CHECK8B_REASON" "$CHECK8B_BOUNDARY" \
+      "${CHECK8B_LINE_BYTE_COUNT:-missing}" "$CHECK8B_TOKEN_COUNT" \
+      "$CHECK8B_CANDIDATE_COUNT" "${#_CHECK8B_TOKENS[@]}" \
+      "${#_CHECK8B_CANDIDATE_INDEXES[@]}"
+  fi
+  bug032_security_run_scope_case sec004-line-4097 "$security_line_4097"
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! bug032_security_guard_record_has \
+      "$BUG032_SECURITY_CASE_LOG" ambiguous line-byte-limit \
+      line-bytes=4097/4096:first-overflow skipped blocked \
+      'Shorten only this declaration to at most 4096 bytes while preserving its meaning.'; then
+    sec004_line_mismatches=$((sec004_line_mismatches + 1))
+  fi
+  bug032_security_report "$sec004_line_mismatches" \
+    "BUG-032 SEC-004 enforces exact 4096 and 4097 line-byte boundaries"
+
+  local security_token_256=""
+  for ((security_index = 0; security_index < 256; security_index++)); do
+    security_token_256="${security_token_256}x"
+  done
+  local security_token_257="${security_token_256}x"
+  local security_token_line_256="$security_token_256. Remove the public route"
+  local security_token_line_257="$security_token_257. Remove the public route"
+  local sec004_token_mismatches=0
+  bug032_security_classify "$security_token_line_256"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "direct-positive" ]] \
+    || [[ "$CHECK8B_REASON" != "direct" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "token-bytes=256/256" ]] \
+    || [[ "${CHECK8B_TOKEN_BYTE_COUNT:-missing}" != "256" ]] \
+    || [[ "$CHECK8B_TOKEN_COUNT" -ne 5 ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 1 ]]; then
+    sec004_token_mismatches=$((sec004_token_mismatches + 1))
+    printf 'BUG032_SEC004_TOKEN_256_MISMATCH status=%s classification=%s reason=%s boundary=%s tokenBytes=%s tokens=%s candidates=%s\n' \
+      "$BUG032_SECURITY_CLASSIFY_STATUS" "$CHECK8B_CLASSIFICATION" \
+      "$CHECK8B_REASON" "$CHECK8B_BOUNDARY" \
+      "${CHECK8B_TOKEN_BYTE_COUNT:-missing}" "$CHECK8B_TOKEN_COUNT" \
+      "$CHECK8B_CANDIDATE_COUNT"
+  fi
+  bug032_security_run_scope_case sec004-token-256 "$security_token_line_256"
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! bug032_security_guard_record_has \
+      "$BUG032_SECURITY_CASE_LOG" direct-positive direct \
+      token-bytes=256/256 run blocked \
+      'Add only the missing Consumer Impact Sweep section, completion item, and affected-consumer inventory for direct surfaces: remove:route.'; then
+    sec004_token_mismatches=$((sec004_token_mismatches + 1))
+  fi
+
+  bug032_security_classify "$security_token_line_257"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "ambiguous" ]] \
+    || [[ "$CHECK8B_REASON" != "token-byte-limit" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "token-bytes=257/256:first-overflow" ]] \
+    || [[ "${CHECK8B_TOKEN_BYTE_COUNT:-missing}" != "257" ]] \
+    || [[ "$CHECK8B_TOKEN_COUNT" -ne 0 ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 0 ]] \
+    || [[ "${#_CHECK8B_TOKENS[@]}" -ne 0 ]] \
+    || [[ "${#_CHECK8B_CANDIDATE_INDEXES[@]}" -ne 0 ]]; then
+    sec004_token_mismatches=$((sec004_token_mismatches + 1))
+    printf 'BUG032_SEC004_TOKEN_257_MISMATCH status=%s classification=%s reason=%s boundary=%s tokenBytes=%s tokens=%s candidates=%s retainedTokens=%s retainedCandidates=%s\n' \
+      "$BUG032_SECURITY_CLASSIFY_STATUS" "$CHECK8B_CLASSIFICATION" \
+      "$CHECK8B_REASON" "$CHECK8B_BOUNDARY" \
+      "${CHECK8B_TOKEN_BYTE_COUNT:-missing}" "$CHECK8B_TOKEN_COUNT" \
+      "$CHECK8B_CANDIDATE_COUNT" "${#_CHECK8B_TOKENS[@]}" \
+      "${#_CHECK8B_CANDIDATE_INDEXES[@]}"
+  fi
+  bug032_security_run_scope_case sec004-token-257 "$security_token_line_257"
+  if [[ "$BUG032_SECURITY_CASE_STATUS" -eq 0 ]] \
+    || ! bug032_security_guard_record_has \
+      "$BUG032_SECURITY_CASE_LOG" ambiguous token-byte-limit \
+      token-bytes=257/256:first-overflow skipped blocked \
+      'Shorten only this token to at most 256 bytes while preserving its meaning.'; then
+    sec004_token_mismatches=$((sec004_token_mismatches + 1))
+  fi
+  bug032_security_report "$sec004_token_mismatches" \
+    "BUG-032 SEC-004 enforces exact 256 and 257 token-byte boundaries"
+
+  local security_neutral_126=""
+  for ((security_index = 1; security_index <= 126; security_index++)); do
+    security_neutral_126="${security_neutral_126}${security_neutral_126:+ }neutral$security_index"
+  done
+  local security_count_128="$security_neutral_126 remove route"
+  local security_count_129="overflow129 $security_count_128"
+  local security_candidate_8='remove route remove path remove endpoint remove contract remove api remove url remove slug remove identifier'
+  local security_candidate_9="$security_candidate_8 deprecate redirect"
+  local sec004_count_mismatches=0
+  bug032_security_classify "$security_count_128"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "direct-positive" ]] \
+    || [[ "$CHECK8B_REASON" != "direct" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "tokens=128/128" ]] \
+    || [[ "$CHECK8B_TOKEN_COUNT" -ne 128 ]] \
+    || [[ "${#_CHECK8B_TOKENS[@]}" -ne 128 ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 1 ]]; then
+    sec004_count_mismatches=$((sec004_count_mismatches + 1))
+  fi
+  bug032_security_classify "$security_count_129"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "ambiguous" ]] \
+    || [[ "$CHECK8B_REASON" != "token-limit" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "tokens=129/128:first-overflow" ]] \
+    || [[ "$CHECK8B_TOKEN_COUNT" -ne 128 ]] \
+    || [[ "${#_CHECK8B_TOKENS[@]}" -ne 128 ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 0 ]]; then
+    sec004_count_mismatches=$((sec004_count_mismatches + 1))
+  fi
+  bug032_security_classify "$security_candidate_8"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "direct-positive" ]] \
+    || [[ "$CHECK8B_REASON" != "direct" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "candidates=8/8" ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 8 ]] \
+    || [[ "${#_CHECK8B_CANDIDATE_INDEXES[@]}" -ne 8 ]]; then
+    sec004_count_mismatches=$((sec004_count_mismatches + 1))
+  fi
+  bug032_security_classify "$security_candidate_9"
+  if [[ "$BUG032_SECURITY_CLASSIFY_STATUS" -ne 0 ]] \
+    || [[ "$CHECK8B_CLASSIFICATION" != "ambiguous" ]] \
+    || [[ "$CHECK8B_REASON" != "candidate-limit" ]] \
+    || [[ "$CHECK8B_BOUNDARY" != "candidates=9/8:first-overflow" ]] \
+    || [[ "$CHECK8B_CANDIDATE_COUNT" -ne 9 ]] \
+    || [[ "${#_CHECK8B_CANDIDATE_INDEXES[@]}" -ne 8 ]]; then
+    sec004_count_mismatches=$((sec004_count_mismatches + 1))
+  fi
+  bug032_security_report "$sec004_count_mismatches" \
+    "BUG-032 SEC-004 preserves 128 and 129 token and eight and nine candidate controls"
+
+  local security_oversized_harness="$security_root/oversized-one-token.sh"
+  local security_oversized_log="$security_root/oversized-one-token.log"
+  cat "$security_classifier_file" > "$security_oversized_harness"
+  cat <<'EOF' >> "$security_oversized_harness"
+set -euo pipefail
+oversized_token=x
+while [[ "${#oversized_token}" -lt 100000 ]]; do
+  oversized_token="${oversized_token}${oversized_token}"
+done
+oversized_token="${oversized_token:0:100000}"
+semantic_calls=0
+set -T
+trap '
+  case "${FUNCNAME[0]:-}" in
+    _check8b_mutation_verb|_check8b_target_after|_check8b_target_before|_check8b_passive_surface|_check8b_named_surface_before|_check8b_surface_from|_check8b_is_surface)
+      semantic_calls=$((semantic_calls + 1))
+      ;;
+  esac
+' DEBUG
+set +e
+check8b_classify_line "$oversized_token"
+classify_status=$?
+set -e
+trap - DEBUG
+set +T
+printf 'RESULT\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  "$classify_status" "$CHECK8B_CLASSIFICATION" "$CHECK8B_REASON" \
+  "$CHECK8B_BOUNDARY" "${CHECK8B_LINE_BYTE_COUNT:-missing}" \
+  "$CHECK8B_TOKEN_COUNT" "$CHECK8B_CANDIDATE_COUNT" \
+  "${#_CHECK8B_TOKENS[@]}" "${#_CHECK8B_CANDIDATE_INDEXES[@]}" \
+  "$semantic_calls"
+EOF
+  local security_oversized_status=""
+  local security_oversized_tag=""
+  local security_oversized_classify_status=""
+  local security_oversized_classification=""
+  local security_oversized_reason=""
+  local security_oversized_boundary=""
+  local security_oversized_line_bytes=""
+  local security_oversized_token_count=""
+  local security_oversized_candidate_count=""
+  local security_oversized_retained_tokens=""
+  local security_oversized_retained_candidates=""
+  local security_oversized_semantic_calls=""
+  local sec004_oversized_mismatches=0
+  security_oversized_status="$(run_capture "$security_oversized_log" \
+    bubbles_run_with_timeout 5 bash "$security_oversized_harness")"
+  IFS=$'\t' read -r security_oversized_tag \
+    security_oversized_classify_status security_oversized_classification \
+    security_oversized_reason security_oversized_boundary \
+    security_oversized_line_bytes security_oversized_token_count \
+    security_oversized_candidate_count security_oversized_retained_tokens \
+    security_oversized_retained_candidates security_oversized_semantic_calls \
+    < "$security_oversized_log" || true
+  if [[ "$security_oversized_status" -ne 0 ]] \
+    || [[ "$security_oversized_tag" != "RESULT" ]] \
+    || [[ "$security_oversized_classify_status" -ne 0 ]] \
+    || [[ "$security_oversized_classification" != "ambiguous" ]] \
+    || [[ "$security_oversized_reason" != "line-byte-limit" ]] \
+    || [[ "$security_oversized_boundary" != "line-bytes=4097/4096:first-overflow" ]] \
+    || [[ "$security_oversized_line_bytes" != "4097" ]] \
+    || [[ "$security_oversized_token_count" -ne 0 ]] \
+    || [[ "$security_oversized_candidate_count" -ne 0 ]] \
+    || [[ "$security_oversized_retained_tokens" -ne 0 ]] \
+    || [[ "$security_oversized_retained_candidates" -ne 0 ]] \
+    || [[ "$security_oversized_semantic_calls" -ne 0 ]]; then
+    sec004_oversized_mismatches=$((sec004_oversized_mismatches + 1))
+    printf 'BUG032_SEC004_OVERSIZED_MISMATCH harnessStatus=%s tag=%s classifyStatus=%s classification=%s reason=%s boundary=%s lineBytes=%s tokenCount=%s candidateCount=%s retainedTokens=%s retainedCandidates=%s semanticCalls=%s\n' \
+      "$security_oversized_status" "$security_oversized_tag" \
+      "${security_oversized_classify_status:-missing}" \
+      "${security_oversized_classification:-missing}" \
+      "${security_oversized_reason:-missing}" \
+      "${security_oversized_boundary:-missing}" \
+      "${security_oversized_line_bytes:-missing}" \
+      "${security_oversized_token_count:-missing}" \
+      "${security_oversized_candidate_count:-missing}" \
+      "${security_oversized_retained_tokens:-missing}" \
+      "${security_oversized_retained_candidates:-missing}" \
+      "${security_oversized_semantic_calls:-missing}"
+  fi
+  bug032_security_report "$sec004_oversized_mismatches" \
+    "BUG-032 SEC-004 bounds oversized one-token input before semantic work"
+
+  unset -f \
+    bug032_security_report bug032_security_counter_value \
+    bug032_security_projection_error_matches \
+    bug032_security_run_scope_case bug032_security_run_shadow_case \
+    bug032_security_run_g040_case bug032_security_classify \
+    bug032_security_guard_record_has
+}
+
+run_bug032_security_regressions "$positive_feature_dir"
+unset -f run_bug032_security_regressions
+# END BUG032 SECURITY REGRESSION TESTS
+
+# BUG032-HARDEN9-REPORT-ROUTE-016 / Scope 4 verification: the current Completion
+# Statement, state execution route, and planned DAG must agree. The addressed
+# state-note finding cannot return to the unresolved route, and the independent
+# BUG-035 sibling cannot be absorbed into BUG-032. Mutated state copies prove
+# both exclusions are load-bearing.
+bug032_route_truth_matches() {
+  local report_file="$1"
+  local state_file="$2"
+  local scopes_file="$3"
+  local completion_statement=""
+  local serialized_dag=""
+
+  [[ -f "$report_file" && -f "$state_file" && -f "$scopes_file" ]] || return 1
+  completion_statement="$(awk '
+    $0 == "## Completion Statement" { capture = 1; next }
+    capture && /^##[[:space:]]+/ { exit }
+    capture { printf "%s ", $0 }
+  ' "$report_file")"
+  serialized_dag="$(awk '
+    $0 == "## Serialized Execution DAG" { capture = 1; next }
+    capture && /^##[[:space:]]+/ { exit }
+    capture { print }
+  ' "$scopes_file")"
+
+  [[ "$completion_statement" == *'The required owner is `bubbles.test`.'* ]] \
+    && [[ "$completion_statement" == *'The next action is a test-only A oracle extension for SCN-032-033 through SCN-032-036.'* ]] \
+    && [[ "$completion_statement" == *'First replay the unchanged row-145 family and record its actual failure.'* ]] \
+    && [[ "$completion_statement" == *'Then add the ten exact security identifiers and capture RED against unchanged production.'* ]] \
+    && [[ "$completion_statement" == *'B-RED waits for independent A verification.'* ]] \
+    && [[ "$completion_statement" == *'C requires no parallel writer because independent C-GREEN is complete.'* ]] \
+    && [[ "$completion_statement" == *'`BUG035-D14-EMPTY-OUTPUT-COUNT` remains outside the BUG-032 target.'* ]] \
+    && [[ "$serialized_dag" == *'| A-BASELINE | `bubbles.test` | Evidence only from unchanged row-145 source and selftest family | P | First action |'* ]] \
+    && [[ "$serialized_dag" == *'| A-SECURITY-RED | `bubbles.test` | Persistent SCN-032-033 through SCN-032-036 assertions | A-BASELINE | Active route |'* ]] \
+    && [[ "$serialized_dag" == *'| A-SECURITY-GREEN | `bubbles.implement` | Planning checks, state-transition guard, unchanged security assertions | A-SECURITY-RED | Waiting |'* ]] \
+    && [[ "$serialized_dag" == *'| B-RED | `bubbles.test` | Check 43 assertions in the shared selftest | A-VERIFY | Waiting for A |'* ]] \
+    && [[ "$serialized_dag" == *'| C-GREEN | `bubbles.test` | Evidence only | Existing C implementation | Independently verified |'* ]] \
+    && [[ "$serialized_dag" != *'| C-RED |'* ]] \
+    && jq -e '
+      (.execution.nextRequiredOwner == "bubbles.test")
+      and (.execution.nextRequiredAction == "Replay the unchanged row-145 family and record its exact result without assigning a cause. Then add only the ten TP-01-04 persistent identifiers for SCN-032-033 through SCN-032-036. Capture all four security findings at RED against unchanged production hashes before any repair. B-RED waits for independent A verification. C-GREEN remains independently verified and receives no writer.")
+      and (.execution.parallelReadyOwners == [{
+        "owner": "bubbles.test",
+        "lane": "A-SECURITY-RED",
+        "scope": 1
+      }])
+      and ((.execution.independentRoutedFindings // []) == ["BUG035-D14-EMPTY-OUTPUT-COUNT"])
+      and (any(.executionHistory[];
+        ((.addressedFindings // []) | index("BUG032-GAPS-STATE-NOTES-009")) != null))
+      and (((.executionHistory[-1].unresolvedFindings // [])
+        | index("BUG032-GAPS-STATE-NOTES-009")) == null)
+      and (((.executionHistory[-1].independentRoutedFindings // [])
+        | index("BUG035-D14-EMPTY-OUTPUT-COUNT")) != null)
+      and (((.executionHistory[-1].unresolvedFindings // [])
+        | index("BUG035-D14-EMPTY-OUTPUT-COUNT")) == null)
+      and (.executionHistory[-1].scope == "BUG-032 revision-71 analyst and design planning reconciliation")
+      and (.executionHistory[-1].outcome == "route_required")
+      and (.executionHistory[-1].nextRequiredOwner == "bubbles.test")
+      and (.executionHistory[-1].nextRequiredAction == "Perform the test-only A oracle correction before any A production work. Remove the rejected G068 same-ID assertion, fold candidate test bindings into surviving scenarios, and capture clean A-RED against unchanged production. B waits for A. C is independently GREEN.")
+      and ((.executionHistory[-1].parallelReadyOwners // []) == [])
+    ' "$state_file" >/dev/null
+}
+
+bug032_route_repo_root="$(cd "$SCRIPT_DIR/../.." && pwd)"
+bug032_route_packet="$bug032_route_repo_root/bugs/BUG-032-planning-maturity-guard-false-positives"
+bug032_route_mutant_addressed="$tmp_root/bug032-route-addressed-mutant.json"
+bug032_route_mutant_sibling="$tmp_root/bug032-route-sibling-mutant.json"
+bug032_route_truth_failures=0
+if ! bug032_route_truth_matches \
+  "$bug032_route_packet/report.md" \
+  "$bug032_route_packet/state.json" \
+  "$bug032_route_packet/scopes.md"; then
+  bug032_route_truth_failures=$((bug032_route_truth_failures + 1))
+  printf 'BUG032_S4_REPORT_ROUTE_CURRENT_MISMATCH packet=%s\n' "$bug032_route_packet"
+fi
+if ! jq '
+  .executionHistory[-1].unresolvedFindings =
+    ((.executionHistory[-1].unresolvedFindings // []) + ["BUG032-GAPS-STATE-NOTES-009"])
+' "$bug032_route_packet/state.json" > "$bug032_route_mutant_addressed"; then
+  bug032_route_truth_failures=$((bug032_route_truth_failures + 1))
+elif bug032_route_truth_matches \
+  "$bug032_route_packet/report.md" \
+  "$bug032_route_mutant_addressed" \
+  "$bug032_route_packet/scopes.md"; then
+  bug032_route_truth_failures=$((bug032_route_truth_failures + 1))
+  printf '%s\n' 'BUG032_S4_REPORT_ROUTE_ADDRESSED_FINDING_MUTANT_ACCEPTED'
+fi
+if ! jq '
+  .executionHistory[-1].unresolvedFindings =
+    ((.executionHistory[-1].unresolvedFindings // []) + ["BUG035-D14-EMPTY-OUTPUT-COUNT"])
+  | .executionHistory[-1].independentRoutedFindings = []
+' "$bug032_route_packet/state.json" > "$bug032_route_mutant_sibling"; then
+  bug032_route_truth_failures=$((bug032_route_truth_failures + 1))
+elif bug032_route_truth_matches \
+  "$bug032_route_packet/report.md" \
+  "$bug032_route_mutant_sibling" \
+  "$bug032_route_packet/scopes.md"; then
+  bug032_route_truth_failures=$((bug032_route_truth_failures + 1))
+  printf '%s\n' 'BUG032_S4_REPORT_ROUTE_INDEPENDENT_SIBLING_MUTANT_ACCEPTED'
+fi
+if [[ "$bug032_route_truth_failures" -eq 0 ]]; then
+  pass "BUG-032 active Completion Statement routes only unresolved findings"
+else
+  fail "BUG-032 active Completion Statement routes only unresolved findings (mismatches=$bug032_route_truth_failures)"
+fi
+unset -f bug032_route_truth_matches
 
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then

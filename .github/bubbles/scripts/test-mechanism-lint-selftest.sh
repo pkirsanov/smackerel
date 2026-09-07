@@ -19,6 +19,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="$SCRIPT_DIR/test-mechanism-lint.sh"
 NAME="test-mechanism-lint-selftest"
+SCHEMA="$SCRIPT_DIR/../schemas/scenario-manifest-v2.schema.json"
 
 failures=0
 checks=0
@@ -32,9 +33,13 @@ bad() {
 
 WORK="$(mktemp -d)" || exit 2
 trap 'rm -rf "$WORK"' EXIT INT TERM
+FIXTURE_REPO_ROOT="$WORK/repo"
+FIXTURE_TMPDIR="$FIXTURE_REPO_ROOT/.tmp"
+mkdir -p "$FIXTURE_REPO_ROOT/bubbles/schemas" "$FIXTURE_TMPDIR"
+cp "$SCHEMA" "$FIXTURE_REPO_ROOT/bubbles/schemas/scenario-manifest-v2.schema.json"
 
 make_case() {
-  local root="$WORK/$1"
+  local root="$FIXTURE_REPO_ROOT/cases/$1"
   mkdir -p "$root"
   printf '%s\n' "$2" >"$root/scenario-manifest.json"
   printf '%s' "$root"
@@ -42,7 +47,24 @@ make_case() {
 
 run_lint() {
   set +e
-  OUT="$(bash "$TARGET" "$1" --quiet 2>&1)"
+  OUT="$(TMPDIR="$FIXTURE_TMPDIR" bash "$TARGET" "$1" --repo-root "$FIXTURE_REPO_ROOT" --quiet 2>&1)"
+  RC=$?
+  set -e
+}
+
+make_harness() {
+  local name="$1" harness
+  harness="$FIXTURE_REPO_ROOT/harness-$name"
+  mkdir -p "$harness"
+  cp "$TARGET" "$harness/test-mechanism-lint.sh"
+  cp "$SCRIPT_DIR/scenario-reference-reader.py" "$harness/scenario-reference-reader.py"
+  printf '%s' "$harness"
+}
+
+run_harness() {
+  local harness="$1" spec_dir="$2"
+  set +e
+  OUT="$(TMPDIR="$FIXTURE_TMPDIR" bash "$harness/test-mechanism-lint.sh" "$spec_dir" --repo-root "$FIXTURE_REPO_ROOT" --quiet 2>&1)"
   RC=$?
   set -e
 }
@@ -276,6 +298,171 @@ if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'COHERENCE'; then
   ok "A15 a bare-list manifest is still linted, not skipped"
 else
   bad "A15 bare-list still validated" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- P10/A16-A19. canonical reader projection and fail-closed input --------
+R="$(make_case p10 '{"schemaVersion":2,"spec":"specs/001-feature","generatedAt":"2026-09-01T00:00:00Z","scenarios":[{"id":"SCN-001-001","scopeRef":"SCOPE-1","title":"t","requiredTestType":"e2e-ui","behaviorTraits":["user-visible-ui"],"testMechanism":{"entrypoint":"production-route","inputOrigin":"seeded-store","assertionSurface":"visible-ui","dependencyPath":"cache-only","productionOwners":["a.ts"],"negativeControl":"wrong route renders nothing"}}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 0 ]]; then
+  ok "P10 a valid version-2 manifest retains test-mechanism semantics"
+else
+  bad "P10 valid version-2 manifest" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# The stable snapshot belongs in the system temporary directory, not in the
+# repository. Its already-verified bytes must use the canonical reader's stdin
+# interface so repository containment still applies to authored path inputs.
+EXTERNAL_TMPDIR="$WORK/external-tmp"
+mkdir -p "$EXTERNAL_TMPDIR"
+set +e
+OUT="$(TMPDIR="$EXTERNAL_TMPDIR" bash "$TARGET" "$R" --repo-root "$FIXTURE_REPO_ROOT" --quiet 2>&1)"
+RC=$?
+set -e
+if [[ "$RC" -eq 0 ]]; then
+  ok "P11 a valid contained manifest passes when stable snapshots use an external TMPDIR"
+else
+  bad "P11 external TMPDIR snapshot" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a16 '{"schemaVersion":1,"schemaVersion":1,"scenarios":[]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q 'duplicate JSON member'; then
+  ok "A16 duplicate manifest keys fail closed through the canonical reader"
+else
+  bad "A16 duplicate keys" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a17 '{"schemaVersion":2,"unexpected":true,"scenarios":[]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q "Additional properties are not allowed"; then
+  ok "A17 version-2 unknown fields fail closed"
+else
+  bad "A17 version-2 unknown field" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a18 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","scenarioId":"SCN-001-002"}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q 'conflicting aliases'; then
+  ok "A18 conflicting scenario identity aliases fail closed"
+else
+  bad "A18 conflicting aliases" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a19 '{"schemaVersion":1,"scenarios":[{"id":"not-a-scenario-id"}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q 'does not match'; then
+  ok "A19 canonical reader errors propagate as usage failures"
+else
+  bad "A19 reader error" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- CR-002. canonical validity and second-reader stable-byte contract -----
+# A20 proves that missing testMechanism never broadens acceptance: canonical
+# validity is decided before the specialized lint can call the manifest inert.
+R="$(make_case a20 '{"schemaVersion":2,"unexpected":true,"scenarios":[{"id":"SCN-001-001"}]}')"
+run_lint "$R"
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q "Additional properties are not allowed"; then
+  ok "A20 an invalid manifest with no testMechanism fails canonical validation"
+else
+  bad "A20 invalid no-mechanism manifest" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# The delegated reader receives the stable snapshot directory, never the live
+# spec directory. Mutating the original in-place during delegation must be
+# detected after the companion returns, while the companion must still observe
+# the exact bytes accepted by the canonical reader.
+R="$(make_case a21 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"canonical"}]}')"
+H="$(make_harness a21)"
+cat >"$H/mutation-receipt.sh" <<'SH'
+#!/usr/bin/env bash
+set -eu
+spec_dir=''
+original="${RACE_ORIGINAL:?}"
+while [ "$#" -gt 0 ]; do
+  case "$1" in --spec-dir) spec_dir="$2"; shift 2 ;; *) shift ;; esac
+done
+grep -q '"title":"canonical"' "$spec_dir/scenario-manifest.json" || exit 19
+printf '%s\n' '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"mutated"}]}' >"$original/scenario-manifest.json"
+SH
+chmod +x "$H/mutation-receipt.sh"
+export RACE_ORIGINAL="$R"
+run_harness "$H" "$R"
+unset RACE_ORIGINAL
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q 'phase: after-mutation-receipt'; then
+  ok "A21 in-place byte mutation is refused after the delegated stable reader"
+else
+  bad "A21 in-place mutation race" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# Replacing the pathname during canonical projection is caught before any
+# specialized inert/pass result or delegated receipt read can occur.
+R="$(make_case a22 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"canonical"}]}')"
+H="$(make_harness a22)"
+mv "$H/scenario-reference-reader.py" "$H/scenario-reference-reader-real.py"
+cat >"$H/scenario-reference-reader.py" <<'PY'
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+
+manifest = sys.argv[1]
+original = os.environ["RACE_ORIGINAL"] + "/scenario-manifest.json"
+result = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "scenario-reference-reader-real.py"), *sys.argv[1:]], check=False)
+replacement = original + ".replacement"
+with open(replacement, "w", encoding="utf-8") as fh:
+    fh.write('{"schemaVersion":1,"scenarios":[]}\n')
+os.replace(replacement, original)
+sys.exit(result.returncode)
+PY
+cat >"$H/mutation-receipt.sh" <<'SH'
+#!/usr/bin/env bash
+exit 23
+SH
+chmod +x "$H/scenario-reference-reader.py" "$H/mutation-receipt.sh"
+export RACE_ORIGINAL="$R"
+run_harness "$H" "$R"
+unset RACE_ORIGINAL
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q 'phase: after-canonical-projection'; then
+  ok "A22 pathname replacement is refused immediately after canonical projection"
+else
+  bad "A22 pathname replacement race" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# A companion failure cannot bypass the after-delegation check. This harness
+# replaces the exact stable pathname delegated to it, then exits non-zero; the
+# lint must prefer the structured integrity refusal over the companion status.
+R="$(make_case a23 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"canonical"}]}')"
+H="$(make_harness a23)"
+cat >"$H/mutation-receipt.sh" <<'SH'
+#!/usr/bin/env bash
+set -eu
+spec_dir=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in --spec-dir) spec_dir="$2"; shift 2 ;; *) shift ;; esac
+done
+replacement="$spec_dir/scenario-manifest.json.replacement"
+printf '%s\n' '{"schemaVersion":1,"scenarios":[]}' >"$replacement"
+mv "$replacement" "$spec_dir/scenario-manifest.json"
+exit 17
+SH
+chmod +x "$H/mutation-receipt.sh"
+run_harness "$H" "$R"
+if [[ "$RC" -eq 2 ]] && printf '%s' "$OUT" | grep -q 'phase: after-mutation-receipt'; then
+  ok "A23 delegated pathname replacement is refused even when the companion fails"
+else
+  bad "A23 delegated replacement race" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# Guard the default-off contract explicitly. The canonical and delegated
+# readers may share a snapshot without turning adapter=none into an obligation.
+R="$(make_case p12 '{"schemaVersion":1,"scenarios":[{"id":"SCN-001-001","title":"t"}]}')"
+set +e
+OUT="$(TMPDIR="$FIXTURE_TMPDIR" bash "$TARGET" "$R" --repo-root "$FIXTURE_REPO_ROOT" 2>&1)"; RC=$?
+set -e
+if [[ "$RC" -eq 0 ]] && printf '%s' "$OUT" | grep -q 'no testMechanism declared (inert)' && printf '%s' "$OUT" | grep -q 'adapter is none (inert)'; then
+  ok "P12 canonical no-mechanism and adapter=none remain inert"
+else
+  bad "P12 adapter=none baseline" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
 # --- U1. usage -------------------------------------------------------------

@@ -1,0 +1,220 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pkirsanov/bubbles/schemas/scenario-manifest-v2.schema.json",
+  "title": "Bubbles scenario-manifest.json version 2 producer schema",
+  "description": "Strict producer contract for new scenario manifests. Compatibility forms belong only to the version 1 reader path.",
+  "type": "object",
+  "required": ["schemaVersion", "scenarios"],
+  "additionalProperties": false,
+  "definitions": {
+    "nonBlank": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*[\\u0000-\\u001F\\u007F]).*\\S.*$"
+    },
+    "scenarioId": {
+      "type": "string",
+      "pattern": "^SCN-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+$"
+    },
+    "scopeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001F\\u007F]).*\\S.*$",
+      "description": "Optional canonical scope identity. Version 2 accepts only a trimmed, control-free, nonblank JSON string. Integer, float, boolean, and null values are invalid. Legacy scope and scopeId aliases are forbidden by the closed scenario object."
+    },
+    "nullableControlFreeNonBlank": {
+      "oneOf": [
+        { "$ref": "#/definitions/nonBlank" },
+        { "type": "null" }
+      ]
+    },
+    "testType": {
+      "type": "string",
+      "enum": ["unit", "functional", "integration", "ui-unit", "e2e-api", "e2e-ui", "stress", "load"]
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?!.*\\s$)(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!\\.\\.(?:/|$))(?!.*\\/\\.\\.(?:/|$))(?!\\.(?:/|$))(?!.*\\/\\.(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:/[^/]+)*$",
+      "description": "Normalized repository-relative POSIX path. Leading or trailing whitespace, absolute, drive-prefixed, backslash, traversal, dot-segment, empty-segment, control-character, and DEL forms are rejected."
+    },
+    "linkedTest": {
+      "type": "object",
+      "required": ["file", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "$ref": "#/definitions/repositoryPath" },
+        "type": { "$ref": "#/definitions/testType" },
+        "testId": { "$ref": "#/definitions/nonBlank" }
+      }
+    },
+    "plannedTest": {
+      "type": "object",
+      "required": ["path", "title", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "$ref": "#/definitions/repositoryPath" },
+        "title": { "$ref": "#/definitions/nonBlank" },
+        "type": { "$ref": "#/definitions/testType" }
+      }
+    },
+    "gherkin": {
+      "type": "object",
+      "required": ["given", "when", "then"],
+      "additionalProperties": false,
+      "properties": {
+        "given": { "$ref": "#/definitions/nonBlank" },
+        "when": { "$ref": "#/definitions/nonBlank" },
+        "then": { "$ref": "#/definitions/nonBlank" }
+      }
+    },
+    "lockdownRecord": {
+      "type": "object",
+      "required": ["state"],
+      "additionalProperties": false,
+      "properties": {
+        "state": { "type": "string", "enum": ["unlocked", "locked", "invalidated", "replaced"] },
+        "approvedBy": { "$ref": "#/definitions/nonBlank" },
+        "approvedAt": { "type": "string", "format": "date-time", "description": "Canonical RFC 3339 subset date-time: calendar-valid date, required offset, seconds 00-59 (leap seconds excluded), optional fractional seconds, case-insensitive T/Z, and numeric offsets through 23:59." },
+        "replacedBy": { "$ref": "#/definitions/scenarioId" }
+      }
+    },
+    "obligation": {
+      "type": "object",
+      "required": ["trait", "requiredProof"],
+      "additionalProperties": false,
+      "properties": {
+        "trait": { "$ref": "#/definitions/nonBlank" },
+        "requiredProof": { "$ref": "#/definitions/nonBlank" },
+        "satisfiedBy": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/nonBlank" }
+        }
+      }
+    },
+    "liveProofNotApplicable": {
+      "type": "object",
+      "required": ["absentTrait", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "absentTrait": { "$ref": "#/definitions/nonBlank" },
+        "reason": { "$ref": "#/definitions/nonBlank" }
+      }
+    },
+    "testMechanism": {
+      "type": "object",
+      "required": ["entrypoint", "inputOrigin", "assertionSurface", "dependencyPath"],
+      "additionalProperties": false,
+      "properties": {
+        "entrypoint": {
+          "type": "string",
+          "enum": ["production-route", "production-api", "production-cli", "public-function", "detached-renderer", "internal-helper"]
+        },
+        "inputOrigin": {
+          "type": "string",
+          "enum": ["live-provider", "ephemeral-real", "seeded-store", "synthetic-cache", "synthetic-fixture", "recorded-fixture"]
+        },
+        "assertionSurface": {
+          "type": "string",
+          "enum": ["visible-ui", "accessibility-tree", "http-response", "persisted-state", "returned-value", "hidden-dom", "internal-state"]
+        },
+        "dependencyPath": {
+          "type": "string",
+          "enum": ["not-applicable", "ephemeral-real", "same-origin-real", "external-live", "synthetic-boundary", "cache-only"]
+        },
+        "productionOwners": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/repositoryPath" }
+        },
+        "negativeControl": { "$ref": "#/definitions/nonBlank" },
+        "negativeControlMechanism": {
+          "type": "string",
+          "enum": ["adversarial-input", "perturbed-input", "mutation"]
+        },
+        "negativeControlFallbackReason": { "$ref": "#/definitions/nonBlank" }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "required": ["id", "title", "requiredTestType"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/scenarioId"
+        },
+        "scopeRef": {
+          "$ref": "#/definitions/scopeRef"
+        },
+        "title": { "$ref": "#/definitions/nonBlank" },
+        "gherkin": { "$ref": "#/definitions/gherkin" },
+        "gherkinHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "behaviorClass": { "type": "string", "enum": ["ui", "api"] },
+        "changeType": { "type": "string", "enum": ["new", "changed", "regression", "bugfix", "replacement"] },
+        "requiredTestType": { "$ref": "#/definitions/testType" },
+        "regressionRequired": { "type": "boolean" },
+        "lockdown": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "$ref": "#/definitions/lockdownRecord" }
+          ]
+        },
+        "linkedTests": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/linkedTest" },
+          "description": "Authored test references. An empty array is valid while planning, but does not satisfy lifecycle coverage policy."
+        },
+        "plannedTests": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/plannedTest" },
+          "description": "Unauthored test plans. These never count as implementation or completion coverage."
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/nonBlank" }
+        },
+        "replacedBy": {
+          "oneOf": [
+            { "$ref": "#/definitions/scenarioId" },
+            { "type": "null" }
+          ]
+        },
+        "invalidatedBy": { "$ref": "#/definitions/nullableControlFreeNonBlank" },
+        "tags": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/nonBlank" }
+        },
+        "riskTier": { "type": "string", "enum": ["low", "medium", "high"] },
+        "behaviorTraits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["pure-calculation", "user-visible-ui", "api-contract", "mutable-state", "degraded-state", "shared-consumer", "dependency-path", "responsive-accessible", "sla-sensitive", "runtime-config", "static-metadata"]
+          }
+        },
+        "liveProofNotApplicable": { "$ref": "#/definitions/liveProofNotApplicable" },
+        "obligations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/obligation" }
+        },
+        "implementationRefs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/repositoryPath" }
+        },
+        "testMechanism": { "$ref": "#/definitions/testMechanism" },
+        "invariantRefs": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^INV-[A-Z0-9-]+$" }
+        }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 2 },
+    "spec": { "$ref": "#/definitions/repositoryPath" },
+    "generatedAt": { "type": "string", "format": "date-time", "description": "Canonical RFC 3339 subset date-time: calendar-valid date, required offset, seconds 00-59 (leap seconds excluded), optional fractional seconds, case-insensitive T/Z, and numeric offsets through 23:59." },
+    "scenarios": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/scenario" }
+    }
+  }
+}

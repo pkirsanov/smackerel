@@ -70,6 +70,8 @@
 #                               [--packet-digest SHA] [--result-envelope-status S]
 #                               [--started-at TS] [--finished-at TS]
 #                               [--evidence-ref REF]... [--repo-root PATH]
+#                               [--mbe-posture MODE --mbe-store-root PATH
+#                                --mbe-context PATH]
 #   dispatch-receipt.sh status  [--occurrence-id ID] [--repo-root PATH]
 #
 # Project config (project-owned, never framework-managed):
@@ -90,6 +92,7 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAME="dispatch-receipt"
 SCHEMA_VERSION="dispatch-receipt/v1"
 STORE_REL=".specify/runtime/dispatch-receipts.jsonl"
@@ -111,6 +114,8 @@ Usage:
                               [--result-envelope-status STATUS]
                               [--started-at TS] [--finished-at TS]
                               [--evidence-ref REF]... [--repo-root PATH]
+                              [--mbe-posture off|shadow|advisory|reference-enforce]
+                              [--mbe-store-root PATH] [--mbe-context PATH]
   dispatch-receipt.sh status  [--occurrence-id ID] [--repo-root PATH]
 
 Dispatch classes (closed set):
@@ -333,6 +338,7 @@ cmd_record() {
   local repo_root="$PWD" occurrence_id='' agent='' packet_file='' packet_digest=''
   local dispatch_status='' envelope_status='' started_at='' finished_at=''
   local evidence_refs=''
+  local mbe_posture='off' mbe_store_root='' mbe_context=''
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -386,6 +392,21 @@ cmd_record() {
         evidence_refs="${evidence_refs}${evidence_refs:+$'\n'}$2"
         shift 2
         ;;
+      --mbe-posture)
+        [ "$#" -ge 2 ] || die_usage "--mbe-posture requires a value"
+        mbe_posture="$2"
+        shift 2
+        ;;
+      --mbe-store-root)
+        [ "$#" -ge 2 ] || die_usage "--mbe-store-root requires a value"
+        mbe_store_root="$2"
+        shift 2
+        ;;
+      --mbe-context)
+        [ "$#" -ge 2 ] || die_usage "--mbe-context requires a value"
+        mbe_context="$2"
+        shift 2
+        ;;
       -h | --help)
         usage
         exit 0
@@ -403,12 +424,37 @@ cmd_record() {
 
   local adapter
   adapter="$(resolve_adapter "$repo_root")"
+  case "$mbe_posture" in
+    off | shadow | advisory | reference-enforce) ;;
+    *) die_usage "--mbe-posture must be off, shadow, advisory, or reference-enforce (got: $mbe_posture)" ;;
+  esac
   if [ "$adapter" = "none" ]; then
+    if [ "$mbe_posture" = "reference-enforce" ]; then
+      fail "reference-enforce requires an active dispatchReceipts adapter" 3
+    fi
     # DEFAULT OFF. Nothing recorded, nothing enforced, exit 0. An unconfigured
     # repository behaves exactly as it does today.
     printf 'adapter=none\n'
     printf 'receipt=skipped\n'
     return 0
+  fi
+
+  # MBE references are additive. The default/off path does not call the
+  # verifier and retains the legacy record and output bytes. Shadow/advisory
+  # may record a coherent reference but never change the dispatch class,
+  # action, gate outcome, or exit status. Reference enforcement fails closed.
+  local mbe_verified_json=''
+  if [ "$mbe_posture" != "off" ] && [ -n "$mbe_store_root" ] && [ -n "$mbe_context" ]; then
+    mbe_verified_json="$(python3 "$SCRIPT_DIR/mbe-reference-verify.py" \
+      --store-root "$mbe_store_root" --context "$mbe_context" --purpose dispatch 2>/dev/null || true)"
+  fi
+  if [ "$mbe_posture" = "reference-enforce" ]; then
+    [ -n "$mbe_store_root" ] && [ -d "$mbe_store_root" ] || fail "reference-enforce requires an existing --mbe-store-root" 3
+    [ -n "$mbe_context" ] && [ -f "$mbe_context" ] || fail "reference-enforce requires an existing --mbe-context" 3
+    [ -n "$mbe_verified_json" ] || fail "reference-enforce requires coherent MBE admission references" 3
+    local mbe_unresolved_hold
+    mbe_unresolved_hold="$(printf '%s' "$mbe_verified_json" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("unresolvedHold") else "false")' 2>/dev/null || printf 'invalid')"
+    [ "$mbe_unresolved_hold" = "false" ] || fail "reference-enforce prohibits repeat dispatch while the reservation has an unresolved hold" 3
   fi
 
   [ -n "$occurrence_id" ] || die_usage "--occurrence-id is required"
@@ -536,7 +582,12 @@ cmd_record() {
     escalated_json="\"$(json_escape "$escalated_from")\""
   fi
 
-  printf '{"schemaVersion":"%s","occurrenceId":"%s","attemptId":%d,"packetDigest":"%s","agent":"%s","startedAt":"%s","finishedAt":"%s","dispatchStatus":"%s","resultEnvelopeStatus":"%s","evidenceRefs":[%s],"escalatedFrom":%s,"retryClass":"%s","action":"%s","advance":"%s","terminal":%s}\n' \
+  local mbe_json_suffix=''
+  if [ -n "$mbe_verified_json" ]; then
+    mbe_json_suffix=",\"mbe\":$mbe_verified_json"
+  fi
+
+  printf '{"schemaVersion":"%s","occurrenceId":"%s","attemptId":%d,"packetDigest":"%s","agent":"%s","startedAt":"%s","finishedAt":"%s","dispatchStatus":"%s","resultEnvelopeStatus":"%s","evidenceRefs":[%s],"escalatedFrom":%s,"retryClass":"%s","action":"%s","advance":"%s","terminal":%s%s}\n' \
     "$SCHEMA_VERSION" \
     "$(json_escape "$occurrence_id")" \
     "$attempt_id" \
@@ -552,6 +603,7 @@ cmd_record() {
     "$action" \
     "$advance" \
     "$terminal" \
+    "$mbe_json_suffix" \
     >> "$store" || fail "cannot append to the receipt store $store"
 
   printf 'adapter=jsonl\n'
@@ -576,6 +628,9 @@ cmd_record() {
   printf 'budgetExhausted=%s\n' "$exhausted"
   printf 'terminal=%s\n' "$terminal"
   printf 'store=%s\n' "$store"
+  if [ -n "$mbe_verified_json" ]; then
+    printf 'mbeReferences=verified\n'
+  fi
 
   if [ "$terminal" = "true" ]; then
     return 3

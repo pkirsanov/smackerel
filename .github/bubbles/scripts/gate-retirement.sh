@@ -103,8 +103,11 @@ if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null
   exit 0
 fi
 
-python3 - "$GATES" "$SUBCOMMAND" <<'PY'
+ADVISORY="$REPO_ROOT/bubbles/scripts/model-tier-advisory.sh"
+
+python3 - "$GATES" "$SUBCOMMAND" "$ADVISORY" <<'PY'
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,6 +115,7 @@ import yaml
 
 gates_path = Path(sys.argv[1])
 subcommand = sys.argv[2]
+advisory_path = sys.argv[3]
 
 VALID_TIERS = ("haiku-class", "sonnet-class", "opus-class")
 
@@ -331,11 +335,46 @@ if subcommand == "report":
     print("  currently UNMET on its evidence precondition. Retirement is a")
     print("  human edit backed by that measurement, never a tool inference.")
 
+covered = sum(len(v) for v in curve.values())
+
+# IMP-058 SCOPE-1 / REG-22: two tools read the same registry independently —
+# this counts declared retireWhen entries directly from gates.yaml, while
+# model-tier-advisory.sh's own `retirement` op counts modelCompensation gates
+# through its own file-binding and YAML parse. They must agree. This is the
+# exact class of defect that shipped: the advisory tool was silently bound to
+# the wrong file and reported zero, which rendered as a clean report rather
+# than a failure. Only `lint` enforces it; `report`/`bind` stay descriptive.
+if subcommand == "lint" and Path(advisory_path).is_file():
+    try:
+        proc = subprocess.run(
+            [str(advisory_path), "retirement"],
+            capture_output=True, text=True, timeout=30,
+        )
+        m = re.search(r"modelCompensation gates: (\d+)", proc.stdout)
+        if m is None:
+            print("FINDING: retirement-count-unreadable: model-tier-advisory.sh "
+                  "retirement produced no 'modelCompensation gates: N' line "
+                  "(shape changed or the tool failed)")
+            findings += 1
+        else:
+            advisory_count = int(m.group(1))
+            total_model_comp = sum(1 for gid in gate_ids if is_model_comp(gid))
+            if advisory_count != total_model_comp:
+                print(f"FINDING: retirement-count-mismatch: gates.yaml declares "
+                      f"{total_model_comp} modelCompensation gate(s) but "
+                      f"model-tier-advisory.sh retirement reports "
+                      f"{advisory_count} — the two readers of this registry "
+                      f"have drifted apart")
+                findings += 1
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"FINDING: retirement-count-unreadable: could not run "
+              f"model-tier-advisory.sh retirement ({exc})")
+        findings += 1
+
 if findings:
     print(f"[gate-retirement] FAIL — findings: {findings}")
     sys.exit(1)
 
-covered = sum(len(v) for v in curve.values())
 print(f"[gate-retirement] OK — all {covered} modelCompensation gate(s) declare "
       f"a retirement criterion")
 sys.exit(0)

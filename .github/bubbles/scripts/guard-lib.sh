@@ -22,31 +22,80 @@ _BUBBLES_GUARD_LIB_SOURCED=1
 # Portable command timeout. Prefers GNU `timeout`, then `gtimeout`, else a bash
 # watchdog fallback. Returns the command's exit code; 124 on timeout (matching
 # GNU timeout). Caller-supplied stdout/stderr redirections are inherited.
+_bubbles_run_with_native_timeout() {
+  local timeout_command="$1"
+  local secs="$2"
+  shift 2
+  local state_file
+  local timeout_pid=""
+  local monitor_was_on=0
+  local rc=0
+
+  state_file="$(mktemp)" || return 1
+  rm -f "$state_file"
+  case "$-" in
+    *m*) monitor_was_on=1 ;;
+    *) set -m ;;
+  esac
+  "$timeout_command" --kill-after=5s "${secs}s" bash -c '
+    state_file="$1"
+    shift
+    trap '\''printf "%s\n" deadline >> "$state_file"'\'' TERM
+    run_child() {
+      trap - INT QUIT
+      exec "$@"
+    }
+    run_child "$@" &
+    child_pid=$!
+    child_rc=0
+    while kill -0 "$child_pid" 2>/dev/null; do
+      wait "$child_pid" || candidate_rc=$?
+      if ! kill -0 "$child_pid" 2>/dev/null; then
+        child_rc=${candidate_rc:-0}
+        break
+      fi
+      candidate_rc=
+    done
+    exit "$child_rc"
+  ' _ "$state_file" "$@" &
+  timeout_pid=$!
+  if [[ "$monitor_was_on" -eq 0 ]]; then
+    set +m
+  fi
+  wait "$timeout_pid" 2>/dev/null || rc=$?
+
+  if kill -0 -- "-$timeout_pid" 2>/dev/null; then
+    kill -TERM -- "-$timeout_pid" 2>/dev/null || true
+    kill -KILL -- "-$timeout_pid" 2>/dev/null || true
+  fi
+
+  # GNU timeout returns 137 when its kill-after ceiling fires. The TERM trap
+  # records that the deadline initiated termination, allowing that result to be
+  # normalized to 124 without changing an ordinary command exit 137.
+  if [[ -f "$state_file" ]] && grep -q '^deadline$' "$state_file" 2>/dev/null; then
+    rc=124
+  fi
+  rm -f "$state_file"
+  return "$rc"
+}
+
 bubbles_run_with_timeout() {
   local secs="$1"; shift
   if command -v timeout >/dev/null 2>&1; then
     # portable-ok: GNU branch is capability-guarded; gtimeout and bash fallback follow.
-    timeout "${secs}s" "$@"
+    _bubbles_run_with_native_timeout "$(command -v timeout)" "$secs" "$@"
     return $?
   fi
   if command -v gtimeout >/dev/null 2>&1; then
-    gtimeout "${secs}s" "$@"
+    _bubbles_run_with_native_timeout "$(command -v gtimeout)" "$secs" "$@"
     return $?
   fi
   # Fallback watchdog (rare: only hosts without coreutils timeout, e.g. a stock
-  # macOS PATH). Two properties are load-bearing; do not simplify either away:
-  #
-  #   1. The watchdog's stdout/stderr go to /dev/null. A background subshell
-  #      inherits the caller's pipe, so when the caller is a command
-  #      substitution -- `out="$(bubbles_run_with_timeout 120 ...)"` -- the
-  #      substitution reads until EOF, and EOF does not arrive while the
-  #      watchdog still holds the write end. That made an instantly-returning
-  #      command block for the FULL timeout.
-  #
-  #   2. The watchdog polls in 1s steps instead of one long `sleep "$secs"`.
-  #      Killing the subshell does not reap a `sleep` grandchild, so a single
-  #      long sleep survives as an orphan for its full duration. Polling lets
-  #      the watchdog notice the command finished and exit within ~1s.
+  # macOS PATH). Run the command in its own process group and supervise it from
+  # this shell. A background sleep-based watchdog both held command-substitution
+  # pipes open and killed only the direct child, leaking descendants. The parent
+  # loop avoids both defects and records timeout explicitly, so an ordinary
+  # command exit 137/143 is preserved rather than mistaken for a deadline.
   # POSIX shells start asynchronous commands with SIGINT/SIGQUIT ignored when
   # job control is off. That disposition survives exec and cannot be trapped by
   # a nested non-interactive Bash, so signal-cleanup tests (and real children)
@@ -62,23 +111,41 @@ bubbles_run_with_timeout() {
   if [[ "$monitor_was_on" -eq 0 ]]; then
     set +m
   fi
-  (
-    waited=0
-    while [ "$waited" -lt "$secs" ]; do
-      sleep 1
-      kill -0 "$cmd_pid" 2>/dev/null || exit 0
-      waited=$((waited + 1))
-    done
-    kill -TERM "$cmd_pid" 2>/dev/null
-  ) >/dev/null 2>&1 &
-  local watch_pid=$!
+  local started_at=$SECONDS
+  local timed_out=0
+  local termination_waited=0
   local rc=0
+  while kill -0 "$cmd_pid" 2>/dev/null; do
+    if (( SECONDS - started_at >= secs )); then
+      timed_out=1
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$timed_out" -eq 1 ]]; then
+    kill -TERM -- "-$cmd_pid" 2>/dev/null || kill -TERM "$cmd_pid" 2>/dev/null || true
+    while kill -0 -- "-$cmd_pid" 2>/dev/null && [[ "$termination_waited" -lt 5 ]]; do
+      sleep 1
+      termination_waited=$((termination_waited + 1))
+    done
+    if kill -0 -- "-$cmd_pid" 2>/dev/null; then
+      kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+    fi
+    wait "$cmd_pid" 2>/dev/null || true
+    return 124
+  fi
+
   wait "$cmd_pid" 2>/dev/null || rc=$?
-  kill -TERM "$watch_pid" 2>/dev/null || true
-  wait "$watch_pid" 2>/dev/null || true
-  # Normalize a watchdog SIGTERM (143) to GNU timeout's 124.
-  [[ "$rc" -eq 143 ]] && rc=124
-  return $rc
+  # Match the native and progress-aware branches: the direct child can exit
+  # successfully while one of its descendants still owns the process group.
+  # Monitor mode made cmd_pid the group identity, and the existence check keeps
+  # cleanup scoped to that exact group rather than falling back to a reused PID.
+  if kill -0 -- "-$cmd_pid" 2>/dev/null; then
+    kill -TERM -- "-$cmd_pid" 2>/dev/null || true
+    kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+  fi
+  return "$rc"
 }
 
 # Progress-aware command timeout for long validators that stream to a log.
@@ -91,6 +158,32 @@ bubbles_run_with_timeout() {
 # invalid invocation. The caller owns the log file; this function truncates it.
 # `BUBBLES_PROGRESS_TIMEOUT_REASON` is empty on command completion and is set to
 # `idle` or `absolute` for the corresponding timeout.
+_bubbles_terminate_process_group() {
+  local group_leader_pid="$1"
+  local termination_waited=0
+
+  kill -TERM -- "-$group_leader_pid" 2>/dev/null || kill -TERM "$group_leader_pid" 2>/dev/null || true
+  while kill -0 -- "-$group_leader_pid" 2>/dev/null && [[ "$termination_waited" -lt 5 ]]; do
+    sleep 1
+    termination_waited=$((termination_waited + 1))
+  done
+  if kill -0 -- "-$group_leader_pid" 2>/dev/null; then
+    kill -KILL -- "-$group_leader_pid" 2>/dev/null || true
+  fi
+  wait "$group_leader_pid" 2>/dev/null || true
+}
+
+_bubbles_restore_signal_trap() {
+  local saved_trap="$1"
+  local signal_name="$2"
+
+  if [[ -n "$saved_trap" ]]; then
+    eval "$saved_trap"
+  else
+    trap - "$signal_name"
+  fi
+}
+
 bubbles_run_with_progress_timeout() {
   local idle_secs="${1:-}"
   local absolute_secs="${2:-}"
@@ -116,6 +209,14 @@ bubbles_run_with_progress_timeout() {
   "$@" > "$log_file" 2>&1 </dev/null &
   local cmd_pid=$!
   [[ "$monitor_was_enabled" -eq 1 ]] || set +m
+  local saved_hup_trap saved_int_trap saved_term_trap
+  saved_hup_trap="$(trap -p HUP)"
+  saved_int_trap="$(trap -p INT)"
+  saved_term_trap="$(trap -p TERM)"
+  local interrupted_signal=""
+  trap 'interrupted_signal=HUP; _bubbles_terminate_process_group "$cmd_pid"' HUP
+  trap 'interrupted_signal=INT; _bubbles_terminate_process_group "$cmd_pid"' INT
+  trap 'interrupted_signal=TERM; _bubbles_terminate_process_group "$cmd_pid"' TERM
   local started_at=$SECONDS
   local last_progress_at=$started_at
   local last_size=0
@@ -129,6 +230,12 @@ bubbles_run_with_progress_timeout() {
     kill -0 "$cmd_pid" 2>/dev/null || break
 
     current_size="$(wc -c 2>/dev/null < "$log_file")" || current_size=""
+    # BSD `wc` right-aligns its count in a fixed-width field ("      12"); GNU
+    # does not, and command substitution strips only the TRAILING newline. The
+    # raw capture therefore failed `^[0-9]+$` on the first poll of every BSD
+    # host, returning 2 before either deadline was ever evaluated. Normalize
+    # before the numeric test; an unreadable log still yields "" and fails loud.
+    current_size="${current_size//[[:space:]]/}"
     if [[ ! "$current_size" =~ ^[0-9]+$ ]]; then
       timeout_rc=2
       break
@@ -151,16 +258,10 @@ bubbles_run_with_progress_timeout() {
   done
 
   if [[ "$timeout_rc" -ne 0 ]]; then
-    kill -TERM -- "-$cmd_pid" 2>/dev/null || kill -TERM "$cmd_pid" 2>/dev/null || true
-    local termination_waited=0
-    while kill -0 "$cmd_pid" 2>/dev/null && [[ "$termination_waited" -lt 5 ]]; do
-      sleep 1
-      termination_waited=$((termination_waited + 1))
-    done
-    if kill -0 -- "-$cmd_pid" 2>/dev/null; then
-      kill -KILL -- "-$cmd_pid" 2>/dev/null || true
-    fi
-    wait "$cmd_pid" 2>/dev/null || true
+    _bubbles_terminate_process_group "$cmd_pid"
+    _bubbles_restore_signal_trap "$saved_hup_trap" HUP
+    _bubbles_restore_signal_trap "$saved_int_trap" INT
+    _bubbles_restore_signal_trap "$saved_term_trap" TERM
     return "$timeout_rc"
   fi
 
@@ -171,6 +272,17 @@ bubbles_run_with_progress_timeout() {
   if kill -0 -- "-$cmd_pid" 2>/dev/null; then
     kill -TERM -- "-$cmd_pid" 2>/dev/null || true
     kill -KILL -- "-$cmd_pid" 2>/dev/null || true
+  fi
+  _bubbles_restore_signal_trap "$saved_hup_trap" HUP
+  _bubbles_restore_signal_trap "$saved_int_trap" INT
+  _bubbles_restore_signal_trap "$saved_term_trap" TERM
+  if [[ -n "$interrupted_signal" ]]; then
+    kill -s "$interrupted_signal" "$BASHPID"
+    case "$interrupted_signal" in
+      HUP) return 129 ;;
+      INT) return 130 ;;
+      TERM) return 143 ;;
+    esac
   fi
   return "$rc"
 }

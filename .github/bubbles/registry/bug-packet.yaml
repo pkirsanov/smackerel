@@ -46,9 +46,11 @@ forms:
         purpose: Evidence with raw terminal output, in the sections report-sections.yaml declares.
       - id: uservalidation.md
         purpose: >-
-          Acceptance checklist shipped UNCHECKED, with automation readiness and
-          the human acceptance record as separate sections (IMP-047 PD-12).
-          Shape authority: bubbles/registry/acceptance-authority.yaml.
+          Acceptance checklist shipped CHECKED under the BUG-037 opt-out
+          contract: the user's only required act is to UNCHECK an item they
+          reject, and unchecking nothing is acceptance. Automation readiness and
+          the OPTIONAL human acceptance record are separate sections. Shape
+          authority: bubbles/registry/acceptance-authority.yaml.
       - id: scenario-manifest.json
         purpose: >-
           Required before any completion claim when the bug scope defines Gherkin
@@ -73,12 +75,60 @@ forms:
     outcomeTelemetry: bubbles/scripts/micro-fix-outcome-log.sh
     artifacts:
       - id: bug.md
+        purpose: >-
+          Reproduction, severity, status, environment, error output, and the
+          root cause. Discharge site for the `root-cause-stated` obligation.
       - id: report.md
+        purpose: >-
+          Evidence with raw terminal output, in the sections
+          report-sections.yaml declares. ALSO the attestation site: it carries
+          the completion line for every id in obligationsRetained below.
       - id: state.json
+        purpose: >-
+          Version 3 control-plane state with workflowMode, execution,
+          certification, and policySnapshot. NOT a completion carrier — an
+          agent-writable JSON field that grants completion is the
+          self-certification shape `escalation.overrideFlag: none` forbids.
+    # BUG-042. These are micro-fix-packet.yaml's four preservedObligations,
+    # restated here ONLY as carrier pairs so the enforcing surfaces can read
+    # WHERE each one is discharged and where its completion is attested. Before
+    # this block the compact form had no completion basis at all: it declares no
+    # scopes.md, so the transition guard's DoD count was 0 and the DEFAULT bug
+    # route produced packets that could be evaluated and never certified.
+    #
+    # `dischargedIn` is taken from micro-fix-packet.yaml's own requirement text
+    # and is NOT uniform: that text names `bug.md` for the root cause and
+    # `report.md` for the other three. `attestedIn` IS uniform, because a
+    # completion claim is an evidence claim and report.md is this form's one
+    # evidence surface.
+    #
+    # THE MISSING `requirement:` IS DELIBERATE. Do not add it to make this block
+    # symmetric with `single-file` below. The two forms differ because their
+    # obligations have different owners:
+    #   - single-file's `explicit-disposition` (Gate G095) exists nowhere else,
+    #     so that form is the only place its text can live.
+    #   - compact's four are OWNED by micro-fix-packet.yaml, which this form
+    #     already points at via `admissionAuthority:`. Copying the text here
+    #     would fork one authority into two copies drifting at their own pace,
+    #     which is the exact defect this registry was created to end.
+    obligationsRetained:
+      - id: reproduce-before-fix
+        dischargedIn: report.md
+        attestedIn: report.md
+      - id: adversarial-regression
+        dischargedIn: report.md
+        attestedIn: report.md
+      - id: root-cause-stated
+        dischargedIn: bug.md
+        attestedIn: report.md
+      - id: evidence-is-execution
+        dischargedIn: report.md
+        attestedIn: report.md
     note: >-
       Fewer artifacts, never fewer obligations. micro-fix-packet.yaml's
       preservedObligations still hold in full: reproduce before fix, adversarial
-      regression, root cause stated, evidence is execution.
+      regression, root cause stated, evidence is execution. Since BUG-042 that
+      sentence is also machine-readable, as the obligationsRetained block above.
 
   - form: single-file
     name: BUGS.md entry (framework source repo only)
@@ -96,11 +146,25 @@ forms:
     artifacts:
       - id: BUGS.md entry
         purpose: >-
-          One entry carrying reproduction, root cause, disposition (Gate G095),
-          and the fix or the recommended upstream fix.
+          One entry carrying reproduction, root cause, an explicit disposition
+          (see the `explicit-disposition` obligation below for what Gate G095
+          does and does not require of it), and the fix or the recommended
+          upstream fix.
     obligationsRetained:
       - id: explicit-disposition
-        requirement: Every entry carries a Gate G095 disposition.
+        requirement: >-
+          Every entry states its disposition explicitly. Gate G095 is the source
+          of the OBLIGATION, not of the VOCABULARY. G095 requires that an issue
+          observed during work be routed explicitly, and its tokens
+          (fixed-in-session, bug-filed, spec-filed, ops-filed, routed,
+          status-adjusted) name that ROUTING decision. A BUGS.md entry is the
+          artifact a bug-filed routing produces; its own `**Disposition:**` line
+          records the OUTCOME of the filed defect in prose - "fixed in-repo in
+          <path>", "external/upstream, workaround documented". Those are two
+          different axes, so do NOT rewrite an entry's disposition into a G095
+          token to satisfy this obligation. The G095 guard
+          (discovered-issue-disposition-guard.sh) reads report.md and
+          RESULT-ENVELOPE narrative; it does not read BUGS.md and never has.
       - id: reproduce-before-fix
         requirement: The entry records the failing reproduction with real output.
       - id: root-cause-stated
@@ -142,6 +206,14 @@ stateExpectations:
 # transition guard, which is why the checkbox text is recorded literally.
 regressionExpectations:
   appliesToForms: [full]
+  note: >-
+    BUG-042. The scoping above is deliberate and stays. The checkbox strings
+    below are literal `scopes.md` text and a Test Plan row, and a form with
+    neither artifact cannot carry them, so extending this list verbatim would
+    demand a Test Plan that cannot exist. The compact form's expression of the
+    SAME obligation is `forms[compact].obligationsRetained[adversarial-regression]`.
+    The obligation is preserved in both forms; only its expression is
+    form-shaped.
   testPlan:
     requirement: At least one Test Plan row whose label literally contains `Regression E2E`.
   dodCheckboxes:
@@ -156,3 +228,42 @@ escalation:
   to: full
   rule: Any failed admission condition in micro-fix-packet.yaml escalates the form.
   overrideFlag: none
+
+# How a packet DECLARES its form (BUG-041).
+#
+# The field already existed and was already consumed, at
+# micro-fix-admission.sh:144, but no registry declared it. A field that is real
+# and consumed yet undeclared forces every second reader to guess the vocabulary
+# or copy the grep, which is how the four-answer drift started. This block is
+# the declaration.
+#
+# `absent: full` is load-bearing and FAILS CLOSED. A packet that declares
+# nothing is linted as the full form, so silence can never reduce a
+# requirement. Declaring `compact` is a REQUEST, not a grant: the packet must
+# ALSO survive micro-fix admission, otherwise this field would become the
+# override that `escalation.overrideFlag: none` above forbids.
+declaration:
+  field: packet
+  location: state.json
+  absent: full
+  vocabulary:
+    - word: full
+      form: full
+    - word: compact
+      form: compact
+    - word: single-file
+      form: single-file
+  # A DECLARED alias with a stated retirement condition is a contract; an
+  # undeclared one is the contradiction this file exists to end. `micro` shipped
+  # before this block existed, so it is admitted here rather than left to be
+  # guessed.
+  deprecatedAliases:
+    - word: micro
+      form: compact
+      reason: >-
+        Shipped before this block existed. micro-fix-admission.sh:144 reads it
+        and bugs/BUG-038-progress-timeout-bsd-wc-padding/state.json stores it.
+      retireWhen: >-
+        Every in-repo state.json stores `compact` and micro-fix-admission.sh
+        reads `compact`. Retirement is a separate change owned by whoever may
+        edit BUG-038.

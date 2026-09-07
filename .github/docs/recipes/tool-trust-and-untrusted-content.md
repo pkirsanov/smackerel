@@ -7,6 +7,8 @@
 Use this when you are wiring a host `PreToolUse` integration, registering an MCP
 server, or reviewing how Bubbles decides whether a tool call may run.
 
+This surface authorizes consequential actions. A measured admission permit answers a different question: whether one resource-consuming dispatch fits its exact goal budget and epoch. Budget availability never authorizes a deploy, transaction, message, infrastructure mutation, or other side effect. See [Research And Admission Runtime](research-and-admission-runtime.md).
+
 ## The two halves
 
 | Half | File | Role |

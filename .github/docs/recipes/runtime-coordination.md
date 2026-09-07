@@ -4,6 +4,8 @@
 
 Use this when multiple sessions might start, reuse, or tear down the same Docker or Compose stack.
 
+Runtime leases coordinate ownership and host capacity for shared runtime resources. They do not admit measured model, subagent, web, browser, or tool dispatches against a goal budget. Use [Research And Admission Runtime](research-and-admission-runtime.md) for that execution-control plane.
+
 ## When To Use It
 
 Use this recipe when any of these are true:

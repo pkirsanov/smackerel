@@ -30,13 +30,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RESOLVER="$SCRIPT_DIR/mode-resolver.sh"
-WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
-ALIASES_FILE="$REPO_ROOT/bubbles/workflows/aliases.yaml"
+WORKFLOWS_FILE="$SCRIPT_DIR/../workflows.yaml"
+ALIASES_FILE="$SCRIPT_DIR/../workflows/aliases.yaml"
 SHELL_ALIASES_FILE="$SCRIPT_DIR/aliases.sh"
-CHEATSHEET_ALIASES_FILE="$REPO_ROOT/bubbles/cheatsheet/aliases.json"
-CHEATSHEET_MODES_FILE="$REPO_ROOT/bubbles/cheatsheet/modes.json"
+CHEATSHEET_ALIASES_FILE="$SCRIPT_DIR/../cheatsheet/aliases.json"
+CHEATSHEET_MODES_FILE="$SCRIPT_DIR/../cheatsheet/modes.json"
 
 failures=0
 pass() { echo "PASS: $1"; }
@@ -165,6 +164,34 @@ if bash "$RESOLVER" --resolve-v6 ship action:bogus 2>/dev/null; then
   fail "adversarial: resolver accepted unknown tag for known primitive"
 else
   pass "adversarial: resolver rejects unknown tag for known primitive"
+fi
+
+# BUG-038: the metadata-only train assignment tuple is exact, while all five
+# pre-existing train lifecycle/status aliases retain their canonical names.
+if [[ "$(bash "$RESOLVER" --resolve-v6 ship action:assign target:train-metadata 2>/dev/null || true)" == "release-train-assign-metadata" ]]; then
+  pass "BUG-038: exact train metadata assignment tuple resolves"
+else
+  fail "BUG-038: exact train metadata assignment tuple does not resolve"
+fi
+
+train_alias_failures=0
+for train_alias_row in \
+  "ship action:cut|release-train-cut" \
+  "ship action:promote|release-train-promote" \
+  "ship action:rollback|release-train-rollback" \
+  "ship action:retire|release-train-retire" \
+  "ship action:status scope:all-trains|release-train-status-all"; do
+  train_input="${train_alias_row%%|*}"
+  train_expected="${train_alias_row#*|}"
+  # shellcheck disable=SC2086
+  train_actual="$(bash "$RESOLVER" --resolve-v6 $train_input 2>/dev/null || true)"
+  if [[ "$train_actual" != "$train_expected" ]]; then
+    fail "BUG-038: existing tuple '$train_input' resolved to '$train_actual' instead of '$train_expected'"
+    train_alias_failures=$((train_alias_failures + 1))
+  fi
+done
+if [[ "$train_alias_failures" -eq 0 ]]; then
+  pass "BUG-038: five existing train aliases retain their targets"
 fi
 
 # 8c. adversarial: duplicate (primitive, tag) tuple is rejected by an

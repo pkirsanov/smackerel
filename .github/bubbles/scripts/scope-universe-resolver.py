@@ -32,12 +32,15 @@ Exit codes: ``0`` success (records on stdout); ``2`` any contract/usage refusal
 (reason on stderr, prefixed ``scope-universe-resolver:``). It never emits a
 partial projection and never falls back to all-scope behavior.
 
-Output protocol (tab-delimited, one record per line, deterministic order):
+Output protocol (tab-delimited, one record per line, deterministic order).
+The first seven fields retain their original order; the additive eighth field
+is a compact, sorted JSON array containing the resolver-owned aliases:
 
-    RECORD<TAB>canonicalId<TAB>status<TAB>isCurrent<TAB>isDescendant<TAB>applicable
+    RECORD<TAB>canonicalId<TAB>status<TAB>isCurrent<TAB>isDescendant<TAB>applicable<TAB>scopeDir<TAB>aliasesJson
 """
 
 import json
+import math
 import sys
 
 CANONICAL_STATUSES = ("not_started", "in_progress", "blocked", "done")
@@ -96,20 +99,34 @@ def canonical_status(value, label):
     return value
 
 
+def positive_integral_number(value):
+    """Return a normalized identity string for a positive integral number."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value) if value > 0 else None
+    if not isinstance(value, float):
+        return None
+    if not math.isfinite(value) or value <= 0 or not value.is_integer():
+        return None
+    return str(int(value))
+
+
 def record_identity(entry, label):
     """Resolve the canonical identity from scopeId or scope (closed rule)."""
     scope_id = entry.get("scopeId")
     scope = entry.get("scope")
     if isinstance(scope_id, str) and scope_id.strip():
-        return scope_id
+        return scope_id.strip()
+    numeric_scope = positive_integral_number(scope)
+    if numeric_scope is not None:
+        return numeric_scope
     if isinstance(scope, bool):
         die(label + " scope must not be a boolean")
-    if isinstance(scope, int):
-        if scope <= 0:
-            die(label + " numeric scope must be a positive integer")
-        return str(scope)
+    if isinstance(scope, (int, float)):
+        die(label + " numeric scope must be a positive integer")
     if isinstance(scope, str) and scope.strip():
-        return scope
+        return scope.strip()
     die(label + " has no valid identity (scopeId or scope required)")
 
 
@@ -117,9 +134,10 @@ def aliases_for(entry, canonical_id):
     """Closed derived alias set (no free-form state alias list is honored)."""
     aliases = {canonical_id}
     scope = entry.get("scope")
-    if isinstance(scope, int) and not isinstance(scope, bool) and scope > 0:
-        aliases.add(str(scope))
-        aliases.add("%02d" % scope)
+    numeric_scope = positive_integral_number(scope)
+    if numeric_scope is not None:
+        aliases.add(numeric_scope)
+        aliases.add("%02d" % int(numeric_scope))
     if isinstance(scope, str) and scope.strip():
         aliases.add(scope.strip())
     scope_id = entry.get("scopeId")
@@ -155,9 +173,10 @@ def build_registry(entries, label):
         for dep in depends_raw:
             if not isinstance(dep, str) or not dep.strip():
                 die(entry_label + " dependsOn entries must be non-empty strings")
-            if dep in depends:
-                die(entry_label + " dependsOn has a duplicate edge: " + repr(dep))
-            depends.append(dep)
+            normalized_dep = dep.strip()
+            if normalized_dep in depends:
+                die(entry_label + " dependsOn has a duplicate edge: " + repr(normalized_dep))
+            depends.append(normalized_dep)
         scope_dir = entry.get("scopeDir")
         if scope_dir is not None:
             if not isinstance(scope_dir, str) or not scope_dir.strip():
@@ -176,6 +195,18 @@ def build_registry(entries, label):
                 "isDescendant": False,
             }
         )
+    alias_owners = {}
+    for record in records:
+        for alias in record["aliases"]:
+            alias_owners.setdefault(alias, []).append(record["canonicalId"])
+    collisions = [
+        (alias, sorted(set(owners)))
+        for alias, owners in alias_owners.items()
+        if len(set(owners)) > 1
+    ]
+    if collisions:
+        alias, owners = sorted(collisions, key=lambda item: item[0])[0]
+        die("ambiguous scope alias " + repr(alias) + " identifies canonical scopes: " + ", ".join(owners))
     return records
 
 
@@ -206,22 +237,30 @@ def resolve_dependency_edges(records):
 
 
 def detect_cycles(records, by_id):
-    """Depth-first cycle detection over the validated dependency graph."""
+    """Iterative depth-first cycle detection over the dependency graph."""
     WHITE, GRAY, BLACK = 0, 1, 2
     color = {r["canonicalId"]: WHITE for r in records}
 
-    def visit(node_id):
-        color[node_id] = GRAY
-        for dep_id in by_id[node_id]["resolvedDependsOn"]:
+    for record in records:
+        root_id = record["canonicalId"]
+        if color[root_id] != WHITE:
+            continue
+        color[root_id] = GRAY
+        stack = [(root_id, 0)]
+        while stack:
+            node_id, next_index = stack[-1]
+            dependencies = by_id[node_id]["resolvedDependsOn"]
+            if next_index >= len(dependencies):
+                color[node_id] = BLACK
+                stack.pop()
+                continue
+            dep_id = dependencies[next_index]
+            stack[-1] = (node_id, next_index + 1)
             if color[dep_id] == GRAY:
                 die("dependency cycle detected at " + repr(node_id))
             if color[dep_id] == WHITE:
-                visit(dep_id)
-        color[node_id] = BLACK
-
-    for record in records:
-        if color[record["canonicalId"]] == WHITE:
-            visit(record["canonicalId"])
+                color[dep_id] = GRAY
+                stack.append((dep_id, 0))
 
 
 def transitive_prerequisites(current, by_id):
@@ -313,9 +352,12 @@ def main(argv):
     current_token = None
     if execution is not None:
         current_token = execution.get("currentScope")
-    if not isinstance(current_token, (str, int)) or isinstance(current_token, bool):
+    normalized_current = positive_integral_number(current_token)
+    if isinstance(current_token, str):
+        normalized_current = current_token.strip()
+    if normalized_current is None:
         die("execution.currentScope is required and must be a string or positive integer")
-    current = resolve_alias(canonical, str(current_token), "execution.currentScope")
+    current = resolve_alias(canonical, normalized_current, "execution.currentScope")
     current["isCurrent"] = True
     if current["status"] not in ("in_progress", "blocked"):
         die("current scope status must be in_progress or blocked")
@@ -333,7 +375,7 @@ def main(argv):
     for record in canonical:
         applicable = not (record["isDescendant"] and record["status"] == "not_started")
         lines.append(
-            "RECORD\t%s\t%s\t%s\t%s\t%s\t%s"
+            "RECORD\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
             % (
                 record["canonicalId"],
                 record["status"],
@@ -341,6 +383,7 @@ def main(argv):
                 "true" if record["isDescendant"] else "false",
                 "true" if applicable else "false",
                 record["scopeDir"],
+                json.dumps(sorted(record["aliases"]), ensure_ascii=False, separators=(",", ":")),
             )
         )
     sys.stdout.write("\n".join(lines) + "\n")

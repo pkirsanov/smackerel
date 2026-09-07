@@ -471,7 +471,7 @@ audit_spec() {
 
     if [[ -f "$traceability_script" ]]; then
       echo "--- Running traceability guard ---"
-      if run_and_report_check "Traceability" bash "$traceability_script" "$spec_dir"; then
+      if run_and_report_check "Traceability" bash "$traceability_script" "$spec_dir" --all-scopes --coverage-policy=authored; then
         :
       else
         spec_failed="true"

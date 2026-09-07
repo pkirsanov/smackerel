@@ -83,6 +83,10 @@ EV_TARGET=""
 EV_DATA_CLASSES=""
 EV_EGRESS="none"
 EV_APPROVAL_FILE=""
+MBE_POSTURE="off"
+MBE_STORE_ROOT=""
+MBE_CONTEXT_FILE=""
+MBE_ACTION_FILE=""
 
 # Pull out --confirm anywhere in the args.
 ARGS=()
@@ -99,10 +103,19 @@ while [[ $# -gt 0 ]]; do
     --data-classes) EV_DATA_CLASSES="${2:-}"; shift 2;;
     --egress) EV_EGRESS="${2:-none}"; shift 2;;
     --approval-file) EV_APPROVAL_FILE="${2:-}"; shift 2;;
+    --mbe-posture) MBE_POSTURE="${2:-}"; shift 2;;
+    --mbe-store-root) MBE_STORE_ROOT="${2:-}"; shift 2;;
+    --mbe-context) MBE_CONTEXT_FILE="${2:-}"; shift 2;;
+    --mbe-action) MBE_ACTION_FILE="${2:-}"; shift 2;;
     -h|--help) usage; exit 0;;
     *) ARGS+=("$1"); shift;;
   esac
 done
+
+case "$MBE_POSTURE" in
+  off | shadow | advisory | reference-enforce) ;;
+  *) echo "pre-tool-risk-gate: invalid --mbe-posture '$MBE_POSTURE'" >&2; exit 2 ;;
+esac
 
 # --- Structured tool/server/operation event decision (IMP-020 S3 / AF-005) ---
 # Consumes a structured event + the tool-trust registry for a FAIL-CLOSED
@@ -229,6 +242,24 @@ event_decision() {
       echo "pre-tool-risk-gate: BLOCK — approval is expired or has no valid expiry." >&2
       echo "decision=block reason=approval-expired enforcement=enforced riskClass=$risk"; exit 3
     fi
+    if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+      if [[ -z "$MBE_STORE_ROOT" || ! -d "$MBE_STORE_ROOT" ||
+            -z "$MBE_CONTEXT_FILE" || ! -f "$MBE_CONTEXT_FILE" ||
+            -z "$MBE_ACTION_FILE" || ! -f "$MBE_ACTION_FILE" ]]; then
+        echo "pre-tool-risk-gate: BLOCK — valid approval is necessary but reference-enforce also requires MBE admission inputs." >&2
+        echo "decision=block reason=mbe-admission-required enforcement=repository-reference riskClass=$risk"; exit 3
+      fi
+      local declared_digest canonical_action computed_digest
+      declared_digest="$(jq -r '.actionDigest // ""' "$MBE_ACTION_FILE" 2>/dev/null || true)"
+      canonical_action="$(jq -cS '{argv:.argv}' "$MBE_ACTION_FILE" 2>/dev/null || true)"
+      computed_digest="sha256:$(printf '%s' "$canonical_action" | { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; } | awk '{print $1}')"
+      if [[ -z "$canonical_action" || "$declared_digest" != "$computed_digest" ]] ||
+        ! python3 "$SCRIPT_DIR/mbe-reference-verify.py" --store-root "$MBE_STORE_ROOT" \
+          --context "$MBE_CONTEXT_FILE" --purpose dispatch --action-digest "$computed_digest" >/dev/null 2>&1; then
+        echo "pre-tool-risk-gate: BLOCK — action approval is valid but MBE admission is absent or incoherent." >&2
+        echo "decision=block reason=mbe-admission-invalid enforcement=repository-reference riskClass=$risk"; exit 3
+      fi
+    fi
     echo "pre-tool-risk-gate: ALLOW — '$label' authorized by valid action-bound approval." >&2
     echo "decision=allow reason=approved enforcement=enforced riskClass=$risk"; exit 0
   fi
@@ -289,6 +320,24 @@ effective_risk_class() {
       case "${command_args%% *}" in
         release|reclaim-stale) printf 'runtime_teardown'; return ;;
         acquire|attach|heartbeat) printf 'owned_mutation'; return ;;
+      esac ;;
+    research)
+      case "${command_args%% *}" in
+        plan|run|resume|validate|publish|cancel) printf 'owned_mutation'; return ;;
+        adapter-local-command) printf 'external_side_effect'; return ;;
+        *) printf 'read_only'; return ;;
+      esac ;;
+    admission)
+      case "${command_args%% *}" in
+        adapter|usage) printf 'read_only'; return ;;
+        *)
+          if [[ "$command_args" == 'budget snapshot'* ]]; then
+            printf 'read_only'
+          else
+            printf 'owned_mutation'
+          fi
+          return
+          ;;
       esac ;;
   esac
   printf '%s' "$default_risk"

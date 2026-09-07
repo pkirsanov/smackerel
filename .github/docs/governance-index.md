@@ -205,6 +205,7 @@ end-to-end flows.
 - [reconcile-redesign-existing-feature.md](recipes/reconcile-redesign-existing-feature.md)
 - [regression-check.md](recipes/regression-check.md)
 - [readiness-review.md](recipes/readiness-review.md)
+- [research-and-admission-runtime.md](recipes/research-and-admission-runtime.md)
 - [release-planning.md](recipes/release-planning.md)
 - [release-train-lifecycle.md](recipes/release-train-lifecycle.md)
 - [resume-work.md](recipes/resume-work.md)

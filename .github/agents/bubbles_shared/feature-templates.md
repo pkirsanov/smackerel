@@ -143,6 +143,14 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 ### Test Plan
 Use the Test Plan table from scope-workflow.md and map each Gherkin scenario to a test entry that validates the exact use case behavior.
 
+Traceability discovers one visible section headed exactly `## Test Plan` or
+`### Test Plan`. Its test table must contain exactly one `Test Type` header and
+exactly one `File/Location` header. Header comparison ignores case and embedded
+whitespace, and column order is irrelevant. The concrete test path comes only
+from the `File/Location` cell. A path in `Command` does not substitute for a
+missing `File/Location`, and neither `File/Location` nor `Command` contributes
+semantic text when a scenario is matched to a row.
+
 **E2E rows MUST be scenario-specific:** list the actual test file, actual `test()` title, and specific scenario ID. Generic E2E placeholders are FORBIDDEN — see agent-common.md → "ACTUAL E2E TEST SPECIFICITY".
 
 **Every feature/fix/change MUST include explicit regression E2E planning:** for every new/changed/fixed behavior, add at least one persistent `Regression:` E2E row tied to the exact scenario or bug behavior it protects. A broad "existing E2E suite" row does not satisfy this requirement by itself.
@@ -291,14 +299,16 @@ Written by automation. Records that the delivered behavior was verified far enou
 
 ## Checklist
 
-Human acceptance. Ships UNCHECKED. A human checks an item after exercising that behavior.
+Human acceptance, opt-out. Ships CHECKED. The user's only required act is to UNCHECK an item whose behavior does not meet their expectation.
 
-- [ ] [Scenario or flow the human accepts]
-- [ ] [Another flow the human accepts]
+- [x] [Scenario or flow the user accepts]
+- [x] [Another flow the user accepts]
 
-An item still unchecked at a terminal transition is either unaccepted work or a user-reported regression.
+An item the user has unchecked blocks a terminal transition until the behavior is fixed and the USER re-checks it. Unchecking nothing is acceptance.
 
 ## Human Acceptance Record
+
+Optional. Not required at a terminal transition. Author it only where an external UAT, an explicit sign-off, or a compliance context wants a named acceptor.
 
 - acceptedBy: [human name or handle — never an agent id]
 - acceptedAt: [YYYY-MM-DDTHH:MM:SSZ]
@@ -326,25 +336,28 @@ Structured by `bubbles.journey` during a guided live-product walkthrough (observ
 Rules:
 
 - Checklist items MUST use markdown checkbox syntax. So must Automation Readiness items.
-- **Acceptance entries ship UNCHECKED (IMP-047 PD-12).** Automation MUST NOT check one. The previous rule required a checked-by-default entry, which meant the template alone satisfied Gate G136's terminal human acceptance with no human act — a planning artifact became a sign-off.
-- **Automation readiness and human acceptance are different facts with different writers.** Automation writes and checks `## Automation Readiness`; a fully checked readiness block discharges no acceptance obligation. Only `## Checklist` plus `## Human Acceptance Record` establish acceptance.
-- A terminal (`done`) transition requires every `## Checklist` item checked AND a `## Human Acceptance Record` carrying `acceptedBy`, `acceptedAt`, and a `method` from the closed vocabulary. `acceptedBy` MUST NOT be an agent id.
+- **Acceptance is OPT-OUT (BUG-037).** The `## Checklist` ships CHECKED, and automation authors that initial state when it creates the artifact. A user who reviews the delivered behavior and objects to nothing performs no further act, and that silence IS acceptance. A user who does object UNCHECKS the item.
+- **An unchecked item is a user-reported regression.** It refuses a terminal (`done`) transition and Gate G136 names it. The guard prints the item and stops; it never checks a box, because checking one would erase the only signal the user has for rejecting delivered behavior.
+- **After a fix, the USER re-checks.** No agent, guard or lint may re-check an item a user unchecked.
+- **Automation readiness and human acceptance are different facts with different writers.** Automation writes and checks `## Automation Readiness`; a fully checked readiness block discharges no acceptance obligation.
+- `## Human Acceptance Record` is OPTIONAL and is NOT required at a terminal transition. When it IS authored it must carry `acceptedBy`, `acceptedAt`, and a `method` from the closed vocabulary, and `acceptedBy` MUST NOT be an agent id — an agent cannot accept on a human's behalf.
 - Empty checklist or non-checkbox bullets are template violations.
 - The canonical checklist section heading is `## Checklist`. Legacy files that omit it should be upgraded before completion claims.
-- `bubbles.journey` structures the `## Goal`, `## Journey Steps`, and `## Open Refinements` sections against the live product, but NEVER auto-checks the human acceptance items under `## Checklist` and NEVER writes `## Human Acceptance Record` (G057, G136) — it records observations; the human accepts.
-- The section names, record fields, method vocabulary, and refusal codes are owned by [`bubbles/registry/acceptance-authority.yaml`](../../bubbles/registry/acceptance-authority.yaml), which `artifact-lint.sh` and Gate G136 both read through `bubbles/scripts/acceptance-authority-lib.sh`.
+- **The three-way rule on who may write a `[x]` (G057, G136).** Automation MAY author the INITIAL checked state at artifact creation — that permission belongs to `bubbles.plan`, which owns creation. Automation MUST NOT re-check an item a user unchecked. Automation MUST NOT toggle an item either way to mirror a test outcome. Only the first is mechanically checkable: a template-authored `[x]` and an agent's overwrite of a user's uncheck are byte-identical, so rows two and three are agent-instruction obligations rather than guard-enforced rules.
+- `bubbles.journey` structures the `## Goal`, `## Journey Steps`, and `## Open Refinements` sections against the live product. Its prohibition is ABSOLUTE and carries no authoring exception: it runs later, against a file that already exists, so it NEVER auto-checks a `## Checklist` item and NEVER writes `## Human Acceptance Record` (G057, G136) — it records observations; the user accepts.
+- The section names, shipped state, terminal condition, record fields, method vocabulary, and refusal codes are owned by [`bubbles/registry/acceptance-authority.yaml`](../../bubbles/registry/acceptance-authority.yaml), which `artifact-lint.sh` and Gate G136 both read through `bubbles/scripts/acceptance-authority-lib.sh`.
 
 ## scenario-manifest.json Template
 
 ```json
 {
-  "version": 1,
-  "featureDir": "specs/NNN-feature-name",
+  "schemaVersion": 2,
+  "spec": "specs/NNN-feature-name",
   "generatedAt": "YYYY-MM-DDTHH:MM:SSZ",
   "scenarios": [
     {
-      "scenarioId": "SCN-NNN-001",
-      "scope": "01-scope-name",
+      "id": "SCN-IMP-126-SCOPE-7-001",
+      "scopeRef": "01-scope-name",
       "title": "User-visible or externally observable behavior",
       "gherkin": {
         "given": "precondition",
@@ -360,11 +373,19 @@ Rules:
       "linkedTests": [
         {
           "file": "path/to/live-system-test.spec.ts",
+          "type": "e2e-ui",
           "testId": "exact-test-name"
         }
       ],
+      "plannedTests": [
+        {
+          "path": "path/to/not-yet-authored-test.spec.ts",
+          "title": "Exact behavior the future test will prove",
+          "type": "e2e-ui"
+        }
+      ],
       "evidenceRefs": [
-        "report.md#scenario-scn-nnn-001"
+        "report.md#scenario-scn-imp-126-scope-7-001"
       ],
       "replacedBy": null,
       "invalidatedBy": null
@@ -372,6 +393,82 @@ Rules:
   ]
 }
 ```
+
+Version 2 is the sole format for new producer output. Each `linkedTests` entry
+names an authored test with `file` and canonical `type`. `testId` is optional.
+Every linked path must resolve to an existing regular repository file before it
+can satisfy lifecycle coverage policy.
+
+Version 2 is closed at the envelope, scenario, and every nested object. Unknown
+members are invalid rather than extension points. The compatibility reader and
+migrator also reject duplicate JSON member names at parse time, including
+duplicates in the envelope, a scenario, or a test-reference object. This is
+different from compatibility aliases: two differently named version 1 aliases
+may coexist only when their normalized semantic values agree.
+
+`scopeRef` is optional in version 2. When present, it is the only permitted
+scope-identity field and MUST be a trimmed, control-free, nonblank JSON string.
+Version 2 rejects integer, float, boolean, null, leading/trailing-whitespace,
+`scope`, and `scopeId` forms. Producers omit `scopeRef` when no scope identity
+is authored; they never emit `null` or derive a value from state.
+
+Put an unauthored test plan in `plannedTests`. Each plan requires a nonblank
+`path`, `title`, and canonical `type`. Planning acceptance does not establish
+implementation or completion coverage. Version 2 permits an empty
+`linkedTests` array during planning for this reason.
+
+Version 1 objects, bare arrays, strings, sentinels, path aliases, and
+`testState` objects are compatibility inputs only. Migrate them with
+`python3 bubbles/scripts/scenario-manifest-migrate.py --check specs/<feature>/scenario-manifest.json`
+before writing. Exit `0` means the file is already valid version 2, exit `1`
+means migration is required, and exit `2` means migration is refused. After an
+exit `1`, run
+`python3 bubbles/scripts/scenario-manifest-migrate.py --write specs/<feature>/scenario-manifest.json`.
+Migration preserves every contracted value or refuses without changing the
+source bytes. It also refuses if another process replaces or changes the source
+between the initial snapshot and atomic replacement. Never invent a title, test
+type, path, or extension value to make migration succeed.
+
+For version 1 authored string references, the first `#` separates the repository
+path from `testId`; later `#` characters remain part of `testId`. A bare path
+remains a bare authored file reference. A blank path or blank fragment is
+ambiguous and refuses without mutation. Compatible `scopeId` and
+`linkedTestContracts` aliases become canonical `scopeRef` and `linkedTests` only
+when duplicate aliases agree after insignificant leading and trailing whitespace
+is removed. The same reconciliation rule applies to `id`/`scenarioId`,
+`file`/`path`, and `title`/`testId`/`name`. Identical `linkedTests` and
+`linkedTestContracts` lists become one canonical `linkedTests` projection.
+Version 1 `scopeRef`, `scope`, and `scopeId` compatibility values
+accept only a control-free nonblank string or a positive exact JSON integer.
+Strings are trimmed and preserve their remaining bytes; positive integers become
+decimal strings. Thus integer `7` agrees with string `"7"`, but not with string
+`"07"`. Zero, negative integers, floats, booleans, null, arrays, objects, blank
+strings, and control-bearing strings refuse. The reader projects every accepted
+scope identity as a string. The migrator stores normalized `scopeRef`, `file`/`path`, and
+`title`/`testId`/`name` semantic values. Genuine post-normalization conflicts
+still refuse without mutation. Version 2 repository paths are already canonical
+and reject leading or trailing whitespace rather than normalizing it.
+
+Migration takes a non-blocking advisory lock keyed by the canonical destination
+path and holds it across snapshot, validation, destination recheck, and atomic
+replacement. It prefers a private, current-user-owned, non-symlink
+`XDG_RUNTIME_DIR` and otherwise creates and verifies a private per-user fallback
+directory. The lock file must be a current-user-owned regular file with private
+permissions and is opened with no-follow and close-on-exec flags where the host
+supports them, relative to an opened and reverified directory descriptor. This
+serializes cooperating migrators. Immediately before
+replace, the migrator rechecks destination identity and bytes, which detects
+observed changes by non-cooperating writers. The advisory lock is not a kernel
+compare-and-swap against arbitrary writers; an arbitrary writer can still race
+after the final recheck and before replacement.
+
+The `date-time` fields use a canonical, interoperable RFC 3339 subset. They
+accept uppercase or lowercase `T`/`Z`, seconds from `00` through `59`, optional
+fractional seconds, and numeric offsets through `23:59`. They reject leap
+seconds because the standard library and JSON Schema runtime cannot verify
+authoritative leap insertion dates reliably. They also reject invalid calendar
+dates, local times without an offset, out-of-range clock fields, and offsets
+beyond `23:59`.
 
 ## state.json Template
 

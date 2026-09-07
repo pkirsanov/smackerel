@@ -30,12 +30,22 @@
 #     says its refusal blocked a transition that would otherwise have proceeded.
 #     A gate that fires and permits is not the same as a gate that never fired,
 #     and only PREVENTION is a valid basis for retirement.
+#   - IMP-058 SCOPE-5 (PERF-14). `receipt-reuse` records ONE fact: a specialist
+#     phase cited `test-leaf-receipt.sh`'s ACCEPTED verdict for a testId instead
+#     of re-executing it. It does not judge whether that reuse was sound -- it
+#     makes the reuse count measurable instead of assumed, and ties every reuse
+#     to the receipt id and digest that authorized it so an unsound one is
+#     traceable.
 #
 # Usage:
 #   bash bubbles/scripts/gate-hit-log.sh append \
 #     --repo-root <path> --spec <path> --mode <mode> --target-status <status> \
 #     --verdict <PASS|FAIL> --exit-status <n> \
 #     [--passed "G001 G002"] [--failed "G003"] [--not-evaluated "G004"]
+#
+#   bash bubbles/scripts/gate-hit-log.sh receipt-reuse \
+#     --repo-root <path> --spec <path> --phase <phase> --agent <agent> \
+#     --test-id <testId> --receipt-id <occurrenceId> --digest <candidateDigest>
 #
 #   bash bubbles/scripts/gate-hit-log.sh report [--repo-root <path>] [--json] \
 #     [--class product|fixture|selftest|migration] [--all-classes]
@@ -91,12 +101,19 @@ usage: gate-hit-log.sh append --repo-root R --spec S --mode M --target-status T
                               --verdict V --exit-status N
                               [--passed "G001 G002"] [--failed "G003"]
                               [--not-evaluated "G004"]
+       gate-hit-log.sh receipt-reuse --repo-root R --spec S --phase P --agent A
+                              --test-id ID --receipt-id RID --digest SHA
        gate-hit-log.sh report [--repo-root R] [--json] [--class C] [--all-classes]
 
 append  records one JSONL line per gate id. Never fails the caller.
         --passed        gates a check evaluated and permitted (fired)
         --failed        gates a check evaluated and refused (fired)
         --not-evaluated gates credited without being evaluated (did NOT fire)
+receipt-reuse
+        records that a specialist phase cited an ACCEPTED test-leaf-receipt.sh
+        verdict instead of re-executing. --test-id and --receipt-id are
+        required; a call missing either writes nothing (a reuse record that
+        cannot name what it reused is not evidence).
 report  aggregates the log: fired, prevented and last-seen per gate.
         Counts sourceClass=product only, so fixture and selftest runs cannot
         be mistaken for evidence that a gate is load-bearing in a product.
@@ -231,6 +248,55 @@ bubbles_gate_hit_append() {
   return 0
 }
 
+# IMP-058 SCOPE-5 (PERF-14). Records that a specialist phase reused a
+# test-leaf-receipt.sh ACCEPTED verdict instead of re-executing. This is a
+# separate record kind, not a flag on `append`: a reuse can happen with no
+# gate pass/fail call in the same breath, and folding it into `append` would
+# make the two facts inseparable in the log the way `fired`/`prevented` proved
+# they must not be.
+bubbles_gate_hit_append_receipt_reuse() {
+  [[ "${BUBBLES_GATE_HIT_LOG:-on}" == "off" ]] && return 0
+
+  local repo_root="" spec="" phase="" agent="" test_id="" receipt_id="" digest=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --repo-root) shift; repo_root="${1:-}" ;;
+      --spec) shift; spec="${1:-}" ;;
+      --phase) shift; phase="${1:-}" ;;
+      --agent) shift; agent="${1:-}" ;;
+      --test-id) shift; test_id="${1:-}" ;;
+      --receipt-id) shift; receipt_id="${1:-}" ;;
+      --digest) shift; digest="${1:-}" ;;
+      *) return 0 ;;
+    esac
+    shift || true
+  done
+
+  # A reuse record that cannot name the testId it reused or the receipt that
+  # authorized it is not traceable to anything, so it is not written.
+  [[ -n "$test_id" && -n "$receipt_id" ]] || return 0
+
+  [[ -n "$repo_root" ]] || repo_root="$GATE_HIT_LOG_DEFAULT_ROOT"
+  case "$spec" in
+    "$repo_root"/*) spec="${spec#"$repo_root"/}" ;;
+    "$repo_root") spec="." ;;
+  esac
+  local log_file runtime_dir ts source_class
+  log_file="$(bubbles_gate_hit_log_path "$repo_root")"
+  runtime_dir="$(dirname "$log_file")"
+  mkdir -p "$runtime_dir" 2>/dev/null || return 0
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" || return 0
+  source_class="$(bubbles_gate_hit_source_class "$repo_root")"
+
+  printf '{"schemaVersion":"%s","kind":"receipt-reuse","ts":"%s","sourceClass":"%s","spec":"%s","phase":"%s","agent":"%s","testId":"%s","receiptId":"%s","digest":"%s"}\n' \
+    "$GATE_HIT_SCHEMA_VERSION" "$ts" "$source_class" \
+    "$(bubbles_gate_hit_json_escape "$spec")" "$(bubbles_gate_hit_json_escape "$phase")" \
+    "$(bubbles_gate_hit_json_escape "$agent")" "$(bubbles_gate_hit_json_escape "$test_id")" \
+    "$(bubbles_gate_hit_json_escape "$receipt_id")" "$(bubbles_gate_hit_json_escape "$digest")" \
+    >>"$log_file" 2>/dev/null || return 0
+  return 0
+}
+
 bubbles_gate_hit_report() {
   local repo_root="$GATE_HIT_LOG_DEFAULT_ROOT" as_json="false" class_filter="product"
   while [[ $# -gt 0 ]]; do
@@ -273,6 +339,7 @@ bubbles_gate_hit_report() {
       if (match($0, /"fired":(true|false)/))     { firedf     = substr($0, RSTART+8,  RLENGTH-8) }
       if (match($0, /"prevented":(true|false)/)) { preventedf = substr($0, RSTART+12, RLENGTH-12) }
       if (match($0, /"parentExpanded":[0-9]+/)) { pe = substr($0, RSTART+17, RLENGTH-17); runs++; pe_total += pe; if (pe+0 > 0) runs_expanded++ }
+      if (match($0, /"kind":"receipt-reuse"/)) { reuse_total++; next }
       if (gate == "") next
 
       # IMP-047 S-A backward compatibility. Records written before firing and
@@ -299,7 +366,7 @@ bubbles_gate_hit_report() {
     }
     END {
       if (as_json == "true") {
-        printf "{\"schemaVersion\":\"%s\",\"logPresent\":true,\"sourceClass\":\"%s\",\"excludedRecords\":%d,\"totalRecords\":%d,\"legacyDerivedRecords\":%d,\"gates\":[", schema, (want_class == "" ? "all" : want_class), excluded+0, total+0, legacy_total+0
+        printf "{\"schemaVersion\":\"%s\",\"logPresent\":true,\"sourceClass\":\"%s\",\"excludedRecords\":%d,\"totalRecords\":%d,\"legacyDerivedRecords\":%d,\"receiptReuseRecords\":%d,\"gates\":[", schema, (want_class == "" ? "all" : want_class), excluded+0, total+0, legacy_total+0, reuse_total+0
         first=1
         for (g in hits) {
           if (!first) printf ","
@@ -347,6 +414,12 @@ bubbles_gate_hit_report() {
           printf "  phases parent-expanded in total: %d\n", pe_total+0
           printf "  Expansion is legal under G022 but means a specialist did not run.\n"
         }
+        if (reuse_total+0 > 0) {
+          printf "  ---\n"
+          printf "  test-leaf-receipt reuses recorded: %d\n", reuse_total+0
+          printf "  Each reuse cites a receipt id and digest (IMP-058 SCOPE-5); an unsound\n"
+          printf "  reuse is traceable to the record that authorized it.\n"
+        }
       }
     }
   ' "$log_file"
@@ -357,6 +430,7 @@ bubbles_gate_hit_main() {
   [[ $# -gt 0 ]] && shift
   case "$sub" in
     append) bubbles_gate_hit_append "$@" ;;
+    receipt-reuse) bubbles_gate_hit_append_receipt_reuse "$@" ;;
     report) bubbles_gate_hit_report "$@" ;;
     -h|--help|"") bubbles_gate_hit_usage; [[ -z "$sub" ]] && return 2 || return 0 ;;
     *) bubbles_gate_hit_usage >&2; return 2 ;;

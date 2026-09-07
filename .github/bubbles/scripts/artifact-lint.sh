@@ -6,11 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source fun mode support
 source "$SCRIPT_DIR/fun-mode.sh"
 
-# IMP-047 PD-12. The acceptance reader is SHARED with guards/tail-delegated-gates.sh
-# (Gate G136). Both used to carry private copies of the same section parser with
-# a comment asking the next author to keep them in step; a comment is not a
+# The acceptance reader is SHARED with guards/tail-delegated-gates.sh (Gate
+# G136). Both used to carry private copies of the same section parser with a
+# comment asking the next author to keep them in step; a comment is not a
 # mechanism. Sourced rather than re-implemented so a change to one is a change
-# to both.
+# to both. Contract authority: bubbles/registry/acceptance-authority.yaml.
 source "$SCRIPT_DIR/acceptance-authority-lib.sh"
 
 # Portable ISO/date -> epoch, kept self-contained (NO cross-file source) for
@@ -404,8 +404,123 @@ required_files=(
   "uservalidation.md"
   "state.json"
 )
+require_scopes_md=true
+require_report_md=true
 
-for required_file in "${required_files[@]}"; do
+# BUG-041: a BUG packet's artifact set is a FUNCTION of its declared packet
+# form, and that function is owned by bubbles/registry/bug-packet.yaml. This
+# lint used to apply the literal list above to every packet, including the
+# `compact` form that IMP-047 S-D made the DEFAULT route, so a packet taking the
+# route the framework recommends could not pass. The list is READ through
+# bug-packet-resolve.sh, the sole production reader, rather than branched on
+# here: a branch inside this script would be a third private copy of the
+# contract, which is the defect relocated. Precedent: IMP-047 S-B and
+# report-sections-resolve.sh, below.
+#
+# The list above still governs FEATURE directories. bug-packet.yaml declares the
+# bug contract only and has no authority over specs/<NNN-feature>/.
+is_bug_packet=false
+if [[ -f "$feature_dir/state.json" ]] && grep -q '"bugId"[[:space:]]*:' "$feature_dir/state.json"; then
+  is_bug_packet=true
+elif [[ "$(basename "$feature_dir")" =~ ^BUG-[0-9]{3} ]]; then
+  is_bug_packet=true
+fi
+
+if [[ "$is_bug_packet" == true ]]; then
+  bug_packet_resolver="$SCRIPT_DIR/bug-packet-resolve.sh"
+  if [[ ! -f "$bug_packet_resolver" ]]; then
+    echo "ERROR: bug-packet-resolve.sh is missing next to artifact-lint.sh"
+    exit 2
+  fi
+  # No fallback set. An unreadable registry is a broken install, and degrading
+  # to "no artifacts required" would be a false-PASS.
+  if ! bug_packet_facts="$(bash "$bug_packet_resolver" 2>&1)"; then
+    echo "ERROR: cannot read bubbles/registry/bug-packet.yaml"
+    echo "$bug_packet_facts" | sed 's/^/   -> /'
+    exit 2
+  fi
+
+  bug_decl_field="$(printf '%s\n' "$bug_packet_facts" | sed -n 's/^field=//p' | head -1)"
+  bug_decl_default="$(printf '%s\n' "$bug_packet_facts" | sed -n 's/^default=//p' | head -1)"
+  if [[ -z "$bug_decl_field" ]] || [[ -z "$bug_decl_default" ]]; then
+    echo "ERROR: bubbles/registry/bug-packet.yaml declares no packet-form declaration field or absent-default"
+    exit 2
+  fi
+
+  bug_declared_word=""
+  if [[ -f "$feature_dir/state.json" ]]; then
+    bug_declared_word="$(sed -n "s/.*\"${bug_decl_field}\"[[:space:]]*:[[:space:]]*\"\([A-Za-z-]*\)\".*/\1/p" "$feature_dir/state.json" | head -1)"
+  fi
+
+  if [[ -z "$bug_declared_word" ]]; then
+    # FAIL CLOSED. A packet that declares nothing is linted as the default form,
+    # so silence can never reduce a requirement.
+    bug_packet_form="$bug_decl_default"
+    info "Bug packet form: $bug_packet_form (no state.json .$bug_decl_field declaration; registry absent-default)"
+  else
+    bug_packet_form="$(printf '%s\n' "$bug_packet_facts" | sed -n "s/^vocab=${bug_declared_word}|//p" | head -1)"
+    if [[ -z "$bug_packet_form" ]]; then
+      # An unrecognised word is a FAILURE, never a silent reduction.
+      fail "state.json .$bug_decl_field=\"$bug_declared_word\" is outside bug-packet.yaml's declared vocabulary; linting as '$bug_decl_default'"
+      bug_packet_form="$bug_decl_default"
+    else
+      info "Bug packet form: $bug_packet_form (state.json .$bug_decl_field=\"$bug_declared_word\")"
+    fi
+  fi
+
+  # Declaring the reduced form is a REQUEST, never a grant. It must ALSO survive
+  # micro-fix admission, otherwise the field would be the override that
+  # bug-packet.yaml sets to `overrideFlag: none` on purpose.
+  if [[ "$bug_packet_form" != "$bug_decl_default" ]]; then
+    bug_admission_script="$SCRIPT_DIR/micro-fix-admission.sh"
+    bug_admitted_form=""
+    if [[ -f "$bug_admission_script" ]]; then
+      bug_admitted_form="$(bash "$bug_admission_script" --resolve-form "$feature_dir" 2>/dev/null | sed -n 's/^form=//p' | head -1)"
+    fi
+    if [[ "$bug_admitted_form" != "$bug_packet_form" ]]; then
+      fail "state.json declares the '$bug_packet_form' packet but micro-fix admission resolves '${bug_admitted_form:-unavailable}'; the '$bug_decl_default' artifact set is required"
+      bug_packet_form="$bug_decl_default"
+    else
+      pass "Packet form '$bug_packet_form' confirmed by micro-fix admission"
+    fi
+  fi
+
+  required_files=()
+  require_scopes_md=false
+  require_report_md=false
+  while IFS= read -r bug_artifact_fact; do
+    [[ -n "$bug_artifact_fact" ]] || continue
+    bug_artifact_conditional="${bug_artifact_fact##*|}"
+    bug_artifact_id="${bug_artifact_fact%|*}"
+    # A conditional artifact is not unconditionally required; its own gate owns it.
+    [[ "$bug_artifact_conditional" == "yes" ]] && continue
+    case "$bug_artifact_id" in
+      scopes.md) require_scopes_md=true ;;
+      report.md) require_report_md=true ;;
+      *) required_files+=("$bug_artifact_id") ;;
+    esac
+  done < <(printf '%s\n' "$bug_packet_facts" | sed -n "s/^artifact=${bug_packet_form}|//p")
+
+  if [[ ${#required_files[@]} -eq 0 ]] && [[ "$require_scopes_md" == false ]] && [[ "$require_report_md" == false ]]; then
+    echo "ERROR: bubbles/registry/bug-packet.yaml declares no artifacts for form '$bug_packet_form'"
+    exit 2
+  fi
+
+  # BUG-042. A reduced form buys fewer artifacts by keeping every obligation.
+  # The registry now says WHERE each obligation is discharged and where its
+  # completion is attested, so this lint can require the attestation line to
+  # EXIST. Existence, not tick: whether it is CHECKED is Check 4's question at
+  # `done`, and lint runs long before that. The line must cite its discharge
+  # site, matching the shape the transition guard requires, so a packet cannot
+  # pass lint on a line the guard will later reject.
+  bug_packet_obligations=()
+  while IFS= read -r bug_obligation_fact; do
+    [[ -n "$bug_obligation_fact" ]] || continue
+    bug_packet_obligations+=("$bug_obligation_fact")
+  done < <(printf '%s\n' "$bug_packet_facts" | sed -n "s/^obligation=${bug_packet_form}|//p")
+fi
+
+for required_file in ${required_files[@]+"${required_files[@]}"}; do
   if [[ -f "$feature_dir/$required_file" ]]; then
     pass "Required artifact exists: $required_file"
   else
@@ -441,18 +556,41 @@ if [[ "$scope_layout" == "per-scope-directory" ]]; then
     pass "Every per-scope directory has a report.md file"
   fi
 else
-  if [[ -f "$feature_dir/scopes.md" ]]; then
-    pass "Required artifact exists: scopes.md"
-  else
-    fail "Missing required artifact: $feature_dir/scopes.md"
+  if [[ "$require_scopes_md" == true ]]; then
+    if [[ -f "$feature_dir/scopes.md" ]]; then
+      pass "Required artifact exists: scopes.md"
+    else
+      fail "Missing required artifact: $feature_dir/scopes.md"
+    fi
   fi
 
-  if [[ -f "$feature_dir/report.md" ]]; then
-    pass "Required artifact exists: report.md"
-  else
-    fail "Missing required artifact: $feature_dir/report.md"
+  if [[ "$require_report_md" == true ]]; then
+    if [[ -f "$feature_dir/report.md" ]]; then
+      pass "Required artifact exists: report.md"
+    else
+      fail "Missing required artifact: $feature_dir/report.md"
+    fi
   fi
 fi
+
+# BUG-042. Obligation attestation lines, for a reduced packet form only. The
+# loop body never runs on a feature directory or on the `full` form, because
+# neither declares obligations.
+for bug_obligation_fact in ${bug_packet_obligations[@]+"${bug_packet_obligations[@]}"}; do
+  bug_obligation_id="${bug_obligation_fact%%|*}"
+  bug_obligation_rest="${bug_obligation_fact#*|}"
+  bug_obligation_discharged="${bug_obligation_rest%%|*}"
+  bug_obligation_attested="${bug_obligation_rest##*|}"
+  bug_obligation_file="$feature_dir/$bug_obligation_attested"
+
+  if [[ -z "$bug_obligation_attested" ]] || [[ ! -f "$bug_obligation_file" ]]; then
+    fail "Obligation '$bug_obligation_id' names attestation artifact '${bug_obligation_attested:-<none>}', which does not exist in $feature_dir"
+  elif grep -E '^\- \[[ x]\] ' "$bug_obligation_file" | grep -F -- "$bug_obligation_id" | grep -qF -- "$bug_obligation_discharged"; then
+    pass "Obligation '$bug_obligation_id' has an attestation line in $bug_obligation_attested citing $bug_obligation_discharged"
+  else
+    fail "Obligation '$bug_obligation_id' has NO attestation line in $bug_obligation_attested citing its discharge site $bug_obligation_discharged — bug-packet.yaml declares it retained by the '$bug_packet_form' form"
+  fi
+done
 
 # Forbidden sidecar artifacts (see artifact-ownership.md → Forbidden Artifacts)
 # These filenames fragment ownership and bypass validation gates. Their content
@@ -553,14 +691,23 @@ if [[ -f "$uservalidation_file" ]]; then
       pass "uservalidation checklist contains checkbox entries"
     fi
 
-    # IMP-047 PD-12. There is deliberately NO "must carry a checked [x] entry"
-    # check here any more. That rule is what made a shipped template satisfy
-    # Gate G136's terminal human acceptance with no human act: the template
-    # arrived checked because lint demanded it, and the terminal gate then read
-    # those boxes as sign-off. Acceptance items now ship UNCHECKED, automation
-    # readiness is a separate section that grants nothing, and terminal
-    # acceptance additionally requires a human-owned record. Lint keeps only
-    # the SHAPE questions, which are the ones that are true during planning.
+    # BUG-037 D-2. There is deliberately NO "must carry a checked [x] entry"
+    # check here, and there will not be one. That rule was the coupling leg of
+    # the fabrication composition PD-12 diagnosed: lint demanded a checked entry,
+    # so the template shipped checked to satisfy lint, and the terminal gate then
+    # read those boxes as sign-off. Under the opt-out contract the checked
+    # shipped state comes from `bubbles/registry/acceptance-authority.yaml`
+    # (`acceptance-checklist.shippedState`), a recorded owner decision, never
+    # from a lint refusal.
+    #
+    # Restoring the rule would also refuse a legitimate state: a user mid-review
+    # is entitled to uncheck every item, and lint runs while they are still
+    # working. Gate G136 already enforces the strictly stronger "every item
+    # checked" at the terminal transition, which is the moment the claim stops
+    # being provisional. Lint keeps only the SHAPE questions. The one assurance
+    # the deleted rule actually bought — detecting a template authored in the
+    # wrong shipped state — moved to the template-versus-registry agreement check
+    # in `acceptance-authority-selftest.sh`.
     checklist_section_content="$(bubbles_acceptance_section_body "$uservalidation_file" '## Checklist')"
     checklist_bullet_lines="$({ echo "$checklist_section_content" | grep -E '^- '; } || true)"
     invalid_checklist_bullets="$({ echo "$checklist_bullet_lines" | grep -Ev '^- \[(x| )\] '; } || true)"
@@ -573,7 +720,7 @@ if [[ -f "$uservalidation_file" ]]; then
 
     acceptance_shape_findings="$(bubbles_acceptance_shape_verdict "$uservalidation_file" || true)"
     if [[ -n "$acceptance_shape_findings" ]]; then
-      fail "uservalidation acceptance authority is malformed (IMP-047 PD-12)"
+      fail "uservalidation acceptance authority is malformed (BUG-037 opt-out acceptance)"
       echo "$acceptance_shape_findings" | sed 's/^/   -> /'
     else
       pass "uservalidation separates automation readiness from human acceptance"

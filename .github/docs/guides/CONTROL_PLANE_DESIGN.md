@@ -162,6 +162,65 @@ The registry is responsible for:
 
 This keeps source-level parallelism (`gitIsolation`, worktrees, parallel scopes) from accidentally colliding at the container/runtime layer.
 
+### 2.5.1. Measured Dispatch Admission And Research Evidence
+
+Runtime leases and measured dispatch admission solve different control-plane problems. A lease coordinates ownership and capacity for a shared runtime stack. Dispatch admission evaluates one resource-consuming model, subagent, web, browser, or tool action against an exact goal budget, reservation state, retry identity, and verified session epoch.
+
+The shared dependency direction is `ECF -> IMP-055 -> IMP-054`:
+
+1. the evidence-control foundation owns immutable typed records and content-addressed storage;
+2. IMP-055 owns goal budgets, reservations, debits, releases, holds, permits, usage reconciliation, retries, and session epochs;
+3. IMP-054 owns question validation, research planning, staged execution, inspection, validation, publication, bridging, and cancellation.
+
+Neither layer grants consequential-action authority. A budget permit cannot authorize deployment, transactions, messaging, or infrastructure mutation. Research publication emits evidence artifacts and a result envelope; it does not certify product delivery.
+
+The repository-controlled reference implementations are opt-in and default off. Missing usage remains `unmeasured`, never zero or free. Hosted research providers, downstream bridges, native host interception, live checkpoints, rollout, and causal savings proof remain external activation work.
+
+#### Security Verdict And Checkpoint Contract
+
+The reference runtimes must distinguish record integrity from independent security authority. A digest proves equality with named bytes. It does not prove authenticity or freshness. A caller-supplied `verified` field cannot supply those guarantees.
+
+Session-epoch verification consumes an authenticated host-proof verification result, not a bare proof digest.
+
+| Binding group | Required values |
+|---|---|
+| Proof | Proof type and proof ID |
+| Authority | Issuer, verifier, and trust-root identity |
+| Session | Previous and next host-session identities |
+| Work | Repository decision and continuation digest |
+| Freshness | Issuance, expiry, and verification times |
+
+The verifier checks the configured trust root and every exact binding. Reference enforcement fails closed when the verifier is absent. It also fails on invalid bindings or freshness. Only a valid authenticated result may open an epoch, satisfy admission, or support a `repository-reference` permit. Native host interception remains unsupported until the host supplies and validates the same contract.
+
+Research validation treats privacy and budget as typed, evidence-derived outcomes. Each outcome is `satisfied`, `failed`, or `not-evaluated`. It names the exact evidence-control or measured-budget records used for derivation. Missing, invalid, stale, or inconsistent evidence produces a stable finding code. Every required check must be `satisfied` before a receipt can be `accepted`. Validator-authored booleans without evidence are not checks.
+
+ECF local verification establishes object integrity and append-chain consistency within the observed store. It does not establish complete-store rollback resistance. An actor can replace the writable store with an older, internally consistent copy. A rollback-resistant verdict requires an independently retained checkpoint outside that store.
+
+| Binding group | Required values |
+|---|---|
+| Authority | Authority and trust-root identity |
+| Store | Store identity, sequence, and head digest |
+| Freshness | Checkpoint and verification times |
+
+The runtime reports rollback resistance as `not-evaluated` without a configured authority and successful comparison. It must not imply that local consistency detects complete-store rollback.
+
+These requirements preserve the opt-in reference posture. Hosted providers, downstream bridges, native interception, and live checkpoint authorities remain parked. Activation requires configured trust roots and verified failure behavior.
+
+#### Security Validation Strategy
+
+Adversarial selftests must reject self-asserted verification flags and arbitrary matching digests. They must also reject unknown verifiers, mismatched bindings, and expired proofs. No rejected proof may open an epoch or lead to a permit.
+
+Research-runtime tests must remove or corrupt privacy and budget evidence. They must assert stable findings and a rejected receipt.
+
+ECF tests must distinguish local consistency from rollback resistance. They must reject checkpoints inside the writable store. They must accept matching independent checkpoints. They must reject stale, malformed, mismatched, or untrusted checkpoints.
+
+#### Complexity Tracking
+
+| Deviation | Simpler alternative considered | Why rejected |
+|---|---|---|
+| Authenticated host-proof verifier and external checkpoint authority | Treat matching digests as verification | Digest equality provides integrity only and lets caller-controlled records mint security verdicts. |
+| Typed evidence-derived privacy and budget outcomes | Preserve unconditional booleans | Unconditional success values create accepted receipts without proof and cannot represent missing evidence honestly. |
+
 ### 2.6. Workflow Run-State
 
 The framework already records execution and certification state, but long-running or resumed work also needs a typed run-state surface that answers simpler operational questions:

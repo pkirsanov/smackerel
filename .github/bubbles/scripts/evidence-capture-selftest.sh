@@ -15,11 +15,65 @@ NAME="evidence-capture-selftest"
 
 failures=0
 checks=0
+EMPTY_SHA256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 ok() { checks=$((checks + 1)); printf '  ok   %s\n' "$1"; }
 bad() {
   checks=$((checks + 1)); failures=$((failures + 1))
   printf '  FAIL %s\n' "$1"; [[ $# -gt 1 ]] && printf '       %s\n' "$2"
 }
+
+# --- 0. zero-output metadata is canonical and diagnostic-free ---------------
+# BUG-037: grep -c emitted a valid zero and then its fallback emitted a second
+# zero. Command substitution retained both lines, so arithmetic consumers wrote
+# diagnostics into an otherwise valid evidence block.
+set +e
+empty_success="$(bash "$TARGET" -- true 2>&1)"
+empty_success_rc=$?
+empty_failure="$(bash "$TARGET" -- sh -c 'exit 7' 2>&1)"
+empty_failure_rc=$?
+set -e
+
+if [[ "$empty_success_rc" -eq 0 ]] &&
+  printf '%s' "$empty_success" | grep -q '^exit: 0$' &&
+  printf '%s' "$empty_success" | grep -q '^lines: 0$' &&
+  printf '%s' "$empty_success" | grep -q "^sha256: $EMPTY_SHA256$" &&
+  printf '%s' "$empty_success" | grep -q -- '^--- output ---$' &&
+  ! printf '%s' "$empty_success" | grep -q 'arithmetic' &&
+  ! printf '%s' "$empty_success" | grep -qx '0'; then
+  ok "successful zero-output capture emits canonical metadata without diagnostics"
+else
+  bad "successful zero-output metadata" "rc=$empty_success_rc $(printf '%s' "$empty_success" | tr '\n' '|')"
+fi
+
+if [[ "$empty_failure_rc" -eq 7 ]] &&
+  printf '%s' "$empty_failure" | grep -q '^exit: 7$' &&
+  printf '%s' "$empty_failure" | grep -q '^lines: 0$' &&
+  printf '%s' "$empty_failure" | grep -q "^sha256: $EMPTY_SHA256$" &&
+  printf '%s' "$empty_failure" | grep -q -- '^--- output ---$' &&
+  ! printf '%s' "$empty_failure" | grep -q 'arithmetic' &&
+  ! printf '%s' "$empty_failure" | grep -qx '0'; then
+  ok "failing zero-output capture emits canonical metadata and propagates exit 7"
+else
+  bad "failing zero-output metadata" "rc=$empty_failure_rc $(printf '%s' "$empty_failure" | tr '\n' '|')"
+fi
+
+# --- 0b. empty-output verification retains match and mismatch contracts -----
+set +e
+empty_match="$(bash "$TARGET" --verify "$EMPTY_SHA256" -- true 2>&1)"
+empty_match_rc=$?
+empty_mismatch="$(bash "$TARGET" --verify "$(printf '0%.0s' {1..64})" -- true 2>&1)"
+empty_mismatch_rc=$?
+set -e
+if [[ "$empty_match_rc" -eq 0 ]] &&
+  [[ "$empty_match" == "[evidence-capture] VERIFIED - output still hashes to $EMPTY_SHA256" ]] &&
+  [[ "$empty_mismatch_rc" -eq 3 ]] &&
+  printf '%s' "$empty_mismatch" | grep -q '^\[evidence-capture\] MISMATCH$' &&
+  printf '%s' "$empty_mismatch" | grep -q "^  observed: $EMPTY_SHA256$" &&
+  ! printf '%s' "$empty_match$empty_mismatch" | grep -q 'arithmetic'; then
+  ok "empty-output --verify match and mismatch preserve exits 0 and 3"
+else
+  bad "empty-output verify contracts" "match=$empty_match_rc mismatch=$empty_mismatch_rc match_out=$(printf '%s' "$empty_match" | tr '\n' '|') mismatch_out=$(printf '%s' "$empty_mismatch" | tr '\n' '|')"
+fi
 
 # --- 1. records command, exit code and hash ----------------------------------
 out="$(bash "$TARGET" --label "demo" -- printf 'a\nb\nc\n' 2>&1)"
@@ -248,6 +302,59 @@ if [[ "$missing_rc" -eq 2 ]] &&
   ok "capture-file loss fails loud without emitting an empty evidence hash"
 else
   bad "capture-file loss fails loud" "rc=$missing_rc $(printf '%s' "$missing_out" | tr '\n' '|')"
+fi
+
+# --- 17. SCN-B053-001: empty success emits one scalar zero ------------------
+empty_sha256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+set +e
+empty_success_out="$(bash "$TARGET" -- bash -c 'exit 0' 2>&1)"
+empty_success_rc=$?
+set -e
+empty_success_line_fields="$(printf '%s\n' "$empty_success_out" | awk '/^lines: / { count += 1 } END { print count + 0 }')"
+if [[ "$empty_success_rc" -eq 0 ]] &&
+  printf '%s\n' "$empty_success_out" | grep -qx 'exit: 0' &&
+  [[ "$empty_success_line_fields" -eq 1 ]] &&
+  printf '%s\n' "$empty_success_out" | grep -qx 'lines: 0' &&
+  printf '%s\n' "$empty_success_out" | grep -qx "sha256: $empty_sha256" &&
+  ! printf '%s\n' "$empty_success_out" | grep -qx '0' &&
+  ! printf '%s\n' "$empty_success_out" | grep -Eqi 'arithmetic|syntax error|operand expected'; then
+  ok "SCN-B053-001 empty successful output emits one clean zero count"
+else
+  bad "SCN-B053-001 empty successful output" "rc=$empty_success_rc lines_fields=$empty_success_line_fields $(printf '%s' "$empty_success_out" | tr '\n' '|')"
+fi
+
+# --- 18. SCN-B053-002: empty failure preserves exit seven ------------------
+set +e
+empty_failure_out="$(bash "$TARGET" -- bash -c 'exit 7' 2>&1)"
+empty_failure_rc=$?
+set -e
+empty_failure_line_fields="$(printf '%s\n' "$empty_failure_out" | awk '/^lines: / { count += 1 } END { print count + 0 }')"
+if [[ "$empty_failure_rc" -eq 7 ]] &&
+  printf '%s\n' "$empty_failure_out" | grep -qx 'exit: 7' &&
+  [[ "$empty_failure_line_fields" -eq 1 ]] &&
+  printf '%s\n' "$empty_failure_out" | grep -qx 'lines: 0' &&
+  printf '%s\n' "$empty_failure_out" | grep -qx "sha256: $empty_sha256" &&
+  ! printf '%s\n' "$empty_failure_out" | grep -qx '0' &&
+  ! printf '%s\n' "$empty_failure_out" | grep -Eqi 'arithmetic|syntax error|operand expected'; then
+  ok "SCN-B053-002 empty failing output preserves exit seven and clean metadata"
+else
+  bad "SCN-B053-002 empty failing output" "rc=$empty_failure_rc lines_fields=$empty_failure_line_fields $(printf '%s' "$empty_failure_out" | tr '\n' '|')"
+fi
+
+# --- 19. SCN-B053-003: one-line short output remains compatible ------------
+set +e
+one_line_out="$(bash "$TARGET" -- printf 'kept\n' 2>&1)"
+one_line_rc=$?
+set -e
+one_line_fields="$(printf '%s\n' "$one_line_out" | awk '/^lines: / { count += 1 } END { print count + 0 }')"
+if [[ "$one_line_rc" -eq 0 ]] &&
+  [[ "$one_line_fields" -eq 1 ]] &&
+  printf '%s\n' "$one_line_out" | grep -qx 'lines: 1' &&
+  printf '%s\n' "$one_line_out" | grep -qx -- '--- output ---' &&
+  printf '%s\n' "$one_line_out" | grep -qx 'kept'; then
+  ok "SCN-B053-003 one-line output retains its count and short rendering"
+else
+  bad "SCN-B053-003 one-line compatibility" "rc=$one_line_rc lines_fields=$one_line_fields $(printf '%s' "$one_line_out" | tr '\n' '|')"
 fi
 
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"

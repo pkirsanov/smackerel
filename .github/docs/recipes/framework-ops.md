@@ -6,6 +6,8 @@ Use `bubbles.super` when the problem is about the Bubbles framework itself: heal
 
 If the work is inside a target project's CI/CD, deployment, monitoring, or build surfaces, use [DevOps Work](devops-work.md) instead. If that work is cross-cutting and not feature-owned, use [Ops Packet Work](ops-packet-work.md). Framework ops is for Bubbles itself, not application delivery plumbing.
 
+For the provider-neutral research lifecycle and measured dispatch controls, use [Research And Admission Runtime](research-and-admission-runtime.md). Those runtime capabilities are not workflow modes and do not replace action authorization.
+
 **Scope rule:** Bubbles-managed git hooks are for the Bubbles framework repo only. Consumer repos use installed Bubbles files, but they must not install Bubbles-managed `pre-commit` or `pre-push` hooks.
 
 **Write rule:** Consumer repos must not directly edit `.github/bubbles/**`, `.github/agents/bubbles*`, `.github/prompts/bubbles*`, `.github/instructions/bubbles-*`, or other framework-managed Bubbles files. If a repo needs a framework change, it must record a proposal in `.github/bubbles-project/proposals/` or run `bubbles framework-proposal <slug>`, then make the real change in the Bubbles source repo.

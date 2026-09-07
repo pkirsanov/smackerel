@@ -30,6 +30,8 @@ usage() {
   cat <<'EOF'
 Usage: bash bubbles/scripts/context-compactor.sh \
   [--session-id <id> --session-control-file <path> --binding-packet-file <path>] \
+  [--mbe-posture <off|shadow|advisory|reference-enforce> \
+   --mbe-store-root <path> --mbe-epoch-context <path>] \
   <raw-result-file>
 
 Reads a raw subagent RESULT-ENVELOPE (markdown is preferred; minimal JSON
@@ -76,6 +78,10 @@ VALIDATED_PACKET=""
 COMPACTOR_SESSION_FILE=""
 SCENARIO_FILE=""
 NODE_ID=""
+MBE_POSTURE="off"
+MBE_STORE_ROOT=""
+MBE_EPOCH_CONTEXT=""
+MBE_EPOCH_JSON=""
 raw_file=""
 
 while [[ $# -gt 0 ]]; do
@@ -105,6 +111,21 @@ while [[ $# -gt 0 ]]; do
       NODE_ID="$2"
       shift 2
       ;;
+    --mbe-posture)
+      [[ $# -ge 2 ]] || { echo "context-compactor: --mbe-posture requires a value" >&2; exit 2; }
+      MBE_POSTURE="$2"
+      shift 2
+      ;;
+    --mbe-store-root)
+      [[ $# -ge 2 ]] || { echo "context-compactor: --mbe-store-root requires a value" >&2; exit 2; }
+      MBE_STORE_ROOT="$2"
+      shift 2
+      ;;
+    --mbe-epoch-context)
+      [[ $# -ge 2 ]] || { echo "context-compactor: --mbe-epoch-context requires a value" >&2; exit 2; }
+      MBE_EPOCH_CONTEXT="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -122,6 +143,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$raw_file" ]] || { usage >&2; exit 2; }
+
+case "$MBE_POSTURE" in
+  off | shadow | advisory | reference-enforce) ;;
+  *) echo "context-compactor: --mbe-posture must be off, shadow, advisory, or reference-enforce (got: $MBE_POSTURE)" >&2; exit 2 ;;
+esac
+if [[ "$MBE_POSTURE" != "off" && -n "$MBE_STORE_ROOT" && -n "$MBE_EPOCH_CONTEXT" ]]; then
+  MBE_EPOCH_JSON="$(python3 "$SCRIPT_DIR/mbe-reference-verify.py" \
+    --store-root "$MBE_STORE_ROOT" --context "$MBE_EPOCH_CONTEXT" --purpose epoch 2>/dev/null || true)"
+fi
+if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+  [[ -n "$MBE_STORE_ROOT" && -d "$MBE_STORE_ROOT" ]] || { echo "context-compactor: reference-enforce requires an existing --mbe-store-root" >&2; exit 3; }
+  [[ -n "$MBE_EPOCH_CONTEXT" && -f "$MBE_EPOCH_CONTEXT" ]] || { echo "context-compactor: reference-enforce requires an existing --mbe-epoch-context" >&2; exit 3; }
+  [[ -n "$MBE_EPOCH_JSON" ]] || { echo "context-compactor: reference-enforce requires a verified MBE epoch" >&2; exit 3; }
+fi
 
 BINDING_REQUIRED=false
 if [[ -n "$SESSION_ID" || -n "$SESSION_CONTROL_FILE" || -n "$BINDING_PACKET_FILE" ]]; then
@@ -525,6 +560,9 @@ compact_record="$(
     printf '"actionable":%s,' "$actionable_v"
   fi
   printf '"timestamp":"%s",' "$timestamp_v"
+  if [[ -n "$MBE_EPOCH_JSON" ]]; then
+    printf '"mbeEpoch":%s,' "$MBE_EPOCH_JSON"
+  fi
   printf '"rawPointer":"%s"' "$(printf '%s' "$raw_abs" | json_escape)"
   printf '}'
 )"

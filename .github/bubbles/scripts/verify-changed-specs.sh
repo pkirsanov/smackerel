@@ -173,7 +173,7 @@ while IFS= read -r spec_dir; do
     run_gate "artifact lint (G010)" bash "$SCRIPT_DIR/artifact-lint.sh" "$spec_dir"
 
   [ -x "$SCRIPT_DIR/traceability-guard.sh" ] &&
-    run_gate "traceability / Test Plan parity (G088)" bash "$SCRIPT_DIR/traceability-guard.sh" "$spec_dir"
+    run_gate "traceability / Test Plan parity (G088)" bash "$SCRIPT_DIR/traceability-guard.sh" "$spec_dir" --all-scopes --coverage-policy=planning
 
   [ -x "$SCRIPT_DIR/scenario-test-resolve.sh" ] &&
     run_gate "scenario linked-test resolution (G057)" bash "$SCRIPT_DIR/scenario-test-resolve.sh" "$spec_dir" --quiet

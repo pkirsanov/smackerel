@@ -94,7 +94,7 @@ for m in "${MODES[@]}"; do
   # ── Resolve the mode through the resolver (grandfather + portable timeout). ──
   set +e
   resolved="$(bubbles_run_with_timeout "$selftest_timeout_seconds" \
-    env BUBBLES_MODE_GRANDFATHER=1 "$RESOLVER" "$m" 2>/dev/null)"
+    /usr/bin/env BUBBLES_MODE_GRANDFATHER=1 "$RESOLVER" "$m" 2>/dev/null)"
   rc=$?
   set -e
   if (( rc != 0 )); then

@@ -323,6 +323,72 @@ else
   bad "micro-fix outcome logger exists" "not found: $logger"
 fi
 
+# --- BUG-041: --resolve-form, the side-effect-free verdict channel ----------
+# WHY A CHANNEL AT ALL. The plain exit code cannot answer "which form is this?"
+# because it is 0 for BOTH routes: d1b is admitted to compact at exit 0 and d1c
+# escalates to full at exit 0. artifact-lint.sh needs the verdict, so it needs a
+# channel the exit code cannot provide.
+rf_out="$(bash "$TARGET" --resolve-form "$d1b" 2>/dev/null)"
+rf_rc=$?
+rf_lines="$(printf '%s\n' "$rf_out" | grep -c .)"
+if [[ "$rf_rc" -eq 0 ]] && [[ "$rf_out" == "form=compact" ]] && [[ "$rf_lines" -eq 1 ]]; then
+  ok "--resolve-form prints exactly one line, form=compact, for an admitted bug"
+else
+  bad "--resolve-form answers compact" "rc=$rf_rc lines=$rf_lines out=$(printf '%s' "$rf_out" | tr '\n' '|')"
+fi
+
+# ADVERSARIAL: the two outcomes MUST differ. If --resolve-form returned the same
+# word for an admitted bug and an escalated one it would be decorative, and
+# artifact-lint.sh would grant the reduced artifact set to a payment fix.
+rf_esc="$(bash "$TARGET" --resolve-form "$d1c" 2>/dev/null)"
+rf_esc_rc=$?
+if [[ "$rf_esc_rc" -eq 0 ]] && [[ "$rf_esc" == "form=full" ]] && [[ "$rf_esc" != "$rf_out" ]]; then
+  ok "--resolve-form answers form=full for an escalated bug, differing from the admitted one"
+else
+  bad "--resolve-form distinguishes escalation" "rc=$rf_esc_rc out=$rf_esc admitted=$rf_out"
+fi
+
+# A REFUSED compact packet (plain exit 1) still resolves to full at exit 0. The
+# channel reports a route; it does not re-report the refusal.
+rf_pay="$(bash "$TARGET" --resolve-form "$d3" 2>/dev/null)"
+rf_pay_rc=$?
+if [[ "$rf_pay_rc" -eq 0 ]] && [[ "$rf_pay" == "form=full" ]]; then
+  ok "--resolve-form resolves a refused payment-surface bug to full, at exit 0"
+else
+  bad "--resolve-form on a refused bug" "rc=$rf_pay_rc out=$rf_pay"
+fi
+
+# An explicit packet: full declaration resolves to full.
+rf_full="$(bash "$TARGET" --resolve-form "$d1d" 2>/dev/null)"
+if [[ "$rf_full" == "form=full" ]]; then
+  ok "--resolve-form honours an explicit packet: full declaration"
+else
+  bad "--resolve-form honours explicit full" "out=$rf_full"
+fi
+
+# ADVERSARIAL: the channel must be SIDE-EFFECT-FREE. A lint that records a
+# routing outcome every time it lints would corrupt the very measurement
+# IMP-047 S-D turned the default on to collect.
+rf_root="$WORK/resolve-noside"
+# The logger derives its repo root as <scriptDir>/../.., so the fixture must
+# mirror the real bubbles/scripts layout or the ledger lands outside $rf_root
+# and the assertion below measures nothing.
+mkdir -p "$rf_root/bubbles/scripts" "$rf_root/bubbles/registry"
+cp "$TARGET" "$rf_root/bubbles/scripts/"
+cp "$SCRIPT_DIR/micro-fix-outcome-log.sh" "$rf_root/bubbles/scripts/" 2>/dev/null || true
+cp "$REGISTRY" "$rf_root/bubbles/registry/"
+rf_ledger="$rf_root/.specify/runtime/micro-fix-outcomes.jsonl"
+bash "$rf_root/bubbles/scripts/micro-fix-admission.sh" --resolve-form "$d1b" > /dev/null 2>&1
+rf_after_resolve=$([[ -f "$rf_ledger" ]] && grep -c . "$rf_ledger" || echo 0)
+bash "$rf_root/bubbles/scripts/micro-fix-admission.sh" "$d1b" > /dev/null 2>&1
+rf_after_plain=$([[ -f "$rf_ledger" ]] && grep -c . "$rf_ledger" || echo 0)
+if [[ "$rf_after_resolve" -eq 0 ]] && [[ "$rf_after_plain" -gt 0 ]]; then
+  ok "--resolve-form writes no outcome-log entry, while the plain run writes $rf_after_plain"
+else
+  bad "--resolve-form is side-effect-free" \
+    "after --resolve-form=$rf_after_resolve entries, after plain run=$rf_after_plain (plain must be >0 or this check is vacuous)"
+fi
+
 printf '\n%s: %d/%d checks passed\n' "$NAME" "$((checks - failures))" "$checks"
 if [[ "$failures" -gt 0 ]]; then
   printf '%s: FAILED\n' "$NAME"

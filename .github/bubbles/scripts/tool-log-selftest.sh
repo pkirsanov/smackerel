@@ -136,6 +136,52 @@ else
   echo "SKIP: Case 4 schema validation (jsonschema not available)"
 fi
 
+# Case 5: concurrent completed wrappers preserve one byte-bearing row per
+# exact session. Regression: bugs/BUG-037-session-cap-cross-session-attribution
+case5_before_lines="$(wc -l < "$LOG_FILE")"
+BUBBLES_TOOL_LOG_FILE="$LOG_FILE" \
+BUBBLES_SESSION_ID="sess-concurrent-A" \
+BUBBLES_AGENT_NAME="bubbles.test" \
+BUBBLES_TOOL_LOG_QUIET=1 \
+  bash "$TOOL_LOG" /bin/echo "concurrent-A-output" > "$TEST_ROOT/case5a.out" 2> "$TEST_ROOT/case5a.err" &
+case5_pid_a=$!
+BUBBLES_TOOL_LOG_FILE="$LOG_FILE" \
+BUBBLES_SESSION_ID="sess-concurrent-B" \
+BUBBLES_AGENT_NAME="bubbles.test" \
+BUBBLES_TOOL_LOG_QUIET=1 \
+  bash "$TOOL_LOG" /bin/echo "concurrent-B-output-longer" > "$TEST_ROOT/case5b.out" 2> "$TEST_ROOT/case5b.err" &
+case5_pid_b=$!
+
+case5_exit_a=0
+case5_exit_b=0
+wait "$case5_pid_a" || case5_exit_a=$?
+wait "$case5_pid_b" || case5_exit_b=$?
+
+[[ "$case5_exit_a" -eq 0 && "$case5_exit_b" -eq 0 ]] \
+  && pass "Case 5: concurrent wrappers both preserve exit 0" \
+  || fail "Case 5: concurrent wrappers should both exit 0 (A=$case5_exit_a B=$case5_exit_b)"
+
+case5_validation=""
+case5_validation_exit=0
+case5_validation="$(python3 -c "
+import json
+rows = [json.loads(line) for line in open('$LOG_FILE')]
+assert len(rows) - int('$case5_before_lines') == 2, (len(rows), '$case5_before_lines')
+selected = [row for row in rows if row.get('sessionId', '').startswith('sess-concurrent-')]
+assert len(selected) == 2, selected
+assert [row['sessionId'] for row in selected].count('sess-concurrent-A') == 1, selected
+assert [row['sessionId'] for row in selected].count('sess-concurrent-B') == 1, selected
+assert all(isinstance(row.get('stdoutBytes'), int) and row['stdoutBytes'] > 0 for row in selected)
+assert all(isinstance(row.get('stderrBytes'), int) and row['stderrBytes'] >= 0 for row in selected)
+print('CONCURRENT_SESSION_BYTES_OK')
+" 2>&1)" || case5_validation_exit=$?
+printf '%s\n' "$case5_validation"
+if [[ "$case5_validation_exit" -eq 0 && "$case5_validation" == "CONCURRENT_SESSION_BYTES_OK" ]]; then
+  pass "Case 5: concurrent delta has one distinct valid byte-bearing row per session"
+else
+  fail "Case 5: concurrent delta has one distinct valid byte-bearing row per session"
+fi
+
 if [[ "$failures" -gt 0 ]]; then
   echo "tool-log-selftest: FAIL ($failures issue(s))"
   exit 1

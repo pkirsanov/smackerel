@@ -90,6 +90,106 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# IMP-055 MBE-3 — absent/off/shadow/advisory are byte- and order-compatible.
+# Only reference-enforce may interpose on dispatch.
+# ---------------------------------------------------------------------------
+COMPAT_CURSOR="$TMP_DIR/compat-cursor.json"
+compat_command() {
+  bash "$COORDINATOR" --spec-dir "$SPEC" --cursor "$COMPAT_CURSOR" --format json --dry-run \
+    "$@" --phase "validate=$RUN_CMD" --phase "implement=$RUN_CMD" 2>&1
+}
+compat_absent="$(compat_command)"
+compat_off="$(compat_command --mbe-posture off)"
+compat_shadow="$(compat_command --mbe-posture shadow)"
+compat_advisory="$(compat_command --mbe-posture advisory)"
+if [[ "$compat_absent" == "$compat_off" && "$compat_absent" == "$compat_shadow" && "$compat_absent" == "$compat_advisory" ]]; then
+  pass "MBE-3: absent, off, shadow, and advisory preserve coordinator output bytes and phase order"
+else
+  fail "MBE-3: a non-enforcing MBE posture changed coordinator output or phase order"
+fi
+
+: > "$RAN"
+REF_CURSOR="$TMP_DIR/reference-cursor.json"
+# IMP-056 SCOPE-6: reference-enforce now dispatches through
+# mutable-dispatch-gateway.sh, which requires the full authorization context.
+# This case is about the pre-existing action/permit-consumption check, which
+# runs per-occurrence BEFORE the gateway is ever invoked, so the new flags
+# only need to be non-empty here -- phase-coordinator.sh's own startup
+# validation checks presence, not that these paths resolve to anything real.
+ref_out="$(bash "$COORDINATOR" --spec-dir "$SPEC" --cursor "$REF_CURSOR" --format json \
+  --mbe-posture reference-enforce --mbe-store-root "$TMP_DIR" \
+  --mbe-repo-root "$TMP_DIR" --mbe-authority-file "$TMP_DIR/unused-authority.json" \
+  --mbe-session-id "sess-unused" --mbe-session-control-file "$TMP_DIR/unused-control.json" \
+  --mbe-packet-file "$TMP_DIR/unused-packet.json" --mbe-feature-dir "$TMP_DIR" \
+  --mbe-candidate-repo "unused-repo" --mbe-receipt-file "$TMP_DIR/unused-receipt.json" \
+  --mbe-session-file "$TMP_DIR/unused-session.json" \
+  --phase "validate=$RUN_CMD" 2>/dev/null)"
+ref_rc=$?
+if [[ "$ref_rc" -ne 0 && "$(ran_count 'validate#1')" -eq 0 ]] &&
+  [[ "$(jget "$ref_out" '[o["exitCode"] for o in d["occurrences"] if o["occurrenceId"]=="validate#1"][0]')" == "3" ]]; then
+  pass "MBE-3: reference-enforce refuses missing admitted references before the child starts"
+else
+  fail "MBE-3: reference-enforce did not fail closed before child execution"
+fi
+
+# ---------------------------------------------------------------------------
+# IMP-056 SCOPE-6 — reference-enforce requires the full gateway context;
+# omitting any one of the new flags is a usage error, not a silent narrowing
+# back to direct-broker dispatch. No orchestrator gets an implicit exemption.
+# ---------------------------------------------------------------------------
+missing_gateway_flag_out="$(bash "$COORDINATOR" --spec-dir "$SPEC" --cursor "$TMP_DIR/missing-flag-cursor.json" \
+  --format json --mbe-posture reference-enforce --mbe-store-root "$TMP_DIR" \
+  --phase "validate=$RUN_CMD" 2>&1)"
+missing_gateway_flag_rc=$?
+if [[ "$missing_gateway_flag_rc" -eq 2 ]] && grep -qF "reference-enforce requires --mbe-repo-root" <<<"$missing_gateway_flag_out"; then
+  pass "MBE-4: reference-enforce without the gateway context flags is a usage error, not a narrower dispatch"
+else
+  fail "MBE-4: missing gateway context flags did not refuse as a usage error (rc=$missing_gateway_flag_rc out=$missing_gateway_flag_out)"
+fi
+
+# ---------------------------------------------------------------------------
+# IMP-056 SCOPE-6 — with real action/permit-consumption bindings present, the
+# coordinator reaches the gateway call and passes every piece of context
+# through correctly, including a --permit-id DERIVED from the consumption
+# file rather than a separate binding. A stub gateway (swapped in via
+# BUBBLES_MUTABLE_DISPATCH_GATEWAY) captures its own argv instead of actually
+# dispatching, so this proves the WIRING without needing a real launch.
+# ---------------------------------------------------------------------------
+WIRING_ACTION_FILE="$TMP_DIR/wiring-action.json"
+WIRING_CONSUMPTION_FILE="$TMP_DIR/wiring-consumption.json"
+printf '{"argv":["/usr/bin/true"],"actionDigest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}' >"$WIRING_ACTION_FILE"
+printf '{"permit_id":"dpm-wiring-fixture","nonce":"nonce:wiring","consumed_at":"2026-08-01T00:00:00.000Z","action_digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}' >"$WIRING_CONSUMPTION_FILE"
+STUB_GATEWAY="$TMP_DIR/stub-gateway.sh"
+STUB_GATEWAY_ARGV="$TMP_DIR/stub-gateway.argv"
+cat >"$STUB_GATEWAY" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$BUBBLES_STUB_GATEWAY_ARGV_FILE"
+echo '{"contractType":"reference-dispatch-result","childExitCode":0,"schemaVersion":1,"settlement":"debit","stderrBytes":0,"stdoutBytes":0,"mutableDispatchAudit":null}'
+exit 0
+EOF
+chmod +x "$STUB_GATEWAY"
+wiring_out="$(BUBBLES_MUTABLE_DISPATCH_GATEWAY="$STUB_GATEWAY" BUBBLES_STUB_GATEWAY_ARGV_FILE="$STUB_GATEWAY_ARGV" \
+  bash "$COORDINATOR" --spec-dir "$SPEC" --cursor "$TMP_DIR/wiring-cursor.json" --format json \
+  --mbe-posture reference-enforce --mbe-store-root "$TMP_DIR" \
+  --mbe-repo-root "$TMP_DIR/repo" --mbe-authority-file "$TMP_DIR/authority.json" \
+  --mbe-session-id "sess-wiring" --mbe-session-control-file "$TMP_DIR/control.json" \
+  --mbe-packet-file "$TMP_DIR/packet.json" --mbe-feature-dir "$TMP_DIR/spec" \
+  --mbe-candidate-repo "bubbles" --mbe-receipt-file "$TMP_DIR/receipt.json" \
+  --mbe-session-file "$TMP_DIR/session.json" \
+  --mbe-action "validate#1=$WIRING_ACTION_FILE" --mbe-permit-consumption "validate#1=$WIRING_CONSUMPTION_FILE" \
+  --phase "validate=$RUN_CMD" 2>&1)"
+wiring_rc=$?
+if [[ "$wiring_rc" -eq 0 ]] && [[ -f "$STUB_GATEWAY_ARGV" ]] &&
+  grep -qxF -- "--permit-id" "$STUB_GATEWAY_ARGV" && grep -qxF -- "dpm-wiring-fixture" "$STUB_GATEWAY_ARGV" &&
+  grep -qxF -- "--repo-root" "$STUB_GATEWAY_ARGV" && grep -qxF -- "$TMP_DIR/repo" "$STUB_GATEWAY_ARGV" &&
+  grep -qxF -- "--receipt-file" "$STUB_GATEWAY_ARGV" && grep -qxF -- "$TMP_DIR/receipt.json" "$STUB_GATEWAY_ARGV" &&
+  grep -qxF -- "--action" "$STUB_GATEWAY_ARGV" && grep -qxF -- "$WIRING_ACTION_FILE" "$STUB_GATEWAY_ARGV"; then
+  pass "MBE-5: reference-enforce dispatches through the gateway with the permit id derived from the consumption file and every context flag threaded through"
+else
+  fail "MBE-5: gateway wiring incomplete or incorrect (rc=$wiring_rc argv=$(cat "$STUB_GATEWAY_ARGV" 2>/dev/null | tr '\n' ' ') out=$wiring_out)"
+fi
+
+# ---------------------------------------------------------------------------
 # AC11 — the INTERRUPTION. `implement` fails, so the dependent `validate#2` is
 # BLOCKED_NOT_RUN while the independent check still executes.
 # ---------------------------------------------------------------------------

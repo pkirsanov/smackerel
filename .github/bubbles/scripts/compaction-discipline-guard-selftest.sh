@@ -90,11 +90,12 @@ write_session_json() {
 run_guard() {
   local root="$1"
   local spec_dir="$2"
+  shift 2
   local stdout_file="$WORKSPACE/stdout.last"
   local stderr_file="$WORKSPACE/stderr.last"
 
   set +e
-  BUBBLES_REPO_ROOT="$root" bash "$GUARD_SCRIPT" "$spec_dir" \
+  BUBBLES_REPO_ROOT="$root" bash "$GUARD_SCRIPT" "$spec_dir" "$@" \
     > "$stdout_file" \
     2> "$stderr_file"
   local rc=$?
@@ -674,6 +675,41 @@ run_guard "$S14_ROOT" "specs/900-convergence-fixture"
 
 assert_exit 0 "S14 exit code (stamp and record both present)"
 assert_stdout_contains "PASS Gate G083" "S14 PASS marker on stdout"
+
+# =============================================================================
+# IMP-055 MBE-4: declaration alone is not epoch proof under enforcement.
+# =============================================================================
+
+note "Scenario S15: reference enforcement rejects declaration-only fresh-context"
+
+S15_ROOT="$WORKSPACE/s15"
+stage_repo_root "$S15_ROOT"
+write_session_json "$S15_ROOT" "$(boundary_session '{"kind":"fresh-context","at":"2026-06-01T10:01:35Z"}')"
+mkdir -p "$S15_ROOT/mbe-store"
+run_guard "$S15_ROOT" "specs/900-convergence-fixture" \
+  --mbe-posture reference-enforce --mbe-store-root "$S15_ROOT/mbe-store"
+
+assert_exit 1 "S15 exit code (declaration-only fresh-context)"
+assert_stderr_contains "re-verifies against the immutable store" "S15 requires verified epoch lineage"
+
+note "Scenario S16: reference enforcement accepts coherent immutable epoch proof"
+
+S16_ROOT="$WORKSPACE/s16"
+stage_repo_root "$S16_ROOT"
+S16_STORE="$WORKSPACE/s16-mbe-store"
+S16_CONTEXT="$S16_ROOT/mbe-context.json"
+if python3 "$SCRIPT_DIR/measured-budget-runtime-v2-selftest.py" \
+  --emit-fixture --store-root "$S16_STORE" --context "$S16_CONTEXT"; then
+  S16_BOUNDARY="$(jq -cn --slurpfile mbe "$S16_CONTEXT" \
+    '{kind:"fresh-context",at:"2026-06-01T10:01:35Z",mbeEpoch:$mbe[0]}')"
+  write_session_json "$S16_ROOT" "$(boundary_session "$S16_BOUNDARY")"
+  run_guard "$S16_ROOT" "specs/900-convergence-fixture" \
+    --mbe-posture reference-enforce --mbe-store-root "$S16_STORE"
+  assert_exit 0 "S16 exit code (verified immutable epoch proof)"
+  assert_stdout_contains "PASS Gate G083" "S16 verified epoch proof passes G083"
+else
+  ko "S16 MBE integration fixture generation must succeed"
+fi
 
 # =============================================================================
 # Final verdict

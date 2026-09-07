@@ -1,0 +1,43 @@
+contractType: research-stage-registry
+schemaVersion: 1
+stages:
+  - id: question-contract
+    ordinal: 1
+    class: deterministic
+    predecessors: []
+  - id: deterministic-plan
+    ordinal: 2
+    class: deterministic
+    predecessors: [question-contract]
+  - id: bounded-acquisition
+    ordinal: 3
+    class: deterministic-io
+    predecessors: [deterministic-plan]
+  - id: normalization-extraction
+    ordinal: 4
+    class: deterministic
+    predecessors: [bounded-acquisition]
+  - id: claim-evidence-ledger
+    ordinal: 5
+    class: hybrid-admission
+    predecessors: [normalization-extraction]
+  - id: conflict-coverage-analysis
+    ordinal: 6
+    class: deterministic
+    predecessors: [claim-evidence-ledger]
+  - id: materiality-risk-gate
+    ordinal: 7
+    class: deterministic
+    predecessors: [conflict-coverage-analysis]
+  - id: optional-synthesis
+    ordinal: 8
+    class: optional-model
+    predecessors: [materiality-risk-gate]
+  - id: deterministic-validation
+    ordinal: 9
+    class: deterministic
+    predecessors: [optional-synthesis]
+  - id: immutable-publication
+    ordinal: 10
+    class: deterministic
+    predecessors: [deterministic-validation]

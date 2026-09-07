@@ -129,31 +129,145 @@ if [[ "$gherkin_scenario_count" -gt 0 ]]; then
   if [[ -f "$scenario_manifest_file" ]]; then
     pass "Scenario manifest exists: $(relative_artifact_path "$scenario_manifest_file")"
 
-    manifest_scenario_count="$(grep -cE '"scenarioId"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    manifest_test_type_count="$(grep -cE '"requiredTestType"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    manifest_linked_test_count="$(grep -cE '"linkedTests"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    manifest_evidence_count="$(grep -cE '"evidenceRefs"[[:space:]]*:' "$scenario_manifest_file" || true)"
+    # The reader is the sole normalization layer for manifest envelopes,
+    # identity aliases, authored/planned references, paths, and v2 reference
+    # projection. Check 3C consumes that normalized projection and applies only
+    # transition-profile policy. This fragment is sourced after the resolver has
+    # populated transition_audit_profile; direct sourcing may provide the same
+    # value through the narrowly named BUBBLES_TRANSITION_AUDIT_PROFILE contract.
+    g057_audit_profile="${transition_audit_profile:-${BUBBLES_TRANSITION_AUDIT_PROFILE:-}}"
+    scenario_reference_reader="$SCRIPT_DIR/scenario-reference-reader.py"
+    manifest_parseable=true
+    manifest_policy_valid=true
+    manifest_scenario_count=""
+    scenario_projection=""
+    scenario_projection_error=""
 
-    if [[ "$manifest_scenario_count" -lt "$gherkin_scenario_count" ]]; then
-      fail "scenario-manifest.json only tracks $manifest_scenario_count scenarios but resolved scopes define $gherkin_scenario_count Gherkin scenarios (Gate G057)"
+    if [[ -z "$g057_audit_profile" ]]; then
+      fail "scenario-manifest.json cannot be classified because the resolver-owned transition audit profile is unavailable (Gate G057)"
+      manifest_parseable=false
+    elif [[ ! -f "$scenario_reference_reader" ]]; then
+      fail "scenario-reference-reader.py is required for scenario manifest validation (Gate G057)"
+      manifest_parseable=false
+    elif ! scenario_projection="$(python3 "$scenario_reference_reader" "$scenario_manifest_file" --repo-root "$guard_repo_root" 2>&1)"; then
+      scenario_projection_error="$scenario_projection"
+      fail "scenario-manifest.json is malformed or has an unsupported projection (Gate G057)"
+      [[ -n "$scenario_projection_error" ]] && info "$scenario_projection_error"
+      manifest_parseable=false
+    elif ! scenario_policy="$(jq -cer --arg profile "$g057_audit_profile" --argjson normalized "$scenario_projection" '
+      def records:
+        if type == "array" then .
+        elif type == "object" and ((.schemaVersion // 1) == 1 or .schemaVersion == 2)
+          and (.scenarios | type) == "array" then .scenarios
+        else error("unsupported envelope") end;
+      def canonical_type:
+        . as $test_type
+        | type == "string"
+          and (["unit", "functional", "integration", "ui-unit", "e2e-api", "e2e-ui", "stress", "load"] | index($test_type) != null);
+      def valid_id: type == "string" and test("^SCN-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+$");
+      def nonblank: type == "string" and test("[^[:space:]]");
+      def planning_profile:
+        . == "planning-maturity-v1" or . == "framework-proposal-v1";
+      def delivery_profile:
+        . == "delivery-completion-v1" or . == "delivery-completion-fast-v1" or . == "operational-completion-v1";
+      . as $document
+      | records as $records
+      | if (($profile | planning_profile) or ($profile | delivery_profile)) then . else error("unsupported audit profile") end
+      | if ($records | length) == ($normalized.scenarios | length) then . else error("projection count mismatch") end
+      | [range(0; $records | length) as $index
+          | $records[$index] as $record
+          | $normalized.scenarios[$index] as $normal
+          | if ($record | type) != "object"
+              or ($normal.scenarioId | valid_id | not)
+              or ($record.title | nonblank | not)
+              or ($record.requiredTestType | canonical_type | not)
+              or (($record.evidenceRefs? // []) | type) != "array"
+            then error("invalid scenario record") else . end
+          | ($normal.references | map(select(.kind == "authored"))) as $authored
+          | ($normal.references | map(select(.kind == "planned"))) as $planned
+          | ($authored | map(select(.exists == true))) as $existing_authored
+          | ($existing_authored | map(select(.type == $record.requiredTestType))) as $delivery_authored
+          | ($authored | map(select(.type != null and .type != $record.requiredTestType))) as $incompatible
+          | {
+              id: $normal.scenarioId,
+              authored: ($authored | length),
+              existingAuthored: ($existing_authored | length),
+              planned: ($planned | length),
+              evidence: ($record.evidenceRefs | length),
+              evidenceMembersValid: ($record.evidenceRefs | all(.[]; nonblank)),
+              incompatible: ($incompatible | length),
+              valid: (if ($profile | planning_profile)
+                then (($authored | length) + ($planned | length)) > 0
+                else (($delivery_authored | length) > 0
+                  and ($existing_authored | length) == ($delivery_authored | length)
+                  and ($planned | length) == 0
+                  and ($record.evidenceRefs | length) > 0
+                  and ($record.evidenceRefs | all(.[]; nonblank))
+                  and ($incompatible | length) == 0)
+                end)
+            }
+        ] as $classified
+      | if ($classified | group_by(.id) | any(.[]; length > 1)) then error("duplicate effective scenario identity") else . end
+      | if ($classified | all(.[]; .valid)) then
+          {count: ($classified | length), scenarios: $classified}
+        else error("per-scenario transition policy violation") end
+    ' "$scenario_manifest_file" 2>/dev/null)"; then
+      fail "scenario-manifest.json violates the per-scenario $g057_audit_profile contract (Gate G057)"
+      manifest_policy_valid=false
     else
-      pass "scenario-manifest.json covers at least as many scenarios as the scope artifacts ($manifest_scenario_count >= $gherkin_scenario_count)"
+      manifest_scenario_count="$(jq -r '.count' <<< "$scenario_policy")"
+      pass "scenario-manifest.json records valid per-scenario classifications for $g057_audit_profile"
+      while IFS=$'\t' read -r scenario_id authored_count planned_count; do
+        if [[ "$authored_count" -eq 0 && "$planned_count" -gt 0 ]]; then
+          info "PLANNED/NA: $scenario_id has planned test coverage and makes no implementation claim (Gate G057)"
+        else
+          pass "$scenario_id has authored scenario coverage compatible with $g057_audit_profile"
+        fi
+      done < <(jq -r '.scenarios[] | [.id, .authored, .planned] | @tsv' <<< "$scenario_policy")
     fi
 
-    if [[ "$manifest_test_type_count" -lt "$gherkin_scenario_count" ]]; then
-      fail "scenario-manifest.json is missing requiredTestType entries for one or more scenarios (Gate G057)"
-    else
-      pass "scenario-manifest.json records required live test types"
-    fi
+    if [[ "$manifest_parseable" == "true" && "$manifest_policy_valid" == "true" ]]; then
+      if [[ "$manifest_scenario_count" -ne "$gherkin_scenario_count" ]]; then
+        fail "legacy residual cardinality cannot match because scenario-manifest.json tracks $manifest_scenario_count scenarios but resolved scopes define exactly $gherkin_scenario_count Gherkin scenarios (Gate G057)"
+        manifest_policy_valid=false
+      else
+        scope_scenario_ids="$(awk '
+          /^[[:space:]]*#{2,6}[[:space:]]+SCN-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]+([[:space:]]|$)/ {
+            for (field = 1; field <= NF; field++) {
+              if ($field ~ /^SCN-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]+$/) print $field
+            }
+          }
+        ' ${scope_files[@]+"${scope_files[@]}"})"
+        scope_scenario_id_count="$(printf '%s\n' "$scope_scenario_ids" | awk 'NF { count++ } END { print count + 0 }')"
+        unique_scope_scenario_ids="$(printf '%s\n' "$scope_scenario_ids" | awk 'NF' | LC_ALL=C sort -u)"
+        unique_scope_scenario_id_count="$(printf '%s\n' "$unique_scope_scenario_ids" | awk 'NF { count++ } END { print count + 0 }')"
 
-    if [[ "$manifest_linked_test_count" -eq 0 ]]; then
-      fail "scenario-manifest.json is missing linkedTests entries (Gate G057)"
-    else
-      pass "scenario-manifest.json records linkedTests"
+        if [[ "$scope_scenario_id_count" -ne "$unique_scope_scenario_id_count" ]]; then
+          fail "resolved scope artifacts contain duplicate Gherkin scenario IDs (Gate G057)"
+          manifest_policy_valid=false
+        else
+          manifest_scenario_ids="$(jq -r '.scenarios[].id' <<< "$scenario_policy" | LC_ALL=C sort -u)"
+          missing_scope_scenario_ids="$(LC_ALL=C comm -23 \
+            <(printf '%s\n' "$unique_scope_scenario_ids" | awk 'NF') \
+            <(printf '%s\n' "$manifest_scenario_ids" | awk 'NF'))"
+          if [[ -n "$missing_scope_scenario_ids" ]]; then
+            fail "identified-subset exact matching failed: scenario-manifest.json does not contain every known resolved Gherkin scenario ID (Gate G057)"
+            info "Missing known scenario ID(s): $(printf '%s\n' "$missing_scope_scenario_ids" | paste -sd ' ' -)"
+            manifest_policy_valid=false
+          elif [[ "$scope_scenario_id_count" -eq "$gherkin_scenario_count" && "$manifest_scenario_ids" != "$unique_scope_scenario_ids" ]]; then
+            fail "identified-subset exact matching failed: scenario-manifest.json scenario ID set does not exactly match resolved Gherkin scenario IDs (Gate G057)"
+            manifest_policy_valid=false
+          elif [[ "$scope_scenario_id_count" -eq "$gherkin_scenario_count" ]]; then
+            pass "identified-subset exact matching covers every resolved Gherkin scenario ID; legacy residual cardinality is 0 = 0"
+          else
+            pass "identified-subset exact matching covers all $scope_scenario_id_count known Gherkin scenario ID(s); legacy residual cardinality matches $((gherkin_scenario_count - scope_scenario_id_count)) unidentified scope heading(s) without inferring identity ($manifest_scenario_count total = $gherkin_scenario_count total)"
+          fi
+        fi
+      fi
     fi
 
     # The count above is a DIAGNOSTIC, never the satisfier. It only proves the
-    # string appears; BUG-030 certified three titles that existed in no file.
+    # declared field exists; BUG-030 certified three titles that existed in no file.
     # Resolution is what satisfies G057.
     #
     # ADVISORY BY DEFAULT, per the IMP-040 rollout: run resolution on existing
@@ -164,7 +278,7 @@ if [[ "$gherkin_scenario_count" -gt 0 ]]; then
     # activating a new gate as blocking against a corpus it has never run on
     # converts every pre-existing stale link into a build break.
     scenario_resolver="$SCRIPT_DIR/scenario-test-resolve.sh"
-    if [[ -x "$scenario_resolver" ]]; then
+    if [[ "$manifest_parseable" == "true" && "$manifest_policy_valid" == "true" && -x "$scenario_resolver" ]]; then
       # Date-only grandfather, deliberately NOT policy_spec_grandfathered: that
       # helper enforces whenever a policySnapshot exists, which couples this
       # activation to an unrelated field. Age is the only relevant question.
@@ -202,7 +316,7 @@ if [[ "$gherkin_scenario_count" -gt 0 ]]; then
     # optional fields, so this is inert on every packet that does not declare
     # them and cannot retro-break an existing manifest.
     scenario_obligation_lint="$SCRIPT_DIR/scenario-obligation-lint.sh"
-    if [[ -x "$scenario_obligation_lint" ]]; then
+    if [[ "$manifest_parseable" == "true" && "$manifest_policy_valid" == "true" && -x "$scenario_obligation_lint" ]]; then
       scenario_obligation_output=""
       if scenario_obligation_output="$(bash "$scenario_obligation_lint" "$feature_dir" --quiet 2>&1)"; then
         pass "scenario obligation matrix is coherent (Gate G057)"
@@ -215,7 +329,7 @@ if [[ "$gherkin_scenario_count" -gt 0 ]]; then
     # Mechanism coherence (IMP-040 SCOPE-4 / COV-10). Inert until a scenario
     # declares testMechanism, so blocking cannot retro-break a packet.
     test_mechanism_lint="$SCRIPT_DIR/test-mechanism-lint.sh"
-    if [[ -x "$test_mechanism_lint" ]]; then
+    if [[ "$manifest_parseable" == "true" && "$manifest_policy_valid" == "true" && -x "$test_mechanism_lint" ]]; then
       test_mechanism_output=""
       if test_mechanism_output="$(bash "$test_mechanism_lint" "$feature_dir" --quiet 2>&1)"; then
         pass "declared test mechanisms support their claims (Gate G057)"
@@ -225,11 +339,6 @@ if [[ "$gherkin_scenario_count" -gt 0 ]]; then
       fi
     fi
 
-    if [[ "$manifest_evidence_count" -eq 0 ]]; then
-      fail "scenario-manifest.json is missing evidenceRefs entries (Gate G057)"
-    else
-      pass "scenario-manifest.json records evidenceRefs"
-    fi
   else
     fail "Resolved scopes define Gherkin scenarios but scenario-manifest.json is missing (Gate G057)"
   fi

@@ -148,6 +148,27 @@ assert_bug_009_source_only_release_entry() {
     || fail "$assertion_scope release manifest records $checksum_subject checksum: $relative_path"
 }
 
+write_bug_051_manifest() {
+  local manifest_path="$1"
+  local scenario_id="$2"
+  local title="$3"
+
+  mkdir -p "$(dirname "$manifest_path")"
+  cat >"$manifest_path" <<JSON
+{
+  "schemaVersion": 1,
+  "spec": "BUG-051 fixture",
+  "scenarios": [
+    {
+      "id": "$scenario_id",
+      "title": "$title",
+      "requiredTestType": "functional"
+    }
+  ]
+}
+JSON
+}
+
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
@@ -158,8 +179,9 @@ QUOTED_FIXTURE="$TMP_ROOT/quoted-fixture"
 QUOTED_SOURCE="$TMP_ROOT/local-source-quoted"
 DEFAULT_BOOTSTRAP_FIXTURE="$TMP_ROOT/default-bootstrap-fixture"
 FOUNDATION_BOOTSTRAP_FIXTURE="$TMP_ROOT/foundation-bootstrap-fixture"
+YAML_SOURCE_FIXTURE="$TMP_ROOT/yaml-source-fixture"
 
-mkdir -p "$REMOTE_FIXTURE" "$LOCAL_FIXTURE" "$QUOTED_FIXTURE" "$DEFAULT_BOOTSTRAP_FIXTURE" "$FOUNDATION_BOOTSTRAP_FIXTURE"
+mkdir -p "$REMOTE_FIXTURE" "$LOCAL_FIXTURE" "$QUOTED_FIXTURE" "$DEFAULT_BOOTSTRAP_FIXTURE" "$FOUNDATION_BOOTSTRAP_FIXTURE" "$YAML_SOURCE_FIXTURE"
 git -C "$REMOTE_FIXTURE" init -q
 git -C "$LOCAL_FIXTURE" init -q
 git -C "$QUOTED_FIXTURE" init -q
@@ -604,6 +626,94 @@ for schema in workflows.schema.json capability-ledger.schema.json adoption-profi
     fail "Schema missing: $schema"
   fi
 done
+
+# BUG-051: source and installed validators must discover the same repository
+# manifests even when invoked from an unrelated working directory.
+cp -a "$LOCAL_FIXTURE/.github/bubbles" "$YAML_SOURCE_FIXTURE/bubbles"
+  bug_051_top_manifest='specs/001-feature/scenario-manifest.json'
+  bug_051_nested_manifest='specs/001-feature/bugs/BUG-001-nested/scenario-manifest.json'
+  for bug_051_fixture in "$YAML_SOURCE_FIXTURE" "$LOCAL_FIXTURE"; do
+    write_bug_051_manifest \
+      "$bug_051_fixture/$bug_051_top_manifest" \
+      'SCN-B051FIX-001' \
+      'Top-level manifest discovery fixture'
+    write_bug_051_manifest \
+      "$bug_051_fixture/$bug_051_nested_manifest" \
+      'SCN-B051FIX-002' \
+      'Nested bug manifest discovery fixture'
+  done
+
+  bug_051_source_validator="$YAML_SOURCE_FIXTURE/bubbles/scripts/yaml-schema-validate.sh"
+  bug_051_installed_validator="$LOCAL_FIXTURE/.github/bubbles/scripts/yaml-schema-validate.sh"
+  bug_051_expected_summary='yaml-schema-validate: PASS  specs/**/scenario-manifest.json (2 file(s))'
+
+  bug_051_source_output="$(
+    cd "$TMP_ROOT"
+    bash "$bug_051_source_validator" 2>&1
+  )" && bug_051_source_rc=0 || bug_051_source_rc=$?
+  echo 'BUG-051 source validator output:'
+  printf '%s\n' "$bug_051_source_output"
+
+  bug_051_installed_output="$(
+    cd "$TMP_ROOT"
+    bash "$bug_051_installed_validator" 2>&1
+  )" && bug_051_installed_rc=0 || bug_051_installed_rc=$?
+  echo 'BUG-051 installed validator output:'
+  printf '%s\n' "$bug_051_installed_output"
+
+  if [[ "$bug_051_source_rc" -eq 0 ]] \
+    && grep -Fq "$bug_051_expected_summary" <<<"$bug_051_source_output"; then
+    pass "BUG-051 source validator discovers top-level and nested manifests"
+  else
+    fail "BUG-051 source validator must discover exactly two manifests"
+  fi
+  if [[ -f "$LOCAL_FIXTURE/$bug_051_top_manifest" ]]; then
+    pass "BUG-051 installed fixture contains $bug_051_top_manifest"
+  else
+    fail "BUG-051 installed fixture is missing $bug_051_top_manifest"
+  fi
+  if [[ -f "$LOCAL_FIXTURE/$bug_051_nested_manifest" ]]; then
+    pass "BUG-051 installed fixture contains $bug_051_nested_manifest"
+  else
+    fail "BUG-051 installed fixture is missing $bug_051_nested_manifest"
+  fi
+  if [[ "$bug_051_installed_rc" -eq 0 ]] \
+    && grep -Fq "$bug_051_expected_summary" <<<"$bug_051_installed_output"; then
+    pass "BUG-051 installed validator executes both repository manifests"
+  else
+    fail "BUG-051 installed validator must discover exactly two repository manifests"
+  fi
+  if [[ "$bug_051_source_output" == *"$bug_051_expected_summary"* ]] \
+    && [[ "$bug_051_installed_output" == *"$bug_051_expected_summary"* ]]; then
+    pass "BUG-051 source and installed manifest discovery counts agree"
+  else
+    fail "BUG-051 source and installed manifest discovery counts must agree"
+  fi
+  if [[ "$bug_051_installed_output" != *'specs/**/scenario-manifest.json (none present)'* ]]; then
+    pass "BUG-051 installed validator does not scan .github/specs"
+  else
+    fail "BUG-051 installed validator incorrectly reports no repository manifests"
+  fi
+
+  printf '%s\n' '{"schemaVersion":1,"scenarios":[{"id":"invalid"}]}' \
+    >"$LOCAL_FIXTURE/$bug_051_nested_manifest"
+  bug_051_invalid_output="$(
+    cd "$TMP_ROOT"
+    bash "$bug_051_installed_validator" 2>&1
+  )" && bug_051_invalid_rc=0 || bug_051_invalid_rc=$?
+  echo 'BUG-051 malformed installed validator output:'
+  printf '%s\n' "$bug_051_invalid_output"
+
+  if [[ "$bug_051_invalid_rc" -ne 0 ]] \
+    && grep -Fq "$bug_051_nested_manifest" <<<"$bug_051_invalid_output"; then
+    pass "BUG-051 malformed nested installed manifest remains blocking and named"
+  else
+    fail "BUG-051 installed validator must reject and name the malformed nested manifest"
+  fi
+  write_bug_051_manifest \
+    "$LOCAL_FIXTURE/$bug_051_nested_manifest" \
+    'SCN-B051FIX-002' \
+    'Nested bug manifest discovery fixture'
 
 # improvements/ MUST be appended to the repo-root .gitignore (NOT
 # .github/.gitignore). The earlier installer bug wrote to TARGET/.gitignore

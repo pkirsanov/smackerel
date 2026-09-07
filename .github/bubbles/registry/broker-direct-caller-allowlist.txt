@@ -1,0 +1,29 @@
+# Broker direct-caller allow-list — IMP-056 SCOPE-6
+#
+# mutable-dispatch-caller-coverage-lint.sh fails any file (other than
+# reference-broker.sh itself and mutable-dispatch-gateway.sh) that invokes
+# reference-broker.sh's `dispatch` verb directly, since every production
+# dispatch must route through the gateway's adapter-resolve + shared-snapshot
+# + mint/verify sequence. A file listed here is a deliberate exception: it
+# tests the broker itself in isolation and is not a production call site.
+#
+# Each entry MUST be preceded by a comment line giving the reason. The lint
+# fails when an entry has no reason, and when a listed file no longer exists
+# (so this file cannot rot).
+#
+# Format: one repo-relative path per line. Blank lines and `#` comments
+# ignored.
+
+# Adversarial/unit-level tests of reference-broker.sh in isolation (snapshot
+# creation, launch-state ledger transitions, permit consumption, the
+# mutableDispatchAudit block) — calling the broker directly is the point of
+# this suite, and it never represents a production dispatch path.
+bubbles/scripts/measured-budget-runtime-v2-selftest.py
+
+# This lint's own selftest writes red-fixture heredocs (evil-direct.sh,
+# evil-indirect.sh, broker-adversarial-selftest.sh) into throwaway mktemp
+# trees to prove the lint catches a bypass. Those fixture bytes live inside
+# THIS file's own source text, so a scan of the real repository sees the same
+# literal bypass-shaped lines this lint is supposed to detect. Same precedent
+# as agnosticity-allowlist.txt exempting agnosticity-lint-selftest.sh.
+bubbles/scripts/mutable-dispatch-caller-coverage-lint-selftest.sh

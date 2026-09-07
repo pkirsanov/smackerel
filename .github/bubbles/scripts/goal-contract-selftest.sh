@@ -8,10 +8,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 GC="$SCRIPT_DIR/goal-contract.sh"
 BOUNDARY_RESOLVER="$SCRIPT_DIR/work-boundary-resolve.sh"
-SCHEMA="$REPO_ROOT/bubbles/schemas/goal-contract.schema.json"
+SCHEMA="$SCRIPT_DIR/../schemas/goal-contract.schema.json"
 
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT INT TERM

@@ -25,6 +25,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="$SCRIPT_DIR/state-transition-guard.sh"
+BRIDGE="$SCRIPT_DIR/evidence-tool-log-bridge.sh"
 NAME="receipt-identity-selftest"
 
 passes=0
@@ -44,6 +45,10 @@ command -v jq >/dev/null 2>&1 || {
 }
 [[ -f "$GUARD_SCRIPT" ]] || {
   printf '%s: guard not found: %s\n' "$NAME" "$GUARD_SCRIPT" >&2
+  exit 2
+}
+[[ -f "$BRIDGE" ]] || {
+  printf '%s: bridge not found: %s\n' "$NAME" "$BRIDGE" >&2
   exit 2
 }
 
@@ -71,7 +76,7 @@ fi
 # terminating quote. This is what the guard actually runs.
 PROGRAM="$(awk '
   /c43_analysis="\$\(jq -rs/ { grab = 1; next }
-  grab && /^[[:space:]]*'"'"' "\$c43_log"/ { exit }
+  grab && /^[[:space:]]*'"'"' "\$c43_admitted_log"/ { exit }
   grab { print }
 ' "$GUARD_SCRIPT")"
 if [[ -z "$PROGRAM" ]] || ! printf '%s' "$PROGRAM" | grep -qF 'deterministic_siblings'; then
@@ -114,6 +119,71 @@ clone_count() {
 sibling_count() {
   printf '%s' "$1" | jq -r '.siblings | length' 2>/dev/null || printf 'ERR'
 }
+
+# ---------------------------------------------------------------------------
+# BUG-050 SCN-B050-003/004 — clone identity consumes the same transition-local
+# admitted projection as freshness. The bridge executes real semantic
+# admission; this selftest continues to execute the real extracted Check 43 jq.
+# ---------------------------------------------------------------------------
+admission_dir="$TMP_DIR/050-admission"
+mkdir -p "$admission_dir"
+cat > "$admission_dir/scenario-manifest.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "spec": "050-admission",
+  "scenarios": [
+    {"scenarioId":"SCN-B050-003","title":"Unrelated clone groups are inert","requiredTestType":"functional"},
+    {"scenarioId":"SCN-B050-004","title":"Admitted incompatible clone blocks","requiredTestType":"functional"}
+  ]
+}
+EOF
+admission_rev="$(printf '%040d' 1)"
+active_hash="$(sha256_text 'bug050-active-output')"
+unrelated_hash="$(sha256_text 'bug050-unrelated-clone-output')"
+
+admit_log() {
+  bash "$BRIDGE" "$admission_dir" --log "$1" --format=admitted-jsonl 2>&1
+}
+
+unrelated_clone_log="$TMP_DIR/bug050-unrelated-clone.jsonl"
+write_log "$unrelated_clone_log" \
+  "{\"schemaVersion\":3,\"ts\":\"2026-09-02T08:10:00Z\",\"sessionId\":\"b050-active\",\"spec\":\"050-admission\",\"scope\":\"SCOPE-01\",\"cmd\":\"bash active-check.sh\",\"exitCode\":0,\"durationMs\":10,\"stdoutHash\":\"$active_hash\",\"stdoutBytes\":64,\"tags\":[\"test\"],\"scenarioBinding\":{\"scenarioId\":\"SCN-B050-003\",\"phase\":\"green\",\"testIdentity\":\"BUG-050::active-clean\",\"sourceRevision\":\"$admission_rev\",\"negativeControl\":\"restore repository-global grouping\",\"claim\":\"unrelated clone groups are inert\"}}" \
+  "{\"schemaVersion\":3,\"ts\":\"2026-09-02T08:10:01Z\",\"sessionId\":\"b050-unrelated-a\",\"spec\":\"999-unrelated\",\"scope\":\"SCOPE-X\",\"cmd\":\"cargo test\",\"exitCode\":0,\"durationMs\":11,\"stdoutHash\":\"$unrelated_hash\",\"stdoutBytes\":64,\"tags\":[\"test\"]}" \
+  "{\"schemaVersion\":3,\"ts\":\"2026-09-02T08:10:02Z\",\"sessionId\":\"b050-unrelated-b\",\"spec\":\"999-unrelated\",\"scope\":\"SCOPE-X\",\"cmd\":\"npm run lint\",\"exitCode\":0,\"durationMs\":12,\"stdoutHash\":\"$unrelated_hash\",\"stdoutBytes\":64,\"tags\":[\"lint\"]}"
+unrelated_admitted_log="$TMP_DIR/bug050-unrelated-admitted.jsonl"
+unrelated_admitted_out="$(admit_log "$unrelated_clone_log")"
+unrelated_admitted_rc=$?
+printf '%s\n' "$unrelated_admitted_out" > "$unrelated_admitted_log"
+unrelated_admitted_count="$(awk 'NF { count++ } END { print count + 0 }' "$unrelated_admitted_log")"
+unrelated_out="$(analyze "$unrelated_admitted_log")"
+if [[ "$unrelated_admitted_rc" -eq 0 && "$unrelated_admitted_count" -eq 1 && "$(clone_count "$unrelated_out")" == "0" ]]; then
+  pass "SCN-B050-003 unrelated incompatible clone history is excluded from the admitted projection"
+else
+  fail "SCN-B050-003 expected one active row and zero admitted clones (bridge=$unrelated_admitted_rc rows=$unrelated_admitted_count clones=$(clone_count "$unrelated_out"))"
+fi
+
+active_clone_log="$TMP_DIR/bug050-active-clone.jsonl"
+write_log "$active_clone_log" \
+  "{\"schemaVersion\":3,\"ts\":\"2026-09-02T08:20:00Z\",\"sessionId\":\"b050-clone-a\",\"spec\":\"050-admission\",\"scope\":\"SCOPE-01\",\"cmd\":\"cargo test\",\"exitCode\":0,\"durationMs\":20,\"stdoutHash\":\"$active_hash\",\"stdoutBytes\":64,\"tags\":[\"test\"],\"scenarioBinding\":{\"scenarioId\":\"SCN-B050-004\",\"phase\":\"green\",\"testIdentity\":\"BUG-050::clone-a\",\"sourceRevision\":\"$admission_rev\",\"negativeControl\":\"accept incompatible active programs\",\"claim\":\"admitted incompatible clone blocks\"}}" \
+  "{\"schemaVersion\":3,\"ts\":\"2026-09-02T08:20:01Z\",\"sessionId\":\"b050-clone-b\",\"spec\":\"050-admission\",\"scope\":\"SCOPE-01\",\"cmd\":\"npm run lint\",\"exitCode\":0,\"durationMs\":21,\"stdoutHash\":\"$active_hash\",\"stdoutBytes\":64,\"tags\":[\"lint\"],\"scenarioBinding\":{\"scenarioId\":\"SCN-B050-004\",\"phase\":\"green\",\"testIdentity\":\"BUG-050::clone-b\",\"sourceRevision\":\"$admission_rev\",\"negativeControl\":\"accept incompatible active programs\",\"claim\":\"admitted incompatible clone blocks\"}}"
+active_admitted_log="$TMP_DIR/bug050-active-admitted.jsonl"
+active_admitted_out="$(admit_log "$active_clone_log")"
+active_admitted_rc=$?
+printf '%s\n' "$active_admitted_out" > "$active_admitted_log"
+active_admitted_count="$(awk 'NF { count++ } END { print count + 0 }' "$active_admitted_log")"
+active_out="$(analyze "$active_admitted_log")"
+if [[ "$active_admitted_rc" -eq 0 && "$active_admitted_count" -eq 2 && "$(clone_count "$active_out")" == "1" ]]; then
+  pass "SCN-B050-004 admitted incompatible clone remains refused by the BUG-033 identity program"
+else
+  fail "SCN-B050-004 expected two admitted rows and one clone (bridge=$active_admitted_rc rows=$active_admitted_count clones=$(clone_count "$active_out"))"
+fi
+if printf '%s' "$active_out" | grep -qF 'family=cargo category=test' &&
+  printf '%s' "$active_out" | grep -qF 'family=npm category=lint'; then
+  pass "SCN-B050-004 clone diagnostic preserves BUG-033 program and category identity detail"
+else
+  fail "SCN-B050-004 clone diagnostic lost BUG-033 identity detail"
+  printf '  analysis: %s\n' "$active_out"
+fi
 
 # ---------------------------------------------------------------------------
 # BUG-033 facet 1 — target distinctness measured PER RECEIPT.
@@ -175,6 +245,20 @@ fi
 family_of() {
   printf '%s' "$1" | jq -Rr "$DEFS"' command_family' 2>&1
 }
+program_of() {
+  printf '%s' "$1" | jq -Rr "$DEFS"' program_identity' 2>&1
+}
+identity_of() {
+  printf '%s' "$1" | jq -Rr "$DEFS"' cmd_identity' 2>&1
+}
+
+identity_of() {
+  printf '%s' "$1" | jq -Rr "$DEFS"' cmd_identity' 2>&1
+}
+
+parts_of() {
+  printf '%s' "$1" | jq -Rr "$DEFS"' cmd_parts | join(" ")' 2>&1
+}
 
 for probe in \
   "node scripts/check-page.mjs alpha" \
@@ -227,6 +311,263 @@ if printf '%s' "$wrapper_adv_out" | grep -qF 'family=cargo' &&
 else
   fail "facet 2 bound: the diagnostic did not name both unwrapped identities"
   printf '  analysis: %s\n' "$wrapper_adv_out"
+fi
+
+# ---------------------------------------------------------------------------
+# BUG-033 facet 3 — bounded launchers expose the evidence-producing command.
+# ---------------------------------------------------------------------------
+facet3_direct="artifact-lint.sh bugs/BUG-033-receipt-target-grouping-and-wrapper-normalization"
+facet3_direct_identity="$(identity_of "$facet3_direct")"
+
+for launcher in timeout gtimeout; do
+  observed="$(identity_of "$launcher 120 $facet3_direct")"
+  if [[ "$observed" == "$facet3_direct_identity" ]]; then
+    pass "SCN-B033-005: $launcher exposes the direct artifact-lint identity"
+  else
+    fail "SCN-B033-005: $launcher identity '$observed' differs from direct identity '$facet3_direct_identity'"
+  fi
+done
+
+facet3_alarm="/usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120 $facet3_direct"
+facet3_alarm_identity="$(identity_of "$facet3_alarm")"
+if [[ "$facet3_alarm_identity" == "$facet3_direct_identity" ]]; then
+  pass "SCN-B033-006: the exact portable Perl alarm launcher exposes the direct artifact-lint identity"
+else
+  fail "SCN-B033-006: portable alarm identity '$facet3_alarm_identity' differs from direct identity '$facet3_direct_identity'"
+fi
+
+for probe in \
+  "timeout 120 env PAGE=alpha zsh -c node scripts/check-page.mjs alpha" \
+  "env PAGE=alpha gtimeout 120 bash -c node scripts/check-page.mjs alpha" \
+  "zsh -c /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120 env PAGE=alpha node scripts/check-page.mjs alpha" \
+  "PAGE=alpha timeout 120 sh -c node scripts/check-page.mjs alpha"; do
+  observed_family="$(family_of "$probe")"
+  observed_identity="$(identity_of "$probe")"
+  if [[ "$observed_family" == "node" ]] && [[ "$observed_identity" == "node scripts/check-page.mjs" ]]; then
+    pass "SCN-B033-007: composed spelling '$probe' exposes node scripts/check-page.mjs"
+  else
+    fail "SCN-B033-007: composed spelling '$probe' produced family='$observed_family' identity='$observed_identity'"
+  fi
+done
+
+facet3_arbitrary_perl="/usr/bin/perl -e 'print 1' 120 artifact-lint.sh TARGET"
+if [[ "$(parts_of "$facet3_arbitrary_perl")" == "$facet3_arbitrary_perl" ]] &&
+  [[ "$(identity_of "$facet3_arbitrary_perl")" != "$(identity_of "artifact-lint.sh TARGET")" ]]; then
+  pass "SCN-B033-008: arbitrary Perl remains unchanged and distinct from the direct command"
+else
+  fail "SCN-B033-008: arbitrary Perl was stripped or collapsed into the direct command"
+fi
+
+# "timeout --preserve-status 120 artifact-lint.sh TARGET" lived in this list
+# until the Check 43 merge below taught the guard timeout's own closed
+# option grammar: --preserve-status is a real, safe GNU option, and it now
+# correctly strips to the direct identity. That positive case moved to the
+# option-grammar coverage under "Check 43 timeout transparency" below;
+# "--bogus-option" replaces it here as the still-genuinely-malformed case
+# this loop exists to cover.
+for malformed in \
+  "timeout" \
+  "timeout 120" \
+  "gtimeout 120" \
+  "timeout --bogus-option 120 artifact-lint.sh TARGET" \
+  "/usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120" \
+  "/usr/bin/perl -e 'alarm shift @ARGV; print @ARGV' 120 artifact-lint.sh TARGET"; do
+  observed="$(parts_of "$malformed")"
+  if [[ "$observed" == "$malformed" ]]; then
+    pass "SCN-B033-009: malformed spelling '$malformed' remains unchanged"
+  else
+    fail "SCN-B033-009: malformed spelling '$malformed' normalized to '$observed'"
+  fi
+done
+
+for launcher_kind in timeout gtimeout portable-perl-alarm; do
+  case "$launcher_kind" in
+    timeout)
+      launcher_prefix="timeout 120"
+      ;;
+    gtimeout)
+      launcher_prefix="gtimeout 120"
+      ;;
+    portable-perl-alarm)
+      launcher_prefix="/usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV' 120"
+      ;;
+  esac
+  identity_a="$(identity_of "$launcher_prefix artifact-lint.sh TARGET")"
+  identity_b="$(identity_of "$launcher_prefix state-transition-guard.sh TARGET")"
+  if [[ "$identity_a" == "artifact-lint.sh TARGET" ]] &&
+    [[ "$identity_b" == "state-transition-guard.sh TARGET" ]]; then
+    pass "SCN-B033-010: $launcher_kind preserves both distinct underlying command identities"
+  else
+    fail "SCN-B033-010: $launcher_kind produced identity_a='$identity_a' identity_b='$identity_b'"
+  fi
+done
+
+facet3_exit_log="$TMP_DIR/facet3-exit-mismatch.jsonl"
+write_log "$facet3_exit_log" \
+  "{\"ts\":\"2026-08-23T12:00:01Z\",\"sessionId\":\"exit-a\",\"spec\":\"specs/alpha\",\"cmd\":\"timeout 120 artifact-lint.sh specs/alpha\",\"exitCode\":0,\"durationMs\":901,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}" \
+  "{\"ts\":\"2026-08-23T12:00:03Z\",\"sessionId\":\"exit-b\",\"spec\":\"specs/beta\",\"cmd\":\"gtimeout 120 artifact-lint.sh specs/beta\",\"exitCode\":1,\"durationMs\":903,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}"
+facet3_exit_out="$(analyze "$facet3_exit_log")"
+if [[ "$(identity_of "timeout 120 artifact-lint.sh specs/alpha")" == "artifact-lint.sh specs/alpha" ]] &&
+  [[ "$(identity_of "gtimeout 120 artifact-lint.sh specs/beta")" == "artifact-lint.sh specs/beta" ]] &&
+  [[ "$(clone_count "$facet3_exit_out")" == "1" ]] &&
+  [[ "$(sibling_count "$facet3_exit_out")" == "0" ]]; then
+  pass "SCN-B033-011: normalized commands with different exits remain incompatible"
+else
+  fail "SCN-B033-011: launcher identity or independent exit incompatibility was not preserved"
+  printf '  analysis: %s\n' "$facet3_exit_out"
+fi
+
+facet3_equal_exit_log="$TMP_DIR/facet3-equal-exit.jsonl"
+write_log "$facet3_equal_exit_log" \
+  "{\"ts\":\"2026-08-23T12:10:01Z\",\"sessionId\":\"equal-a\",\"spec\":\"specs/alpha\",\"cmd\":\"timeout 120 artifact-lint.sh specs/alpha\",\"exitCode\":0,\"durationMs\":911,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}" \
+  "{\"ts\":\"2026-08-23T12:10:03Z\",\"sessionId\":\"equal-b\",\"spec\":\"specs/beta\",\"cmd\":\"gtimeout 120 artifact-lint.sh specs/beta\",\"exitCode\":0,\"durationMs\":913,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"lint\"]}"
+facet3_equal_exit_out="$(analyze "$facet3_equal_exit_log")"
+if [[ "$(clone_count "$facet3_equal_exit_out")" == "0" ]] &&
+  [[ "$(sibling_count "$facet3_equal_exit_out")" == "1" ]]; then
+  pass "SCN-B033-011 negative control: equal exits remove the exit-result incompatibility"
+else
+  fail "SCN-B033-011 negative control: equal exits did not produce deterministic siblings"
+  printf '  analysis: %s\n' "$facet3_equal_exit_out"
+fi
+
+# ---------------------------------------------------------------------------
+# Check 43 timeout transparency — GNU `timeout` and macOS coreutils
+# `gtimeout` are execution bounds, not underlying programs. Only bare canonical
+# wrapper tokens are transparent after their known options and mandatory
+# duration are consumed. A receipt cannot authenticate the executable behind a
+# path-qualified token, so system paths and attacker-controlled paths remain
+# opaque alongside unknown options, malformed durations, and near-miss names.
+# ---------------------------------------------------------------------------
+timeout_program="scenario-test-resolve-selftest.sh"
+timeout_identity="scenario-test-resolve-selftest.sh"
+for probe in \
+  "bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout -k 5 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --kill-after=5 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --kill-after 5 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout -s TERM 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --signal=TERM 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --signal TERM 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout -v 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --verbose 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --foreground 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --preserve-status 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --kill-after=inf 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout --signal TERM --kill-after=5 --foreground --verbose --preserve-status 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "gtimeout -k 5 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "gtimeout -- 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "timeout 540 /usr/bin/env bash bubbles/scripts/scenario-test-resolve-selftest.sh" \
+  "env CHECK=1 bash -c gtimeout --verbose 150 sh bubbles/scripts/scenario-test-resolve-selftest.sh"; do
+  observed_family="$(family_of "$probe")"
+  observed_program="$(program_of "$probe")"
+  observed_identity="$(identity_of "$probe")"
+  if [[ "$observed_family" == "$timeout_program" &&
+    "$observed_program" == "$timeout_program" &&
+    "$observed_identity" == "$timeout_identity" ]]; then
+    pass "timeout transparency: '$probe' has the bare script family/program/identity"
+  else
+    fail "timeout transparency: '$probe' resolved family='$observed_family' program='$observed_program' identity='$observed_identity'"
+  fi
+done
+
+for probe in \
+  "mytimeout 150 cargo test" \
+  "timeout-wrapper 150 cargo test" \
+  "/tmp/timeout 150 cargo test" \
+  "/usr/bin/timeout 150 cargo test" \
+  "/usr/local/bin/gtimeout 150 cargo test" \
+  "timeout --unknown 150 cargo test" \
+  "timeout -x 150 cargo test" \
+  "timeout --help 150 cargo test" \
+  "timeout --version 150 cargo test" \
+  "timeout -f 150 cargo test" \
+  "timeout -p 150 cargo test" \
+  "timeout -vfp 150 cargo test" \
+  "timeout -k.5 150 cargo test" \
+  "timeout -sTERM 150 cargo test" \
+  "timeout -s9 150 cargo test" \
+  "timeout -sv 150 cargo test" \
+  "timeout -k --verbose 150 cargo test" \
+  "timeout -k invalid 150 cargo test" \
+  "timeout --kill-after=invalid 150 cargo test" \
+  "timeout -s --verbose 150 cargo test" \
+  "timeout -s BOGUS 150 cargo test" \
+  "timeout --signal= 150 cargo test" \
+  "timeout --signal 150" \
+  "timeout -k" \
+  "timeout -s" \
+  "timeout -v" \
+  "timeout 1S cargo test" \
+  "timeout not-a-duration cargo test" \
+  "timeout 150"; do
+  observed_family="$(family_of "$probe")"
+  if [[ "$observed_family" != "cargo" ]]; then
+    pass "timeout transparency bound: '$probe' remains opaque"
+  else
+    fail "timeout transparency bound: '$probe' was incorrectly unwrapped as cargo"
+  fi
+done
+
+timeout_sibling_log="$TMP_DIR/timeout-siblings.jsonl"
+write_log "$timeout_sibling_log" \
+  "{\"ts\":\"2026-08-16T09:34:01Z\",\"sessionId\":\"tn-a\",\"cmd\":\"bash bubbles/scripts/scenario-test-resolve-selftest.sh alpha\",\"exitCode\":0,\"durationMs\":441,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"],\"inputClosure\":[{\"path\":\"alpha\",\"sha256\":\"aaa\"}]}" \
+  "{\"ts\":\"2026-08-16T09:34:03Z\",\"sessionId\":\"tn-b\",\"cmd\":\"gtimeout --kill-after 5 150 /usr/bin/env CHECK=1 sh bubbles/scripts/scenario-test-resolve-selftest.sh beta\",\"exitCode\":0,\"durationMs\":443,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"],\"inputClosure\":[{\"path\":\"beta\",\"sha256\":\"bbb\"}]}"
+
+timeout_sibling_out="$(analyze "$timeout_sibling_log")"
+if [[ "$(clone_count "$timeout_sibling_out")" == "0" &&
+  "$(sibling_count "$timeout_sibling_out")" == "1" ]]; then
+  pass "timeout transparency: bare child and bare canonical gtimeout wrapper normalize to deterministic siblings"
+else
+  fail "timeout transparency: expected 0 clones and 1 sibling group for bare-versus-wrapped executions"
+  printf '  analysis: %s\n' "$timeout_sibling_out"
+fi
+
+timeout_path_impersonation_log="$TMP_DIR/timeout-path-impersonation.jsonl"
+write_log "$timeout_path_impersonation_log" \
+  "{\"ts\":\"2026-08-16T09:34:11Z\",\"sessionId\":\"tp-a\",\"spec\":\"specs/alpha\",\"cmd\":\"bash bubbles/scripts/scenario-test-resolve-selftest.sh alpha\",\"exitCode\":0,\"durationMs\":445,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T09:34:13Z\",\"sessionId\":\"tp-b\",\"spec\":\"specs/beta\",\"cmd\":\"/tmp/timeout 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh beta\",\"exitCode\":0,\"durationMs\":447,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T09:34:15Z\",\"sessionId\":\"tp-c\",\"spec\":\"specs/gamma\",\"cmd\":\"/usr/bin/timeout 150 bash bubbles/scripts/scenario-test-resolve-selftest.sh gamma\",\"exitCode\":0,\"durationMs\":449,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}"
+
+timeout_path_impersonation_out="$(analyze "$timeout_path_impersonation_log")"
+if [[ "$(clone_count "$timeout_path_impersonation_out")" == "1" ]]; then
+  pass "timeout trust bound: path-qualified timeout tokens do not collapse to the nested child identity"
+else
+  fail "timeout trust bound: expected path-qualified timeout tokens to remain distinct from the child"
+  printf '  analysis: %s\n' "$timeout_path_impersonation_out"
+fi
+if printf '%s' "$timeout_path_impersonation_out" | grep -qF 'family=timeout' &&
+  printf '%s' "$timeout_path_impersonation_out" | grep -qF "family=$timeout_program"; then
+  pass "timeout trust bound: diagnostics preserve wrapper and child families"
+else
+  fail "timeout trust bound: diagnostics did not preserve both wrapper and child families"
+  printf '  analysis: %s\n' "$timeout_path_impersonation_out"
+fi
+
+timeout_adv_log="$TMP_DIR/timeout-adversarial.jsonl"
+write_log "$timeout_adv_log" \
+  "{\"ts\":\"2026-08-16T09:35:01Z\",\"sessionId\":\"tw-a\",\"spec\":\"specs/alpha\",\"cmd\":\"timeout 150 cargo test\",\"exitCode\":0,\"durationMs\":451,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T09:35:03Z\",\"sessionId\":\"tw-b\",\"spec\":\"specs/beta\",\"cmd\":\"gtimeout --preserve-status 150 npm run test\",\"exitCode\":0,\"durationMs\":453,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}"
+
+timeout_adv_out="$(analyze "$timeout_adv_log")"
+if [[ "$(clone_count "$timeout_adv_out")" == "1" ]]; then
+  pass "timeout transparency bound: timeout-wrapped cargo and npm sharing stdout are still refused"
+else
+  fail "timeout transparency bound: expected 1 clone group for timeout-wrapped cargo-vs-npm, observed $(clone_count "$timeout_adv_out")"
+  printf '  analysis: %s\n' "$timeout_adv_out"
+fi
+
+timeout_script_adv_log="$TMP_DIR/timeout-distinct-scripts.jsonl"
+write_log "$timeout_script_adv_log" \
+  "{\"ts\":\"2026-08-16T09:36:01Z\",\"sessionId\":\"ts-a\",\"spec\":\"specs/alpha\",\"cmd\":\"timeout 150 bash bubbles/scripts/alpha-selftest.sh\",\"exitCode\":0,\"durationMs\":461,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}" \
+  "{\"ts\":\"2026-08-16T09:36:03Z\",\"sessionId\":\"ts-b\",\"spec\":\"specs/beta\",\"cmd\":\"gtimeout -s TERM 150 sh bubbles/scripts/beta-selftest.sh\",\"exitCode\":0,\"durationMs\":463,\"stdoutHash\":\"$NONEMPTY\",\"stdoutBytes\":128,\"tags\":[\"test\"]}"
+
+timeout_script_adv_out="$(analyze "$timeout_script_adv_log")"
+if [[ "$(clone_count "$timeout_script_adv_out")" == "1" ]]; then
+  pass "timeout transparency bound: two distinct timeout-wrapped scripts sharing stdout are still refused"
+else
+  fail "timeout transparency bound: expected 1 clone group for distinct scripts, observed $(clone_count "$timeout_script_adv_out")"
+  printf '  analysis: %s\n' "$timeout_script_adv_out"
 fi
 
 # ---------------------------------------------------------------------------

@@ -449,6 +449,69 @@ else
   cat "$edge_strict_log"
 fi
 
+# --- --emit-refs: markdown heading is a reference, not a comment (IMP-058 SCOPE-6)
+#
+# A leading "#" is a full-line COMMENT in .sh but a HEADING in .md. Before this
+# fix, `--emit-refs` treated both the same way, so a gate named only in an H2
+# heading (the shape agents/bubbles_shared/state-gates.md and
+# evidence-rules.md actually use for G071) was silently dropped as if it were
+# commented out -- while a REAL comment in either file type must still be
+# excluded.
+refs_root="$TMPDIR/repo-refs"
+seed_repo "$refs_root"
+cat > "$refs_root/agents/refs-doc.md" <<'EOF'
+## Some Gate (G950)
+
+This body paragraph names no gate at all.
+
+<!-- G951 is only mentioned inside this HTML comment -->
+
+Prose can also reference G952 in a normal paragraph.
+EOF
+cat > "$refs_root/bubbles/scripts/refs-doc.sh" <<'EOF'
+#!/usr/bin/env bash
+# This shell comment mentions G953, which must NOT count as a reference.
+echo "G954 is real executable text"
+EOF
+
+refs_log="$TMPDIR/refs.log"
+bash "$TARGET" --repo-root "$refs_root" --emit-refs >"$refs_log" 2>&1
+
+if grep -q 'G950' "$refs_log" && grep 'G950' "$refs_log" | grep -q 'refs-doc.md'; then
+  pass "a markdown H2 heading naming a gate counts as a reference"
+else
+  fail "expected G950 to be referenced from its H2 heading in refs-doc.md"
+  cat "$refs_log"
+fi
+
+if grep -q 'G952' "$refs_log"; then
+  pass "ordinary markdown prose still counts as a reference"
+else
+  fail "expected G952 (plain paragraph text) to be referenced"
+  cat "$refs_log"
+fi
+
+if grep -q 'G951' "$refs_log"; then
+  fail "a gate named only inside an HTML comment (<!-- -->) must NOT be a reference"
+  cat "$refs_log"
+else
+  pass "a gate named only inside an HTML comment is excluded, even in markdown"
+fi
+
+if grep -q 'G953' "$refs_log"; then
+  fail "a gate named only inside a shell '#' comment must NOT be a reference"
+  cat "$refs_log"
+else
+  pass "a shell '#' comment is still excluded (non-markdown behavior unchanged)"
+fi
+
+if grep -q 'G954' "$refs_log"; then
+  pass "executable shell text still counts as a reference"
+else
+  fail "expected G954 (real executable text) to be referenced"
+  cat "$refs_log"
+fi
+
 # --- Summary --------------------------------------------------------------
 
 echo

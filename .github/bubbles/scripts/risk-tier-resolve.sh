@@ -37,10 +37,12 @@ EOF
 
 surface=""
 changed_paths=""
+output_format="text"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --surface) surface="$2"; shift 2 ;;
     --changed-paths) changed_paths="$2"; shift 2 ;;
+    --json|--typed-json) output_format="json"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "risk-tier-resolve: unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -57,10 +59,32 @@ low_risk_re='(build-free|buildless|static site|static html|single[- ]file|self[-
 
 decide() {
   local tier="$1" risk_class="$2" min_assurance="$3" reason="$4"
-  printf 'tier=%s\n' "$tier"
-  printf 'riskClass=%s\n' "$risk_class"
-  printf 'minimumAssurance=%s\n' "$min_assurance"
-  printf 'reason=%s\n' "$reason"
+  if [[ "$output_format" == "json" ]]; then
+    command -v jq >/dev/null 2>&1 || { echo "risk-tier-resolve: jq is required for typed JSON" >&2; exit 2; }
+    local surface_digest paths_digest material digest
+    if command -v sha256sum >/dev/null 2>&1; then
+      surface_digest="$(printf '%s' "$surface" | sha256sum | awk '{print $1}')"
+      paths_digest="$(printf '%s' "$changed_paths" | sha256sum | awk '{print $1}')"
+    elif command -v shasum >/dev/null 2>&1; then
+      surface_digest="$(printf '%s' "$surface" | shasum -a 256 | awk '{print $1}')"
+      paths_digest="$(printf '%s' "$changed_paths" | shasum -a 256 | awk '{print $1}')"
+    else
+      echo "risk-tier-resolve: sha256 utility is required for typed JSON" >&2
+      exit 2
+    fi
+    material="$(jq -cnS --arg assurance "$min_assurance" --arg paths "sha256:$paths_digest" --arg reason "$reason" --arg risk "$risk_class" --arg surface "sha256:$surface_digest" --arg tier "$tier" '{changedPathsDigest:$paths,contractType:"risk-tier-decision",minimumAssurance:$assurance,reason:$reason,riskClass:$risk,schemaVersion:1,surfaceDigest:$surface,tier:$tier}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      digest="$(printf '%s' "$material" | sha256sum | awk '{print $1}')"
+    else
+      digest="$(printf '%s' "$material" | shasum -a 256 | awk '{print $1}')"
+    fi
+    printf '%s' "$material" | jq -cS --arg digest "sha256:$digest" '. + {decisionDigest:$digest}'
+  else
+    printf 'tier=%s\n' "$tier"
+    printf 'riskClass=%s\n' "$risk_class"
+    printf 'minimumAssurance=%s\n' "$min_assurance"
+    printf 'reason=%s\n' "$reason"
+  fi
   exit 0
 }
 

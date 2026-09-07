@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="$SCRIPT_DIR/evidence-receipt-check.sh"
 TOOL_LOG="$SCRIPT_DIR/tool-log.sh"
+GUARD="$SCRIPT_DIR/state-transition-guard.sh"
 FAILURES=0
 pass() { echo "PASS: $1"; }
 fail() {
@@ -124,6 +125,101 @@ fi
 printf '{"ts":"2026-07-20T00:00:02Z","cmd":"ok","inputClosure":[{"path":"src.txt","sha256":"%s"}]}\n' "$(sha "$d/src.txt")" > "$d/valid.jsonl"
 bash "$CHECK" --log "$d/valid.jsonl" --repo-root "$d" --strict >/dev/null 2>&1 && rc=0 || rc=$?
 if [[ "$rc" -eq 0 ]]; then pass "T8 --strict all-valid → exit 0"; else fail "T8 expected exit 0 (rc=$rc)"; fi
+
+# T9: re-running the same evidence identity refreshes a stale receipt. The
+# historical row remains append-only in the log but no longer blocks strict
+# freshness once a newer current receipt records the new input hash.
+refresh_log="$d/refresh.jsonl"
+old_hash="$(sha "$d/src.txt")"
+printf '{"ts":"2026-07-20T00:00:03Z","cwd":"%s","spec":"spec-a","scope":"scope-a","cmd":"run tests","inputClosure":[{"path":"src.txt","sha256":"%s"}]}\n' \
+  "$d" "$old_hash" > "$refresh_log"
+printf 'refreshed input\n' > "$d/src.txt"
+printf '{"ts":"2026-07-20T00:00:04Z","cwd":"%s","spec":"spec-a","scope":"scope-a","cmd":"run tests","inputClosure":[{"path":"src.txt","sha256":"%s"}]}\n' \
+  "$d" "$(sha "$d/src.txt")" >> "$refresh_log"
+out="$(bash "$CHECK" --log "$refresh_log" --repo-root "$d" --strict)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 && "$(field "$out" total)" -eq 2 && "$(field "$out" current)" -eq 1 && "$(field "$out" superseded)" -eq 1 && "$(field "$out" valid)" -eq 1 && "$(field "$out" stale)" -eq 0 ]]; then
+  pass "T9 fresh rerun supersedes stale receipt with the same evidence identity"
+else
+  fail "T9 expected one current valid and one superseded receipt (rc=$rc, out=$out)"
+fi
+
+# T10: the same command in another scope is a distinct claim. A fresh scope-b
+# run must not hide stale evidence still current for scope-a.
+scope_log="$d/scope-isolation.jsonl"
+printf '{"ts":"2026-07-20T00:00:05Z","cwd":"%s","spec":"spec-a","scope":"scope-a","cmd":"run tests","inputClosure":[{"path":"src.txt","sha256":"%s"}]}\n' \
+  "$d" "$old_hash" > "$scope_log"
+printf '{"ts":"2026-07-20T00:00:06Z","cwd":"%s","spec":"spec-a","scope":"scope-b","cmd":"run tests","inputClosure":[{"path":"src.txt","sha256":"%s"}]}\n' \
+  "$d" "$(sha "$d/src.txt")" >> "$scope_log"
+out="$(bash "$CHECK" --log "$scope_log" --repo-root "$d" --strict)" && rc=0 || rc=$?
+if [[ "$rc" -eq 1 && "$(field "$out" total)" -eq 2 && "$(field "$out" current)" -eq 2 && "$(field "$out" superseded)" -eq 0 && "$(field "$out" valid)" -eq 1 && "$(field "$out" stale)" -eq 1 ]]; then
+  pass "T10 fresh receipt in another scope does not supersede stale evidence"
+else
+  fail "T10 expected scope-isolated valid=1 stale=1 (rc=$rc, out=$out)"
+fi
+
+# BUG-050 SCN-B050-002: once the transition has admitted a receipt, strict
+# freshness remains fail-closed. The transition-local projection narrows the
+# input set; it must not weaken this checker's verdict for a stale row inside it.
+admitted_path="$d/admitted.txt"
+printf 'captured input\n' > "$admitted_path"
+admitted_hash="$(sha "$admitted_path")"
+printf 'changed after capture\n' > "$admitted_path"
+admitted_stale_log="$d/admitted-stale.jsonl"
+printf '{"schemaVersion":3,"ts":"2026-09-02T08:00:00Z","sessionId":"bug050-stale","spec":"BUG-050","scope":"SCOPE-01","cmd":"bash focused-admitted-stale.sh","exitCode":0,"inputClosure":[{"path":"admitted.txt","sha256":"%s"}],"scenarioBinding":{"scenarioId":"SCN-B050-002","phase":"green","testIdentity":"BUG-050::admitted-stale","sourceRevision":"0000000000000000000000000000000000000001","negativeControl":"change the admitted input closure","claim":"admitted stale receipt blocks"}}\n' \
+  "$admitted_hash" > "$admitted_stale_log"
+out="$(bash "$CHECK" --log "$admitted_stale_log" --repo-root "$d" --strict)" && rc=0 || rc=$?
+if [[ "$rc" -eq 1 && "$(field "$out" current)" -eq 1 && "$(field "$out" stale)" -eq 1 ]] &&
+  [[ "$(field "$out" 'staleReceipts[0].reason' 2>/dev/null || true)" == "input hash differs: admitted.txt" ]]; then
+  pass "SCN-B050-002 admitted stale receipt remains blocking under strict freshness"
+else
+  fail "SCN-B050-002 expected one named admitted stale receipt (rc=$rc, out=$out)"
+fi
+
+# BUG-050 SCN-B050-005: RED proves historical ordering against its captured
+# source. A transition-admitted view may retain that stale closure only when a
+# later matching IMPLEMENT receipt exists. Ordinary full-log diagnostics remain
+# strict, and the GREEN receipt still uses current bytes.
+historical_red_log="$d/historical-red.jsonl"
+historical_red_hash="$(sha "$admitted_path")"
+printf 'post-red implementation bytes\n' > "$admitted_path"
+current_hash="$(sha "$admitted_path")"
+printf '{"schemaVersion":3,"ts":"2026-09-02T08:10:00Z","sessionId":"bug050-red","spec":"BUG-050","scope":"SCOPE-01","cmd":"bash focused-red.sh","exitCode":1,"inputClosure":[{"path":"admitted.txt","sha256":"%s"}],"scenarioBinding":{"scenarioId":"SCN-B050-005","phase":"red","testIdentity":"BUG-050::historical-red","sourceRevision":"0000000000000000000000000000000000000001","negativeControl":"restore current-byte equality for historical RED","claim":"historical RED remains ordered proof"}}\n' \
+  "$historical_red_hash" > "$historical_red_log"
+printf '{"schemaVersion":3,"ts":"2026-09-02T08:11:00Z","sessionId":"bug050-implement","spec":"BUG-050","scope":"SCOPE-01","cmd":"bash focused-implement.sh","exitCode":0,"inputClosure":[{"path":"admitted.txt","sha256":"%s"}],"scenarioBinding":{"scenarioId":"SCN-B050-005","phase":"implement","testIdentity":"BUG-050::historical-red","sourceRevision":"0000000000000000000000000000000000000002","negativeControl":"restore current-byte equality for historical RED","claim":"implementation follows historical RED"}}\n' \
+  "$current_hash" >> "$historical_red_log"
+printf '{"schemaVersion":3,"ts":"2026-09-02T08:12:00Z","sessionId":"bug050-green","spec":"BUG-050","scope":"SCOPE-01","cmd":"bash focused-green.sh","exitCode":0,"inputClosure":[{"path":"admitted.txt","sha256":"%s"}],"scenarioBinding":{"scenarioId":"SCN-B050-005","phase":"green","testIdentity":"BUG-050::historical-red","sourceRevision":"0000000000000000000000000000000000000002","negativeControl":"restore current-byte equality for historical RED","claim":"current GREEN remains current-byte compatible"}}\n' \
+  "$current_hash" >> "$historical_red_log"
+out="$(bash "$CHECK" --log "$historical_red_log" --repo-root "$d" --strict)" && rc=0 || rc=$?
+if [[ "$rc" -eq 1 && "$(field "$out" stale)" -eq 1 ]]; then
+  pass "SCN-B050-005 ordinary full-log freshness still reports the stale RED closure"
+else
+  fail "SCN-B050-005 ordinary mode unexpectedly relaxed RED freshness (rc=$rc, out=$out)"
+fi
+out="$(bash "$CHECK" --log "$historical_red_log" --repo-root "$d" --transition-admitted --strict)" && rc=0 || rc=$?
+if [[ "$rc" -eq 0 && "$(field "$out" historical)" -eq 1 && "$(field "$out" stale)" -eq 0 && "$(field "$out" valid)" -eq 2 ]]; then
+  pass "SCN-B050-005 admitted historical RED survives current-byte drift after matching IMPLEMENT"
+else
+  fail "SCN-B050-005 admitted historical RED was not preserved (rc=$rc, out=$out)"
+fi
+
+if awk '
+  /^# CHECK 43:/ { in_check_43 = 1 }
+  in_check_43 && /c43_out=.*c43_checker/ && /--log "\$c43_admitted_log"/ && /--transition-admitted/ && /--strict/ {
+    freshness_uses_admitted_projection = 1
+  }
+  in_check_43 && /c43_analysis=.*jq -rs/ { clone_analysis_started = 1 }
+  in_check_43 && clone_analysis_started && /"\$c43_admitted_log"/ {
+    clone_uses_admitted_projection = 1
+  }
+  /^# CHECKS 23-25/ { in_check_43 = 0 }
+  END {
+    exit !(freshness_uses_admitted_projection && clone_uses_admitted_projection)
+  }
+' "$GUARD"; then
+  pass "SCN-B050-001 Check 43 shares transition-admitted receipts across freshness and clone consumers"
+else
+  fail "SCN-B050-001 Check 43 must pass one transition-admitted projection to freshness and clone consumers"
+fi
 
 echo
 if [[ "$FAILURES" -gt 0 ]]; then

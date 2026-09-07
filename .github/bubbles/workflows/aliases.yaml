@@ -331,6 +331,11 @@ v5Aliases:
     tags: { action: status, scope: all-trains }
     description: Portfolio rollup across every declared train.
 
+  release-train-assign-metadata:
+    primitive: ship
+    tags: { action: assign, target: train-metadata }
+    description: Assign declared train metadata to one existing spec state without lifecycle effects.
+
   adapter-readiness-to-packet:
     primitive: ship
     tags: { action: deliver, lifecycle: adapter-readiness }

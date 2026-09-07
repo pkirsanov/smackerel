@@ -19,10 +19,12 @@ set -euo pipefail
 #   9. Convergence rename failure cleans its update temp and packet capture.
 #  10. Missing required --phase flag → exit non-zero with error message.
 #  11. --help exits zero and prints its usage banner.
+#  12. The persistent session lock ignore rule is exact, not wildcard-broadened.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SNAPSHOT="$SCRIPT_DIR/state-snapshot.sh"
 BINDING="$SCRIPT_DIR/repository-binding.sh"
+SOURCE_MEMORY_IGNORE="$SCRIPT_DIR/../../.specify/memory/.gitignore"
 
 if [[ ! -x "$SNAPSHOT" ]]; then
   echo "FAIL: state-snapshot.sh is not executable at $SNAPSHOT" >&2
@@ -78,6 +80,28 @@ file_line_count() {
     done < "$file"
   fi
   printf '%s' "$count"
+}
+
+git_path_is_visible() {
+  local root="$1"
+  local path="$2"
+  local status_output
+
+  status_output="$(git -C "$root" status --porcelain=v1 --untracked-files=all -- "$path")"
+  [[ "$status_output" == "?? $path" ]]
+}
+
+memory_ignore_contract_holds() {
+  local root="$1"
+  local lock_path=".specify/memory/bubbles.session.json.flock"
+  local session_path=".specify/memory/bubbles.session.json"
+  local neighbor_path=".specify/memory/session-neighbor.json"
+
+  git -C "$root" check-ignore -q -- "$lock_path" &&
+    ! git -C "$root" check-ignore -q -- "$session_path" &&
+    ! git -C "$root" check-ignore -q -- "$neighbor_path" &&
+    git_path_is_visible "$root" "$session_path" &&
+    git_path_is_visible "$root" "$neighbor_path"
 }
 
 BOUND_CONTROL=""
@@ -1127,6 +1151,94 @@ if [[ "$cb_noid_rc" -eq 2 ]] &&
   pass "host-checkpoint without a checkpoint id is rejected"
 else
   fail "host-checkpoint without an id should exit 2 (got $cb_noid_rc)"
+fi
+
+# ---- Case 14: exact persistent session lock ignore contract (BUG-033) ------
+
+cases=$((cases + 1))
+case14_root="$TMP_ROOT/case14"
+case14_adversarial_root="$TMP_ROOT/case14-adversarial"
+case14_lock_path=".specify/memory/bubbles.session.json.flock"
+case14_session_path=".specify/memory/bubbles.session.json"
+case14_neighbor_path=".specify/memory/session-neighbor.json"
+
+for fixture_root in "$case14_root" "$case14_adversarial_root"; do
+  mkdir -p "$fixture_root/.specify/memory"
+  git init -q "$fixture_root"
+  : > "$fixture_root/$case14_lock_path"
+  : > "$fixture_root/$case14_session_path"
+  : > "$fixture_root/$case14_neighbor_path"
+done
+
+cp "$SOURCE_MEMORY_IGNORE" "$case14_root/.specify/memory/.gitignore"
+cp "$SOURCE_MEMORY_IGNORE" "$case14_adversarial_root/.specify/memory/.gitignore"
+printf '\n%s\n' 'bubbles.session.json*' >> "$case14_adversarial_root/.specify/memory/.gitignore"
+
+if git -C "$case14_root" check-ignore -q -- "$case14_lock_path"; then
+  pass "SCN-B033-009: the exact persistent session lock path is ignored by Git"
+else
+  fail "SCN-B033-009: Git should classify the exact persistent session lock path as ignored"
+fi
+
+if ! git -C "$case14_root" check-ignore -q -- "$case14_session_path" &&
+  git_path_is_visible "$case14_root" "$case14_session_path"; then
+  pass "SCN-B033-009: bubbles.session.json remains visible to Git"
+else
+  fail "SCN-B033-009: bubbles.session.json should remain visible to Git"
+fi
+
+if ! git -C "$case14_root" check-ignore -q -- "$case14_neighbor_path" &&
+  git_path_is_visible "$case14_root" "$case14_neighbor_path"; then
+  pass "SCN-B033-009: a neighboring memory-state file remains visible to Git"
+else
+  fail "SCN-B033-009: the neighboring memory-state file should remain visible to Git"
+fi
+
+if memory_ignore_contract_holds "$case14_root"; then
+  pass "SCN-B033-009: the committed memory ignore file satisfies the complete Git classification contract"
+else
+  fail "SCN-B033-009: the committed memory ignore file should satisfy the complete Git classification contract"
+fi
+
+if ! memory_ignore_contract_holds "$case14_adversarial_root" &&
+  git -C "$case14_adversarial_root" check-ignore -q -- "$case14_session_path"; then
+  pass "SCN-B033-009 bound: wildcard broadening fails the visibility contract by hiding session JSON"
+else
+  fail "SCN-B033-009 bound: wildcard broadening should fail by hiding session JSON"
+fi
+
+# ---- Case 15: verified MBE epoch is carried into a context boundary --------
+
+cases=$((cases + 1))
+case15_root="$TMP_ROOT/case15"
+case15_session_id="snapshot-case15"
+prepare_bound_repo "$case15_root" "$case15_session_id"
+case15_control="$BOUND_CONTROL"
+case15_packet="$BOUND_PACKET"
+case15_session="$case15_root/.specify/memory/bubbles.session.json"
+case15_store="$TMP_ROOT/case15-mbe-store"
+case15_context="$TMP_ROOT/case15-mbe-context.json"
+
+if python3 "$SCRIPT_DIR/measured-budget-runtime-v2-selftest.py" \
+  --emit-fixture --store-root "$case15_store" --context "$case15_context"; then
+  BUBBLES_AGENT_NAME="bubbles.workflow" bash "$SNAPSHOT" \
+    --session-id "$case15_session_id" --session-control-file "$case15_control" \
+    --binding-packet-file "$case15_packet" \
+    --phase phase_3_execute --mode start --context-boundary fresh-context \
+    --mbe-posture reference-enforce --mbe-store-root "$case15_store" \
+    --mbe-epoch-context "$case15_context" >/dev/null
+  if jq -e '
+    .contextBoundary.kind == "fresh-context"
+    and .contextBoundary.mbeEpoch.verified == true
+    and .contextBoundary.mbeEpoch.epochId == .turnSnapshots[-1].mbeEpoch.epochId
+    and .contextBoundary.mbeEpoch.epochVerificationId == .turnSnapshots[-1].mbeEpoch.epochVerificationId
+  ' "$case15_session" >/dev/null 2>&1; then
+    pass "Reference-enforced snapshot carries one coherent verified epoch into turn and boundary records"
+  else
+    fail "Reference-enforced snapshot must carry matching verified epoch lineage"
+  fi
+else
+  fail "MBE integration fixture generation must succeed for state snapshot coverage"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

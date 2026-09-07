@@ -42,6 +42,19 @@ stateModel:
   - bubbles.propagate
   certificationWriter: bubbles.validate
 
+# Provider-neutral IMP-055 MBE-2 references. These remain advisory and keep
+# every current direct-authorized runner grant intact. `hostEnforcement` is
+# deliberately unsupported until an external host canary proves interception.
+measuredBudgetPolicy:
+  posture: advisory
+  hostEnforcement: unsupported
+  grantRegistry: bubbles/registry/tool-grants.yaml
+  modelClassRegistry: bubbles/registry/model-classes.yaml
+  epochSchema: bubbles/schemas/session-epoch.schema.json
+  defaultGrantProfile: direct-compatible
+  defaultModelClass: none
+  epochClasses: [ planning, implementation, verification, certification ]
+
 workflowModeGrants:
   defaultAllowed: false
   executionModel: direct-authorized-runner
@@ -65,7 +78,7 @@ workflowModeGrants:
     bubbles.releases:
       modes: [ release-planning-to-doc ]
     bubbles.train:
-      modes: [ release-train-cut, release-train-promote, release-train-rollback, release-train-retire, release-train-status-all ]
+      modes: [ release-train-cut, release-train-promote, release-train-rollback, release-train-retire, release-train-status-all, release-train-assign-metadata ]
     bubbles.upkeep:
       modes: [ upkeep-backup-verify, upkeep-restore-drill, upkeep-bcdr-drill, upkeep-patch-cycle, upkeep-secret-rotation, upkeep-flag-cleanup, upkeep-compliance-sweep ]
     bubbles.propagate:

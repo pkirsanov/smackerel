@@ -21,13 +21,21 @@
 # from a deliberate opt-out, which is exactly the ambiguity this contract exists
 # to remove.
 #
-# Uses NO yq/jq/python — a plain awk scan keeps it dependency-free on the
-# minimal PATH used by framework validation.
+# Uses Python only for the security-sensitive executable approval. The YAML
+# scan remains dependency-light, while repository-rooted descriptor walking
+# rejects every symlink component and binds approval to one opened object.
 #
 # Output (stdout, one key=value per line):
 #   adapter=<none|command>
 #   adapterPath=<absolute path to the framework adapter>   (adapter=none)
 #   command=<absolute path to the project executable>      (adapter=command)
+#   commandRelative=<repository-relative executable path>  (adapter=command)
+#   commandDevice=<device id>                              (adapter=command)
+#   commandInode=<inode>                                   (adapter=command)
+#   commandMode=<permission and special mode bits>         (adapter=command)
+#   commandSize=<byte size>                                (adapter=command)
+#   commandMtimeNs=<mtime in nanoseconds>                  (adapter=command)
+#   commandSha256=<SHA-256 of approved descriptor content> (adapter=command)
 #   timeoutSeconds=<integer>                               (adapter=command)
 #   repoRoot=<absolute repository root>
 #
@@ -71,6 +79,72 @@ fail() {
   exit "${2:-1}"
 }
 
+approve_command() {
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 - "$1" "$REPO_ROOT" <<'PY'
+import hashlib, os, stat, sys
+
+relative, root = sys.argv[1:]
+parts = relative.split("/")
+if not parts or any(part in ("", ".", "..") for part in parts):
+  raise SystemExit(1)
+if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+  raise SystemExit(1)
+opened = []
+try:
+  parent = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+  opened.append(parent)
+  root_metadata = os.fstat(parent)
+  if not stat.S_ISDIR(root_metadata.st_mode):
+    raise OSError("repository root is not a directory")
+  for component in parts[:-1]:
+    child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=parent)
+    opened.append(child)
+    metadata = os.fstat(child)
+    if not stat.S_ISDIR(metadata.st_mode):
+      raise OSError("intermediate component is not a directory")
+    parent = child
+  descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+  opened.append(descriptor)
+  metadata = os.fstat(descriptor)
+  if not stat.S_ISREG(metadata.st_mode):
+    raise OSError("not a regular file")
+  effective_bits = metadata.st_mode & 0o001
+  if metadata.st_gid in os.getgroups() or metadata.st_gid == os.getegid():
+    effective_bits |= metadata.st_mode & 0o010
+  if metadata.st_uid == os.geteuid():
+    effective_bits |= metadata.st_mode & 0o100
+  if not effective_bits:
+    raise PermissionError("not executable")
+  digest = hashlib.sha256()
+  while True:
+    chunk = os.read(descriptor, 1024 * 1024)
+    if not chunk:
+      break
+    digest.update(chunk)
+  confirmed = os.fstat(descriptor)
+  if (confirmed.st_dev, confirmed.st_ino, confirmed.st_mode, confirmed.st_size,
+      confirmed.st_mtime_ns) != (metadata.st_dev, metadata.st_ino,
+                                 metadata.st_mode, metadata.st_size,
+                                 metadata.st_mtime_ns):
+    raise OSError("metadata changed while hashing approved descriptor")
+  absolute = os.path.join(root, *parts)
+  print("\t".join(str(value) for value in (
+    absolute, relative, metadata.st_dev, metadata.st_ino,
+    metadata.st_mode & 0o7777,
+    metadata.st_size, metadata.st_mtime_ns, digest.hexdigest())))
+except (OSError, ValueError):
+  raise SystemExit(1)
+finally:
+  for descriptor in reversed(opened):
+    try:
+      os.close(descriptor)
+    except OSError:
+      pass
+PY
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo-root)
@@ -93,7 +167,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -d "$REPO_ROOT" ] || fail "repo root not found: $REPO_ROOT" 2
-REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+REPO_ROOT="$(cd -P "$REPO_ROOT" && pwd)"
 
 CONFIG_FILE=''
 if [ -f "$REPO_ROOT/.github/bubbles-project.yaml" ]; then
@@ -156,11 +230,16 @@ case "$ADAPTER" in
         fail "testDiscovery.command must be a repo-relative path without '..' (got '$COMMAND_REL')"
         ;;
     esac
-    COMMAND_ABS="$REPO_ROOT/$COMMAND_REL"
-    [ -f "$COMMAND_ABS" ] ||
-      fail "testDiscovery.command '$COMMAND_REL' not found at $COMMAND_ABS"
-    [ -x "$COMMAND_ABS" ] ||
+    [ -e "$REPO_ROOT/$COMMAND_REL" ] || [ -L "$REPO_ROOT/$COMMAND_REL" ] ||
+      fail "testDiscovery.command '$COMMAND_REL' not found at $REPO_ROOT/$COMMAND_REL"
+    [ -x "$REPO_ROOT/$COMMAND_REL" ] ||
       fail "testDiscovery.command '$COMMAND_REL' is not executable"
+    COMMAND_APPROVAL="$(approve_command "$COMMAND_REL")" || {
+      fail "testDiscovery.command '$COMMAND_REL' could not be approved: every intermediate and final component must be a non-symlink stable path"
+    }
+    IFS="$(printf '\t')" read -r COMMAND_ABS COMMAND_REL_APPROVED COMMAND_DEVICE COMMAND_INODE COMMAND_MODE COMMAND_SIZE COMMAND_MTIME_NS COMMAND_SHA256 <<EOF
+$COMMAND_APPROVAL
+EOF
     [ -n "$TIMEOUT" ] || TIMEOUT="$DEFAULT_TIMEOUT"
     case "$TIMEOUT" in
       '' | *[!0-9]*)
@@ -170,6 +249,13 @@ case "$ADAPTER" in
     [ "$TIMEOUT" -gt 0 ] ||
       fail "testDiscovery.timeoutSeconds must be greater than zero"
     echo "command=$COMMAND_ABS"
+    echo "commandRelative=$COMMAND_REL_APPROVED"
+    echo "commandDevice=$COMMAND_DEVICE"
+    echo "commandInode=$COMMAND_INODE"
+    echo "commandMode=$COMMAND_MODE"
+    echo "commandSize=$COMMAND_SIZE"
+    echo "commandMtimeNs=$COMMAND_MTIME_NS"
+    echo "commandSha256=$COMMAND_SHA256"
     echo "timeoutSeconds=$TIMEOUT"
     ;;
   *)

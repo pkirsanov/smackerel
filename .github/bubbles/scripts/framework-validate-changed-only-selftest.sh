@@ -137,6 +137,74 @@ else
   fail "the previously-skipped check should run when no change set is resolvable"
 fi
 
+# ---------------------------------------------------------------------------
+# IMP-058 SCOPE-4 / PERF-13: a bare invocation (no flags at all) now defaults
+# to the same --changed-only behavior. Re-arm a determinable change set (an
+# upstream to compare against, matching case 2 above) and prove the DEFAULT
+# narrows the run set identically to the explicit flag, that --no-changed-only
+# forces the full run back, and that BUBBLES_VALIDATE_CHANGED_ONLY=false does
+# too. This is the exact property release-check.sh and pre-push.sh's
+# full-validation branch depend on for their own explicit override to work.
+# ---------------------------------------------------------------------------
+git -C "$FIXTURE" branch --set-upstream-to=origin/main main >/dev/null
+
+list_bare() {
+  ( cd "$FIXTURE"; set +e; bash bubbles/scripts/framework-validate.sh --list-tier=full 2>&1 )
+}
+list_no_changed_only() {
+  ( cd "$FIXTURE"; set +e; bash bubbles/scripts/framework-validate.sh --list-tier=full --no-changed-only 2>&1 )
+}
+list_env_override() {
+  ( cd "$FIXTURE"; set +e; BUBBLES_VALIDATE_CHANGED_ONLY=false bash bubbles/scripts/framework-validate.sh --list-tier=full 2>&1 )
+}
+
+bare_list="$(list_bare)"
+if grep -qE "^WOULD-SKIP \(--changed-only\):.*${UNTOUCHED_LABEL}" <<<"$bare_list"; then
+  pass "a bare invocation (no flags) defaults to --changed-only narrowing"
+else
+  fail "a bare invocation should narrow the run set exactly like --changed-only does"
+fi
+if grep -qE "^WOULD-RUN:.*${TOUCHED_LABEL}" <<<"$bare_list"; then
+  pass "a bare invocation still runs the check owning the actually-changed surface"
+else
+  fail "a bare invocation dropped the check owning the actually-changed surface"
+fi
+
+# --list-tier itself never runs a check, so this proves flag PARSING wires
+# --no-changed-only correctly, not the full 3743s suite -- --list-tier=full
+# already lists what WOULD run under each mode without executing anything.
+no_changed_only_list="$(list_no_changed_only)"
+if grep -qE '^WOULD-SKIP \(--changed-only\)' <<<"$no_changed_only_list"; then
+  fail "--no-changed-only must force the full run; something is still being skipped"
+else
+  pass "--no-changed-only forces the full run, overriding the new default"
+fi
+
+env_override_list="$(list_env_override)"
+if grep -qE '^WOULD-SKIP \(--changed-only\)' <<<"$env_override_list"; then
+  fail "BUBBLES_VALIDATE_CHANGED_ONLY=false must force the full run; something is still being skipped"
+else
+  pass "BUBBLES_VALIDATE_CHANGED_ONLY=false forces the full run, overriding the new default"
+fi
+
+# ---------------------------------------------------------------------------
+# Regression pin: the two release-critical callers must protect themselves
+# EXPLICITLY rather than relying on flag absence, so neither can silently
+# inherit a future default change again. This is a static source check, not a
+# behavioral one -- it is a promise about the CALLERS, not the flag mechanism
+# already proven above.
+# ---------------------------------------------------------------------------
+if grep -qE 'framework-validate\.sh"[^"]*--no-changed-only' "$REPO_ROOT/bubbles/scripts/release-check.sh"; then
+  pass "release-check.sh explicitly passes --no-changed-only to framework-validate.sh"
+else
+  fail "release-check.sh does not explicitly force --no-changed-only -- a release could silently narrow its own validation"
+fi
+if grep -qE 'framework-validate\.sh"[^"]*--no-changed-only' "$REPO_ROOT/bubbles/scripts/hooks/pre-push.sh"; then
+  pass "pre-push.sh's full-validation fallback explicitly passes --no-changed-only"
+else
+  fail "pre-push.sh's fallback does not explicitly force --no-changed-only -- a push could silently narrow its own validation"
+fi
+
 echo
 if [[ "$failures" -eq 0 ]]; then
   echo "framework-validate changed-only selftest passed."

@@ -117,7 +117,7 @@ assert_blocks_with() {
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").log"
   local status
-  status="$(run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir")"
+  status="$(run_capture "$log_file" command -p env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir")"
   assert_resolved "$log_file" "$label" || return 0
   if [[ "$status" -eq 0 ]]; then
     fail "$label — guard PASSED but must BLOCK" "$log_file"
@@ -136,7 +136,7 @@ assert_passes() {
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").log"
   local status
-  status="$(run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir")"
+  status="$(run_capture "$log_file" command -p env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir")"
   assert_resolved "$log_file" "$label" || return 0
   if [[ "$status" -ne 0 ]]; then
     fail "$label — guard BLOCKED but must PASS" "$log_file"
@@ -170,7 +170,7 @@ assert_check9_covers() {
   local feature_dir="$1" label="$2"
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").log"
-  run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir" >/dev/null
+  run_capture "$log_file" command -p env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$GUARD_SCRIPT" "$feature_dir" >/dev/null
   assert_resolved "$log_file" "$label" || return 0
   if log_has "$log_file" "has NO evidence block"; then
     fail "$label — Check 9 emitted 'has NO evidence block' (the valid tool-log entry was NOT accepted)" "$log_file"
@@ -190,7 +190,7 @@ assert_old_guard_passes() {
   local log_file
   log_file="$tmp_root/$(basename "$feature_dir").oldguard.log"
   local status
-  status="$(run_capture "$log_file" env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$OLD_GUARD" "$feature_dir")"
+  status="$(run_capture "$log_file" command -p env BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1 bash "$OLD_GUARD" "$feature_dir")"
   if log_has "$log_file" "E009-" || log_has "$log_file" "workflowMode: UNRESOLVED"; then
     fail "$label — OLD guard did not resolve the contract (E009/UNRESOLVED); teeth-proof invalid" "$log_file"
     return 0
@@ -727,8 +727,12 @@ assert_passes "$receipt_fresh_dir" any \
 assert_blocks_with "$receipt_stale_dir" \
   "Evidence receipt(s) are STALE" \
   "CHECK 43 (stale): receipt whose input changed after capture BLOCKS"
+# BUG-033 retired the free-text "Evidence receipt CLONE" line for a structured
+# reason vocabulary; `command-identity-mismatch` is the reason this fixture
+# (`cargo test` vs `npm run lint` over one stdout hash) must produce, and it
+# excludes the `classification-error` fallback a broken classifier would emit.
 assert_blocks_with "$clone_diffcmd_dir" \
-  "Evidence receipt CLONE" \
+  "reason=command-identity-mismatch" \
   "CHECK 43 (clone): one stdout hash cited by TWO DIFFERENT commands BLOCKS"
 assert_passes "$clone_samecmd_dir" any \
   "CHECK 43 (re-run): same stdout hash from the SAME command is honest, passes"

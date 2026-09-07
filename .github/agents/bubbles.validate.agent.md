@@ -184,7 +184,7 @@ In `deep`/`full` mode, command green status alone is insufficient. Validation MU
 | 2.13 | Traceability Guard | `traceability-guard.sh` | Every planned scenario maps to concrete tests and report evidence |
 | 2.14 | Changed-Spec Done Audit (prospective mode) | `done-spec-audit.sh --profile changed` | Changed/reopened/newly promoted done specs pass current gates |
 | 2.15 | Phase-Scope Coherence (G027) | Guard script Check 15 | execution claims / certified phases match certified completed scopes |
-| 2.16 | Implementation Reality Scan (G028) | `implementation-reality-scan.sh` | 0 violations |
+| 2.16 | Implementation Reality Scan (G028) | `bash bubbles/scripts/cli.sh scan {FEATURE_DIR} --verbose` | Direct `BSEC1`, valid `BPS1`, exact candidate epoch, 0 violations |
 | 2.17 | Artifact Freshness Guard (G052) | `artifact-freshness-guard.sh` | Superseded content isolated; superseded scopes non-executable |
 | 2.18 | Implementation Delta Evidence (G053) | Guard script Check 13B | Report artifacts include git-backed implementation proof with non-artifact file paths |
 | 2.19 | Delivery Implementation Delta (G093) | Guard script Check 29B | Done-ceiling delivery has non-planning implementation/runtime/config/contract/test/docs delta outside `specs/` and `.specify/`, or lower-ceiling mode is exempt |
@@ -450,15 +450,26 @@ bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}
 
 #### 2C.7: Implementation Reality Scan (Gate G028)
 
-For implementation modes, run the source code reality scan to detect stub/fake/hardcoded data:
+For implementation modes, run the reality scan through the canonical privileged CLI boundary:
 
 ```bash
-bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
+bash bubbles/scripts/cli.sh scan {FEATURE_DIR} --verbose
 ```
 
 - Detects gateway handlers returning hardcoded vec![...] data instead of real service calls
 - Detects frontend hooks calling getSimulationData() or containing zero API/query/client transport signals
 - Detects prohibited simulation helpers (seeded_pick/seeded_range) in production Rust code
+- `cli.sh scan` and transition-guard Check 16 MUST enter `privileged-bash-entry-v1` directly through `/usr/bin/env -i`, `BUBBLES_SECURITY_ENTRY_MODE=direct`, and `/bin/bash -p` before scanner module sourcing
+- Direct raw scanner invocation is compatibility-only. Its `compat-reexec` path cannot prove pre-boundary cleanliness and cannot satisfy this validation step
+- Require complete `BSEC1` and `BPS1` evidence. Also require `root-protected-perl-supervisor-v1`, `root-protected-native-python-v1`, `PYSEC1`, `PYMOD1`, and `SCS1`
+- Bind the evidence to the exact clean immutable candidate under review. For BUG-039 Scope 2, require epoch `privileged-native-supervision-v2` and current identifiers `SEC-R1`, `SEC-R2`, `HAR-R1`, `HAR-R2`, and `HAR-R3`
+- Verify Perl owns one direct worker until `waitpid` reaps it.
+- Require `BPS1` after reap. The worker must never inherit the supervisor control descriptor.
+- Verify the fixed 30-second wall, two-second grace, output limits, signal ownership, and numeric status ownership.
+- Worker text, pipe EOF, and descriptor-holding descendants must not decide completion.
+- Accept no recursive descendant-containment claim. Accept no replay of raw worker output, environment values, or PIDs in diagnostics
+- Missing or untrusted fixed `/usr/bin/perl` must fail closed as `SUPERVISOR_UNAVAILABLE` or `SUPERVISOR_UNTRUSTED`.
+- Require a root-protected `/usr/bin/perl` plus an authenticated Python toolchain. Never permit fallback or bypass remediation.
 - If violations found → validation FAILS for implementation completeness
 - Record the full output in the validation report
 
@@ -524,7 +535,7 @@ bash bubbles/scripts/handoff-cycle-check.sh {FEATURE_DIR}
 | Impact-Aware Validation Plan | `bash bubbles/scripts/test-impact-plan.sh --changed-file-list <changed-files.txt>` | [actual] | ✅/❌/⚪ |
 | Trace Contract Guard | `bash bubbles/scripts/trace-contract-guard.sh --workflow <workflow-name> --trace-output <trace-log-path>` | [actual] | ✅/❌/⚪ |
 | Changed-Spec Done Audit | `bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}` | [actual] | ✅/❌/⚪ |
-| Implementation Reality Scan | `bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose` | [actual] | ✅/❌ |
+| Implementation Reality Scan | `bash bubbles/scripts/cli.sh scan {FEATURE_DIR} --verbose` | [actual] | ✅/❌ |
 | Artifact Freshness Guard | `bash bubbles/scripts/artifact-freshness-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Implementation Delta Evidence | `bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Handoff Cycle Check | `bash bubbles/scripts/handoff-cycle-check.sh {FEATURE_DIR}` | [actual] | ✅/❌/⚪ |

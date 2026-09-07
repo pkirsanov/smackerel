@@ -176,6 +176,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | Recipe | Problem → Solution |
 |--------|-------------------|
 | [Coordinate Runtime Leases](runtime-coordination.md) | "Parallel sessions might share or collide on Docker/Compose stacks" |
+| [Research And Admission Runtime](research-and-admission-runtime.md) | "I need immutable research evidence or measured dispatch admission without confusing either with action authorization" |
 | [Bookend Phases](bookend-phases.md) | "Long workflows leak containers, leases, and half-applied state when they exit early" |
 | [Check Status](check-status.md) | "What's the state of my current work?" |
 | [End of Day](end-of-day.md) | "I'm done for today, need to hand off context" |

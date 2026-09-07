@@ -33,6 +33,15 @@
 # Usage:
 #   bash bubbles/scripts/micro-fix-admission.sh <bugDir>
 #   bash bubbles/scripts/micro-fix-admission.sh --registry   # print the contract
+#   bash bubbles/scripts/micro-fix-admission.sh --resolve-form <bugDir>
+#
+# --resolve-form (BUG-041) is a side-effect-free VERDICT CHANNEL. It prints
+# exactly one line, `form=compact` or `form=full`, and exits 0. It exists
+# because the plain exit code cannot answer the question: this script exits 0
+# for BOTH outcomes -- an admitted compact packet and an escalated full packet
+# are both exit 0, because escalation is a routing decision, not a failure.
+# In this mode normal stdout is discarded and the outcome logger is suppressed,
+# so a caller (artifact-lint.sh) can ask the question without mutating anything.
 #
 # Exit codes:
 #   0 = the bug is on the full packet, or it is on the compact packet and conforms
@@ -49,9 +58,14 @@ usage() {
   cat <<'USAGE'
 usage: micro-fix-admission.sh <bugDir>
        micro-fix-admission.sh --registry
+       micro-fix-admission.sh --resolve-form <bugDir>
 
 Resolves the packet route for a bug and enforces the compact packet's admission
 conditions and preserved obligations.
+
+--resolve-form prints one line, `form=compact` or `form=full`, exits 0, writes
+no outcome log and mutates nothing. It exists because the plain exit code is 0
+for BOTH routes, so it cannot carry the verdict.
 
 The compact packet is the DEFAULT route (IMP-047 S-D). A bug answering every
 admission condition admissibly uses it; any failed condition escalates
@@ -83,6 +97,14 @@ registry_admit_when() {
     f && /^  - id:/{exit}
   ' "$REGISTRY"
 }
+
+# BUG-041: --resolve-form is consumed BEFORE the flag dispatch below, so the
+# bugDir argument reaches the normal code path unchanged.
+RESOLVE_FORM=0
+if [[ ${1:-} == "--resolve-form" ]]; then
+  RESOLVE_FORM=1
+  shift
+fi
 
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
 case "$1" in
@@ -119,6 +141,19 @@ BUG_DIR="$1"
 STATE="$BUG_DIR/state.json"
 BUG_MD="$BUG_DIR/bug.md"
 
+# In --resolve-form mode every informational line is discarded and the single
+# verdict is written to fd 3. Suppressing the channel structurally beats
+# guarding each printf: a printf added later cannot leak into the verdict.
+if [[ "$RESOLVE_FORM" -eq 1 ]]; then
+  exec 3>&1 1> /dev/null
+fi
+
+verdict() {
+  [[ "$RESOLVE_FORM" -eq 1 ]] || return 0
+  printf 'form=%s\n' "$1" >&3
+  exit 0
+}
+
 # --- route resolution (IMP-047 S-D: the compact packet is the DEFAULT) -------
 #
 # The compact route used to require an explicit `"packet": "micro"` opt-in,
@@ -151,6 +186,8 @@ fi
 log_route() {
   local route="$1" resolution="$2" failed="${3:-}"
   local logger="$SCRIPT_DIR/micro-fix-outcome-log.sh"
+  # --resolve-form answers a question; it must not record an outcome.
+  [[ "$RESOLVE_FORM" -eq 0 ]] || return 0
   [[ -f "$logger" ]] || return 0
   bash "$logger" route --bug "$BUG_DIR" --route "$route" \
     --resolution "$resolution" --failed "$failed" 2>/dev/null || true
@@ -174,13 +211,21 @@ failed_ids="${failed_ids# }"
 if [[ "$declared_packet" == "full" ]]; then
   printf '[%s] %s declares packet: full - nothing to enforce.\n' "$NAME" "$BUG_DIR"
   log_route full declared
+  verdict full
   exit 0
+fi
+
+# A DECLARED compact packet whose conditions fail escalates too. Without this
+# the declaration would be the override flag the registry sets to `none`.
+if [[ -n "$declared_packet" ]] && [[ -n "$failed_ids" ]]; then
+  verdict full
 fi
 
 if [[ -z "$declared_packet" ]]; then
   if [[ "$answered" -eq 0 ]]; then
     printf '[%s] %s answers no admission condition - it uses the full bug packet.\n' "$NAME" "$BUG_DIR"
     log_route full unassessed
+    verdict full
     exit 0
   fi
   if [[ -n "$failed_ids" ]]; then
@@ -188,6 +233,7 @@ if [[ -z "$declared_packet" ]]; then
       "$NAME" "$BUG_DIR" "$failed_ids"
     printf '[%s] Escalation is mechanical. There is no reviewer discretion and no override flag.\n' "$NAME"
     log_route full escalated "$failed_ids"
+    verdict full
     exit 0
   fi
   printf '[%s] %s passes every admission condition - the COMPACT packet is the default route.\n' "$NAME" "$BUG_DIR"
@@ -256,6 +302,7 @@ done
 if [[ "$refusals" -eq 0 ]]; then
   printf '[%s] admitted: compact packet is proportionate for this defect.\n' "$NAME"
   log_route compact "${declared_packet:-default}"
+  verdict compact
   exit 0
 fi
 
@@ -263,4 +310,5 @@ printf '\n[%s] %d refusal(s). This bug uses the FULL packet (%s).\n' \
   "$NAME" "$refusals" "$(awk '/^escalation:/{e=1;next} e && /^  target:/{print $2;exit}' "$REGISTRY")"
 printf '[%s] Fix the bug artifacts or escalate. There is no override flag.\n' "$NAME"
 log_route full refused "$failed_ids"
+verdict full
 exit 1

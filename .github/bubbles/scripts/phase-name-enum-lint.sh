@@ -127,26 +127,39 @@ scanned=0
 while IFS= read -r sf; do
   [[ -n "$sf" ]] || continue
   scanned=$((scanned + 1))
+  state_phases="$(python3 - "$sf" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    document = json.load(handle)
+
+def walk(value):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in ("currentPhase", "phase") and isinstance(child, str):
+                print(child)
+            elif key in ("phasesExecuted", "completedPhaseClaims") and isinstance(child, list):
+                for phase in child:
+                    if isinstance(phase, str):
+                        print(phase)
+            walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            walk(child)
+
+walk(document)
+PY
+  )" || {
+    printf 'phase-name-enum-lint: invalid state JSON: %s\n' "$sf" >&2
+    exit 1
+  }
   while IFS= read -r raw; do
     [[ -n "$raw" ]] || continue
     observed="$observed$raw"$'\n'
-  done < <(grep -oE '"(currentPhase|phase)"[[:space:]]*:[[:space:]]*"[^"]*"' "$sf" 2>/dev/null |
-    sed 's/.*:[[:space:]]*"//; s/"$//')
-  while IFS= read -r raw; do
-    [[ -n "$raw" ]] || continue
-    observed="$observed$raw"$'\n'
-  done < <(awk '
-    /"(phasesExecuted|completedPhaseClaims)"[[:space:]]*:[[:space:]]*\[/ { ina = 1 }
-    ina {
-      line = $0
-      while (match(line, /"[a-zA-Z][a-zA-Z0-9_-]*"/)) {
-        tok = substr(line, RSTART + 1, RLENGTH - 2)
-        if (tok != "phasesExecuted" && tok != "completedPhaseClaims") print tok
-        line = substr(line, RSTART + RLENGTH)
-      }
-      if (index($0, "]") > 0) ina = 0
-    }
-  ' "$sf" 2>/dev/null)
+  done <<EOF
+$state_phases
+EOF
 done <<EOF
 $state_files
 EOF

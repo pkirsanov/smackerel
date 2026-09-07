@@ -49,6 +49,13 @@ set -uo pipefail
 #   S29 later phase with open prerequisite                        → exit 1
 #   S30 later phase with delivered prerequisite                   → exit 0
 #   S31 structural mode with open prerequisite                    → exit 0
+#   S32 validate recorded only in a provenance object             → exit 0
+#   S33 mixed certification array without validate                → exit 1
+#   S34 validate after a provenance object                        → exit 0
+#   S35 top-level done diverges from explicit certification       → exit 1
+#   S36 legacy validate cannot override explicit certification    → exit 1
+#   S37 coherent explicit v3 certification                        → exit 0
+#   S38 legacy done+validate with no certification object         → exit 0
 # Reference: improvements/IMP-006-release-delivery-reconciliation.md
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -148,6 +155,28 @@ mk_spec() {
 EOF
 }
 
+# mk_spec_state_json <repo> <specpath> <state-json>
+# Certification-authority fixtures stay data-only. The real G101 guard owns
+# every delivery decision exercised below.
+mk_spec_state_json() {
+  local repo="$1" specpath="$2" state_json="$3"
+  local dir="$repo/$specpath"
+  mkdir -p "$dir"
+  printf '%s\n' "$state_json" >"$dir/state.json"
+  if ! jq -e . "$dir/state.json" >/dev/null 2>&1; then
+    echo "selftest: invalid state fixture for $specpath" >&2
+    exit 2
+  fi
+}
+
+require_fixture_shape() {
+  local state_json="$1" query="$2" desc="$3"
+  if ! jq -e "$query" "$state_json" >/dev/null 2>&1; then
+    echo "selftest: fixture setup failure: $desc" >&2
+    exit 2
+  fi
+}
+
 # mk_spec_blocked <repo> <specpath> <reason>
 mk_spec_blocked() {
   local repo="$1" specpath="$2" reason="$3"
@@ -211,6 +240,75 @@ expect_output_contains() {
     pass "$desc"
   else
     bad "$desc (missing output: $needle)"
+  fi
+}
+
+expect_not_delivered() {
+  local desc="$1"
+  local observed="NO-DELIVERY-ROW"
+  case "$RUN_OUTPUT" in
+    *NOT-DELIVERED*) observed="NOT-DELIVERED" ;;
+    *DELIVERED*) observed="DELIVERED" ;;
+  esac
+  if [[ "$RC" -eq 1 && "$observed" == "NOT-DELIVERED" ]]; then
+    pass "$desc"
+  else
+    bad "$desc (want rc=1 and NOT-DELIVERED, got rc=$RC and $observed)"
+  fi
+}
+
+assert_g101_comment_truth() {
+  local source="${BASH_SOURCE[0]}"
+  local desc="BUG-032 test comments describe current Check 43 and G101 assertion groups"
+  local line="" comment_window=""
+  local assurance_comment=0 assurance_sequence=0
+  local prerequisite_comment=0 prerequisite_sequence=0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      "# S26 —"*)
+        if [[ "$comment_window" == *"S26 proves the refusal"* \
+          && "$comment_window" == *"S27 proves it is NOT a"* \
+          && "$comment_window" == *"S28 proves it is classified as delivery"* ]]; then
+          assurance_comment=1
+          assurance_sequence=1
+        fi
+        ;;
+      "# S27 —"*)
+        [[ "$assurance_sequence" -eq 1 ]] && assurance_sequence=2
+        ;;
+      "# S28 —"*)
+        [[ "$assurance_sequence" -eq 2 ]] && assurance_sequence=3
+        ;;
+      "# S29 —"*)
+        if [[ "$comment_window" == *"S29 proves the block"* \
+          && "$comment_window" == *"S30 proves it is not a blanket refusal"* \
+          && "$comment_window" == *"S31 proves it is a delivery assertion"* ]]; then
+          prerequisite_comment=1
+          prerequisite_sequence=1
+        fi
+        ;;
+      "# S30 —"*)
+        [[ "$prerequisite_sequence" -eq 1 ]] && prerequisite_sequence=2
+        ;;
+      "# S31 —"*)
+        [[ "$prerequisite_sequence" -eq 2 ]] && prerequisite_sequence=3
+        ;;
+    esac
+
+    case "$line" in
+      "# ----------------------------------------------------------------------------") comment_window="" ;;
+      \#*) comment_window="${comment_window}"$'\n'"$line" ;;
+      "") : ;;
+      *) comment_window="" ;;
+    esac
+  done <"$source"
+
+  if [[ "$assurance_comment" -eq 1 && "$assurance_sequence" -eq 3 \
+    && "$prerequisite_comment" -eq 1 && "$prerequisite_sequence" -eq 3 ]]; then
+    pass "$desc"
+  else
+    bad "$desc (assurance comment/sequence=$assurance_comment/$assurance_sequence, prerequisite comment/sequence=$prerequisite_comment/$prerequisite_sequence)"
   fi
 }
 
@@ -429,9 +527,9 @@ expect_rc 2 "S25 unknown --mode is a usage error"
 
 # ----------------------------------------------------------------------------
 # assurance=implemented must rest on a mode that actually implements.
-# These three cases are a set: S18 proves the refusal, S19 proves it is NOT a
-# blanket ban on assurance, and S20 proves it is classified as delivery rather
-# than grammar. Without S19 the check could be satisfied by refusing everything.
+# These three cases are a set: S26 proves the refusal, S27 proves it is NOT a
+# blanket ban on assurance, and S28 proves it is classified as delivery rather
+# than grammar. Without S27 the check could be satisfied by refusing everything.
 
 # S26 — planning-only terminal + assurance=implemented → 1
 R26="$(new_repo s26)"
@@ -458,9 +556,10 @@ run_guard --repo-root "$R28" --phase mvp --mode structural
 expect_rc 0 "S28 structural does not fail planning-only assurance (delivery concern)"
 
 # ----------------------------------------------------------------------------
-# An OPEN PREREQUISITE blocks the requested phase. Also a set: S21 proves the
-# block, S22 proves it is not a blanket refusal of any phase that declares a
-# dependsOn, and S23 proves it is a delivery assertion rather than grammar.
+# An OPEN PREREQUISITE blocks the requested phase. Also a set:
+# S29 proves the block, S30 proves it is not a blanket refusal of any phase that
+# declares a dependsOn, and S31 proves it is a delivery assertion rather than
+# grammar.
 
 # S29 — later phase is asserted while its prerequisite is still open -> 1
 R29="$(new_repo s29)"
@@ -539,6 +638,74 @@ mk_spec_cert_mixed "$R34" specs/100-lateval "done" \
     "validate"]'
 run_guard --repo-root "$R34" --phase mvp
 expect_rc 0 "S34 validate after an object element is still seen (order independence)"
+
+# ----------------------------------------------------------------------------
+# BUG-032 SCN-032-026: an explicit v3 certification object is authoritative.
+# Both conflicts stay paired with coherent-v3 and genuinely absent-certification
+# legacy controls so a blanket refusal cannot satisfy the regression.
+
+# S35 — top-level done cannot override an explicit in-progress certification.
+R35="$(new_repo s35)"
+mk_features "$R35" mvp true \
+  "bubbles:feature id=mirror-conflict spec=specs/101-mirror-conflict delivery=required"
+mk_spec_state_json "$R35" specs/101-mirror-conflict \
+  '{"version":3,"specId":"101-mirror-conflict","status":"done","workflowMode":"full-delivery","certification":{"status":"in_progress","certifiedCompletedPhases":["validate"]}}'
+require_fixture_shape "$R35/specs/101-mirror-conflict/state.json" \
+  '.version == 3 and .status == "done" and .certification.status == "in_progress" and ((.certification.certifiedCompletedPhases | index("validate")) != null)' \
+  "S35 must carry divergent explicit v3 status mirrors with certified validate"
+run_guard --repo-root "$R35" --phase mvp
+expect_not_delivered "BUG-032 G101 rejects explicit status-mirror divergence"
+
+# S36 — legacy completedPhases cannot certify an explicit in-progress object.
+R36="$(new_repo s36)"
+mk_features "$R36" mvp true \
+  "bubbles:feature id=legacy-phase-conflict spec=specs/102-legacy-phase-conflict delivery=required"
+mk_spec_state_json "$R36" specs/102-legacy-phase-conflict \
+  '{"version":3,"specId":"102-legacy-phase-conflict","status":"done","workflowMode":"full-delivery","completedPhases":["validate"],"certification":{"status":"in_progress","certifiedCompletedPhases":[]}}'
+require_fixture_shape "$R36/specs/102-legacy-phase-conflict/state.json" \
+  '.version == 3 and .status == "done" and .certification.status == "in_progress" and (.certification.certifiedCompletedPhases | length) == 0 and ((.completedPhases | index("validate")) != null)' \
+  "S36 must isolate legacy validate beneath an explicit uncertified v3 object"
+run_guard --repo-root "$R36" --phase mvp
+expect_not_delivered "BUG-032 G101 gives explicit v3 certification precedence over legacy phases"
+
+# S37 — coherent explicit v3 done plus certified validate remains delivered.
+R37="$(new_repo s37)"
+mk_features "$R37" mvp true \
+  "bubbles:feature id=coherent-v3 spec=specs/103-coherent-v3 delivery=required"
+mk_spec_state_json "$R37" specs/103-coherent-v3 \
+  '{"version":3,"specId":"103-coherent-v3","status":"done","workflowMode":"full-delivery","certification":{"status":"done","certifiedCompletedPhases":["validate"]}}'
+require_fixture_shape "$R37/specs/103-coherent-v3/state.json" \
+  '.version == 3 and .status == "done" and .certification.status == "done" and ((.certification.certifiedCompletedPhases | index("validate")) != null)' \
+  "S37 must carry coherent explicit v3 done and certified validate"
+run_guard --repo-root "$R37" --phase mvp
+bug032_coherent_rc="$RC"
+bug032_coherent_output="$RUN_OUTPUT"
+
+# S38 — documented compatibility applies only when certification is absent.
+R38="$(new_repo s38)"
+mk_features "$R38" mvp true \
+  "bubbles:feature id=legacy-no-certification spec=specs/104-legacy-no-certification delivery=required"
+mk_spec_state_json "$R38" specs/104-legacy-no-certification \
+  '{"version":2,"specId":"104-legacy-no-certification","status":"done","workflowMode":"full-delivery","completedPhases":["validate"]}'
+require_fixture_shape "$R38/specs/104-legacy-no-certification/state.json" \
+  '.version == 2 and .status == "done" and (has("certification") | not) and ((.completedPhases | index("validate")) != null)' \
+  "S38 must genuinely omit the certification object and retain legacy validate"
+run_guard --repo-root "$R38" --phase mvp
+bug032_legacy_rc="$RC"
+bug032_legacy_output="$RUN_OUTPUT"
+
+bug032_controls_desc="BUG-032 G101 preserves coherent v3 and no-certification legacy controls"
+if [[ "$bug032_coherent_rc" -eq 0 && "$bug032_legacy_rc" -eq 0 \
+  && "$bug032_coherent_output" == *DELIVERED* \
+  && "$bug032_coherent_output" != *NOT-DELIVERED* \
+  && "$bug032_legacy_output" == *DELIVERED* \
+  && "$bug032_legacy_output" != *NOT-DELIVERED* ]]; then
+  pass "$bug032_controls_desc"
+else
+  bad "$bug032_controls_desc (coherent rc=$bug032_coherent_rc, legacy rc=$bug032_legacy_rc)"
+fi
+
+assert_g101_comment_truth
 
 # ----------------------------------------------------------------------------
 echo ""

@@ -90,11 +90,17 @@ write_session_json() {
 run_guard() {
   local root="$1"
   local spec_dir="$2"
+  local session_id="${3:-}"
   local stdout_file="$WORKSPACE/stdout.last"
   local stderr_file="$WORKSPACE/stderr.last"
+  local guard_args=("$spec_dir")
+
+  if [[ -n "$session_id" ]]; then
+    guard_args+=(--session-id "$session_id")
+  fi
 
   set +e
-  BUBBLES_REPO_ROOT="$root" bash "$GUARD_SCRIPT" "$spec_dir" \
+  BUBBLES_REPO_ROOT="$root" bash "$GUARD_SCRIPT" "${guard_args[@]}" \
     > "$stdout_file" \
     2> "$stderr_file"
   local rc=$?
@@ -158,7 +164,7 @@ S0_ROOT="$WORKSPACE/s0"
 stage_repo_root "$S0_ROOT" 10
 write_session_json "$S0_ROOT" '{"convergenceLoops": []}'
 
-run_guard "$S0_ROOT" "specs/900-convergence-fixture" >/dev/null
+run_guard "$S0_ROOT" "specs/900-convergence-fixture" "host-current" >/dev/null
 
 assert_exit 0 "S0 exit code"
 assert_stdout_contains "PASS Gate G082" "S0 PASS marker on stdout"
@@ -175,6 +181,7 @@ stage_repo_root "$S1_ROOT" 10
 write_session_json "$S1_ROOT" '{
   "convergenceLoops": [
     {
+      "hostSessionId": "host-current",
       "specDir": "specs/900-convergence-fixture",
       "agent": "bubbles.workflow",
       "iterationCount": 11,
@@ -184,7 +191,7 @@ write_session_json "$S1_ROOT" '{
   ]
 }'
 
-run_guard "$S1_ROOT" "specs/900-convergence-fixture" >/dev/null
+run_guard "$S1_ROOT" "specs/900-convergence-fixture" "host-current" >/dev/null
 
 assert_exit 1 "S1 exit code (cap exceeded)"
 assert_stderr_contains "G082" "S1 stderr names Gate G082"
@@ -204,6 +211,7 @@ stage_repo_root "$S2_ROOT" 10
 write_session_json "$S2_ROOT" '{
   "convergenceLoops": [
     {
+      "hostSessionId": "host-current",
       "specDir": "specs/900-convergence-fixture",
       "agent": "bubbles.workflow",
       "iterationCount": 10,
@@ -213,7 +221,7 @@ write_session_json "$S2_ROOT" '{
   ]
 }'
 
-run_guard "$S2_ROOT" "specs/900-convergence-fixture" >/dev/null
+run_guard "$S2_ROOT" "specs/900-convergence-fixture" "host-current" >/dev/null
 
 assert_exit 0 "S2 exit code (cap exactly hit)"
 assert_stdout_contains "PASS Gate G082" "S2 PASS marker on stdout"
@@ -230,7 +238,7 @@ stage_repo_root "$S3_ROOT" 10
 # Intentionally malformed JSON.
 write_session_json "$S3_ROOT" '{"convergenceLoops": ['
 
-run_guard "$S3_ROOT" "specs/900-convergence-fixture" >/dev/null
+run_guard "$S3_ROOT" "specs/900-convergence-fixture" "host-current" >/dev/null
 
 assert_exit 2 "S3 exit code (malformed JSON)"
 assert_stderr_contains "convergence-cap-guard" "S3 stderr has diagnostic prefix"
@@ -248,6 +256,7 @@ stage_repo_root "$S4_ROOT" 10
 write_session_json "$S4_ROOT" '{
   "convergenceLoops": [
     {
+      "hostSessionId": "host-current",
       "specDir": "specs/999-other-spec",
       "agent": "bubbles.workflow",
       "iterationCount": 99,
@@ -257,10 +266,62 @@ write_session_json "$S4_ROOT" '{
   ]
 }'
 
-run_guard "$S4_ROOT" "specs/900-convergence-fixture" >/dev/null
+run_guard "$S4_ROOT" "specs/900-convergence-fixture" "host-current" >/dev/null
 
 assert_exit 0 "S4 exit code (other-spec entry isolated)"
 assert_stdout_contains "observed=0" "S4 ignores entries for non-matching specDir"
+
+# =============================================================================
+# Scenario SCN-B037-012: exact-session and exact-spec maximum
+# =============================================================================
+
+note "Scenario SCN-B037-012: G082 isolates the authoritative session and exact target spec"
+
+S5_ROOT="$WORKSPACE/s5"
+stage_repo_root "$S5_ROOT" 10
+write_session_json "$S5_ROOT" '{
+  "convergenceLoops": [
+    {
+      "hostSessionId": "host-current",
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.workflow",
+      "iterationCount": 4,
+      "lastIterationAt": "2026-09-01T10:00:00Z",
+      "cappedAt": null
+    },
+    {
+      "hostSessionId": "host-current",
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.goal",
+      "iterationCount": 7,
+      "lastIterationAt": "2026-09-01T10:01:00Z",
+      "cappedAt": null
+    },
+    {
+      "hostSessionId": "host-old",
+      "specDir": "specs/900-convergence-fixture",
+      "agent": "bubbles.goal",
+      "iterationCount": 88,
+      "lastIterationAt": "2026-09-01T09:00:00Z",
+      "cappedAt": null
+    },
+    {
+      "hostSessionId": "host-current",
+      "specDir": "specs/archive/900-convergence-fixture",
+      "agent": "bubbles.goal",
+      "iterationCount": 99,
+      "lastIterationAt": "2026-09-01T10:02:00Z",
+      "cappedAt": null
+    }
+  ]
+}'
+
+run_guard "$S5_ROOT" "specs/900-convergence-fixture" "host-current" >/dev/null
+
+assert_exit 0 "SCN-B037-012 exact-session target-spec exit"
+assert_stdout_contains "observed=7" "SCN-B037-012 retains the current target-spec maximum"
+assert_stdout_contains 'G082 status=PASS exit=0 session="host-current" spec="specs/900-convergence-fixture"' \
+  "SCN-B037-012 emits the closed G082 PASS record"
 
 # =============================================================================
 # Final verdict

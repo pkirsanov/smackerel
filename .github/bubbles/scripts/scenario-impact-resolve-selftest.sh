@@ -38,6 +38,13 @@ make_case() {
   printf '%s' "$root"
 }
 
+install_v2_schema() {
+  local root="$1"
+  mkdir -p "$root/bubbles/schemas"
+  cp "$SCRIPT_DIR/../schemas/scenario-manifest-v2.schema.json" \
+    "$root/bubbles/schemas/scenario-manifest-v2.schema.json"
+}
+
 run_impact() {
   local dir="$1"; shift
   set +e
@@ -45,6 +52,13 @@ run_impact() {
   RC=$?
   set -e
 }
+
+if grep -Fq 'scenario-reference-reader.py' "$TARGET" \
+  && ! grep -Fq 'json.load(fh)' "$TARGET"; then
+  ok "S1 manifest semantics are delegated to the canonical reader"
+else
+  bad "S1 canonical reader ownership"
+fi
 
 CERT='"evidenceRefs":["report.md#scn-1"]'
 
@@ -174,6 +188,120 @@ if [[ "$RC" -eq 1 ]] && printf '%s' "$OUT" | grep -q 'REVALIDATE: SCN-001-001'; 
   ok "A6 a bare-list manifest still marks the impacted scenario"
 else
   bad "A6 bare-list envelope" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- V1/V2 controls and closed-parser adversaries ---------------------------
+R="$(make_case v1 '{"schemaVersion":1,"scenarios":[{"scenarioId":"SCN-001-001","title":"t","requiredTestType":"unit","evidenceRefs":["report.md#v1"],"implementationRefs":["src/v1.ts"]}]}')"
+run_impact "$R" --changed src/v1.ts --format ids
+if [[ "$RC" -eq 1 && "$OUT" == "SCN-001-001" ]]; then
+  ok "V1 a valid v1 identity alias is normalized and preserves impact output"
+else
+  bad "V1 valid v1 control" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case v2 '{"schemaVersion":2,"scenarios":[{"id":"SCN-001-002","title":"t","requiredTestType":"unit","evidenceRefs":["report.md#v2"],"implementationRefs":["src/v2.ts"]}]}')"
+install_v2_schema "$R"
+run_impact "$R" --changed src/v2.ts --format ids
+if [[ "$RC" -eq 1 && "$OUT" == "SCN-001-002" ]]; then
+  ok "V2 a valid closed v2 manifest preserves impact output"
+else
+  bad "V2 valid v2 control" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a7 '{"schemaVersion":1,"schemaVersion":2,"scenarios":[]}')"
+run_impact "$R"
+if [[ "$RC" -eq 2 && "$OUT" == *"duplicate JSON member"* ]]; then
+  ok "A7 duplicate JSON members fail closed through the canonical reader"
+else
+  bad "A7 duplicate member" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+R="$(make_case a8 '{"schemaVersion":2,"unexpected":true,"scenarios":[]}')"
+install_v2_schema "$R"
+run_impact "$R"
+if [[ "$RC" -eq 2 && "$OUT" == *"Additional properties are not allowed"* ]]; then
+  ok "A8 strict-v2 unknown fields fail closed through the canonical reader"
+else
+  bad "A8 v2 closed object" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+READER_SHIM="$WORK/reader-failure-bin"
+mkdir -p "$READER_SHIM"
+REAL_PYTHON3="$(command -v python3)"
+cat >"$READER_SHIM/python3" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "${1:-}" == */scenario-reference-reader.py ]]; then
+  printf 'injected reader failure\n' >&2
+  exit 19
+fi
+exec "$REAL_PYTHON3" "$@"
+SHIM
+chmod +x "$READER_SHIM/python3"
+R="$(make_case a9 '{"schemaVersion":1,"scenarios":[]}')"
+set +e
+OUT="$(PATH="$READER_SHIM:$PATH" REAL_PYTHON3="$REAL_PYTHON3" bash "$TARGET" "$R" 2>&1)"
+RC=$?
+set -e
+if [[ "$RC" -eq 2 && "$OUT" == *"injected reader failure"* ]]; then
+  ok "A9 canonical reader failure is preserved and fails closed"
+else
+  bad "A9 reader failure" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- A10. projection larger than the process environment is transported ----
+# This payload exceeds common ARG_MAX/environment limits. The resolver must
+# carry the canonical reader projection out-of-band rather than exporting it.
+LARGE_ROOT="$WORK/a10"
+mkdir -p "$LARGE_ROOT"
+python3 - "$LARGE_ROOT/scenario-manifest.json" <<'PY'
+import json
+import sys
+
+scenarios = []
+for index in range(30000):
+    scenarios.append({
+        "id": f"SCN-900-{index:05d}",
+        "title": "large projection transport adversary",
+        "requiredTestType": "unit",
+        "evidenceRefs": [f"report.md#large-{index}"],
+        "implementationRefs": [f"src/large/component-{index}.ts"],
+    })
+with open(sys.argv[1], "w", encoding="utf-8") as manifest_file:
+    json.dump({"schemaVersion": 1, "scenarios": scenarios}, manifest_file)
+PY
+run_impact "$LARGE_ROOT" --changed src/large/component-29999.ts --format ids
+if [[ "$RC" -eq 1 && "$OUT" == "SCN-900-29999" ]]; then
+  ok "A10 a projection larger than the process environment resolves without env transport"
+else
+  bad "A10 large projection transport" "rc=$RC out=$(printf '%s' "$OUT" | tr '\n' '|')"
+fi
+
+# --- A11. replaced projection path is contained and fully cleaned ----------
+# An adversarial parser shim replaces the projection file after the reader
+# writes it. Cleanup must remove the replacement and displaced original while
+# never escaping the resolver-owned private directory.
+REPLACEMENT_TMP="$WORK/a11-tmp"
+REPLACEMENT_SHIM="$WORK/a11-bin"
+mkdir -p "$REPLACEMENT_TMP" "$REPLACEMENT_SHIM"
+cat >"$REPLACEMENT_SHIM/python3" <<'SHIM'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-" && "${2:-}" == */reference-projection.json ]]; then
+  mv "$2" "$2.displaced"
+  printf '{"replacement":true}\n' >"$2"
+fi
+exec "$REAL_PYTHON3" "$@"
+SHIM
+chmod +x "$REPLACEMENT_SHIM/python3"
+R="$(make_case a11 '{"schemaVersion":1,"scenarios":[]}')"
+set +e
+OUT="$(TMPDIR="$REPLACEMENT_TMP" PATH="$REPLACEMENT_SHIM:$PATH" REAL_PYTHON3="$REAL_PYTHON3" bash "$TARGET" "$R" 2>&1)"
+RC=$?
+set -e
+replacement_residue="$(find "$REPLACEMENT_TMP" -mindepth 1 -print)"
+if [[ "$RC" -eq 2 && -z "$replacement_residue" ]]; then
+  ok "A11 replacement of the projection path fails closed and leaves no owned temp residue"
+else
+  bad "A11 replacement-safe cleanup" "rc=$RC residue=$replacement_residue out=$(printf '%s' "$OUT" | tr '\n' '|')"
 fi
 
 # --- U1. usage ---------------------------------------------------------------

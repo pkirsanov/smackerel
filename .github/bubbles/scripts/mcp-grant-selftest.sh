@@ -244,6 +244,48 @@ if [[ -d "$AGENTS_SRC" ]]; then
   assert_eq "T13 all 5 restricted source agents end with a trailing newline" "0" "$nl_fail"
 fi
 
+# --- T14: identity comes from the primary checkout, not a linked worktree ---
+# A worktree's own basename would name the token after a throwaway directory,
+# diverging from the id install.sh registers in .vscode/mcp.json and from the
+# targetRepoSlug marker repository-binding uses to refuse foreign edits.
+if command -v git >/dev/null 2>&1; then
+  WT_REPO="$WORK/identity-fixture"
+  WT_LINKED="$WORK/throwaway-worktree"
+  mkdir -p "$WT_REPO/.github/bubbles/scripts"
+  cp "$SCRIPT_DIR/mcp-grant-reconcile.sh" "$WT_REPO/.github/bubbles/scripts/"
+  (
+    cd "$WT_REPO" || exit 1
+    git init -q .
+    git config user.email selftest@example.com
+    git config user.name selftest
+    git add -A
+    git commit -q -m "identity fixture"
+    git worktree add -q --detach "$WT_LINKED" HEAD
+  ) >/dev/null 2>&1 || true
+
+  if [[ -f "$WT_LINKED/.github/bubbles/scripts/mcp-grant-reconcile.sh" ]]; then
+    WT_TOKEN="$(
+      cd "$WT_LINKED" || exit 1
+      # shellcheck source=/dev/null
+      source .github/bubbles/scripts/mcp-grant-reconcile.sh
+      bubbles_mcp_server_token
+    )"
+    assert_eq "T14 linked worktree derives the token from the primary checkout" \
+      "bubbles-identity-fixture" "$WT_TOKEN"
+
+    PRIMARY_TOKEN="$(
+      cd "$WT_REPO" || exit 1
+      # shellcheck source=/dev/null
+      source .github/bubbles/scripts/mcp-grant-reconcile.sh
+      bubbles_mcp_server_token
+    )"
+    assert_eq "T14b primary checkout and its worktree agree on the token" \
+      "$PRIMARY_TOKEN" "$WT_TOKEN"
+  else
+    echo "  SKIP: T14 linked-worktree fixture unavailable"
+  fi
+fi
+
 echo "mcp-grant-selftest: ${pass} passed, ${fail} failed"
 [[ "$fail" -eq 0 ]] || exit 1
 echo "mcp-grant-selftest: PASS"

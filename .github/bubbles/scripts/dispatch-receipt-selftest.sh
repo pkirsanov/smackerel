@@ -178,6 +178,80 @@ record "$REPO" --occurrence-id 'implement#1' --agent bubbles.implement \
   --packet-file "$REPO/packet.txt" --dispatch-status TRANSPORT_TERMINATED
 assert_eq "explicit adapter=none: record exits 0" "$LAST_RC" "0"
 assert_eq "explicit adapter=none: zero records written" "$(store_count "$REPO")" "0"
+record "$REPO" --occurrence-id 'implement#1' --agent bubbles.implement \
+  --packet-file "$REPO/packet.txt" --dispatch-status TRANSPORT_TERMINATED \
+  --mbe-posture reference-enforce
+assert_eq "adapter=none: explicit reference enforcement refuses" "$LAST_RC" "3"
+assert_eq "adapter=none: refused enforcement writes no record" "$(store_count "$REPO")" "0"
+
+# Non-enforcing rollout postures never alter dispatch classification, action,
+# phase advancement, or exit status. Absent and explicit off are byte-identical.
+new_repo jsonl
+record "$REPO" --occurrence-id 'absent#1' --agent bubbles.implement \
+  --packet-file "$REPO/packet.txt" --dispatch-status NO_RESULT \
+  --started-at 2026-01-01T00:00:00Z --finished-at 2026-01-01T00:00:01Z
+absent_out="$LAST_OUT"
+absent_rc="$LAST_RC"
+rm -f "$(store_path "$REPO")"
+record "$REPO" --occurrence-id 'absent#1' --agent bubbles.implement \
+  --packet-file "$REPO/packet.txt" --dispatch-status NO_RESULT \
+  --started-at 2026-01-01T00:00:00Z --finished-at 2026-01-01T00:00:01Z \
+  --mbe-posture off
+assert_eq "rollout compatibility: absent and off output bytes match" "$LAST_OUT" "$absent_out"
+assert_eq "rollout compatibility: absent and off exit status match" "$LAST_RC" "$absent_rc"
+for posture in shadow advisory; do
+  rm -f "$(store_path "$REPO")"
+  record "$REPO" --occurrence-id 'absent#1' --agent bubbles.implement \
+    --packet-file "$REPO/packet.txt" --dispatch-status NO_RESULT \
+    --started-at 2026-01-01T00:00:00Z --finished-at 2026-01-01T00:00:01Z \
+    --mbe-posture "$posture"
+  assert_eq "rollout compatibility: $posture preserves exit status" "$LAST_RC" "$absent_rc"
+  assert_eq "rollout compatibility: $posture preserves action" "$(kv action)" "retry-identical-once"
+  assert_eq "rollout compatibility: $posture preserves advancement" "$(kv advance)" "refused"
+done
+
+new_repo jsonl
+printf '{}\n' > "$REPO/bad-mbe.json"
+record "$REPO" --occurrence-id 'implement#1' --agent bubbles.implement \
+  --packet-file "$REPO/packet.txt" --dispatch-status NO_RESULT \
+  --mbe-posture reference-enforce --mbe-store-root "$REPO" \
+  --mbe-context "$REPO/bad-mbe.json"
+assert_eq "reference enforcement: incoherent MBE graph refuses" "$LAST_RC" "3"
+assert_eq "reference enforcement: incoherent graph writes no receipt" "$(store_count "$REPO")" "0"
+
+new_repo jsonl
+mbe_store="$TMP_DIR/mbe-coherent-store"
+mbe_context="$REPO/mbe-context.json"
+if python3 "$SCRIPT_DIR/measured-budget-runtime-v2-selftest.py" \
+  --emit-fixture --store-root "$mbe_store" --context "$mbe_context"; then
+  record "$REPO" --occurrence-id 'implement#1' --agent bubbles.implement \
+    --packet-file "$REPO/packet.txt" --dispatch-status NO_RESULT \
+    --mbe-posture reference-enforce --mbe-store-root "$mbe_store" \
+    --mbe-context "$mbe_context"
+  assert_eq "reference enforcement: coherent MBE graph preserves receipt classification" "$LAST_RC" "1"
+  if grep -q '"mbe":{' "$(store_path "$REPO")"; then
+    pass "reference enforcement: coherent MBE references are carried into the receipt"
+  else
+    fail "reference enforcement: receipt must carry coherent MBE references"
+  fi
+else
+  fail "reference enforcement: coherent MBE fixture generation succeeds"
+fi
+
+new_repo jsonl
+mbe_hold_store="$TMP_DIR/mbe-hold-store"
+mbe_hold_context="$REPO/mbe-hold-context.json"
+if python3 "$SCRIPT_DIR/measured-budget-runtime-v2-selftest.py" \
+  --emit-fixture --hold --store-root "$mbe_hold_store" --context "$mbe_hold_context"; then
+  record "$REPO" --occurrence-id 'implement#1' --agent bubbles.implement \
+    --packet-file "$REPO/packet.txt" --dispatch-status NO_RESULT \
+    --mbe-posture reference-enforce --mbe-store-root "$mbe_hold_store" \
+    --mbe-context "$mbe_hold_context"
+  assert_eq "reference enforcement: unresolved hold refuses repeat dispatch" "$LAST_RC" "3"
+  assert_eq "reference enforcement: unresolved hold writes no receipt" "$(store_count "$REPO")" "0"
+else
+  fail "reference enforcement: unresolved-hold fixture generation succeeds"
+fi
 
 # A configured-but-unknown adapter fails LOUD rather than degrading to none: a
 # typo must not silently disable the control.

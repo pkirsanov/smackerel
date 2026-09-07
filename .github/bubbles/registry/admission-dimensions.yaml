@@ -1,0 +1,21 @@
+{
+  "contractType": "admission-dimension-registry",
+  "schemaVersion": 1,
+  "dimensions": [
+    {"name": "modelRequestCount", "unit": "requests", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "inputTokens", "unit": "tokens", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "outputTokens", "unit": "tokens", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "cacheWriteTokens", "unit": "tokens", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "cacheReadTokens", "unit": "tokens", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "providerCredits", "unit": "providerMinorUnits", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "monetaryMinorUnits", "unit": "currencyMinorUnits", "amountShape": "currency-scale-integer", "reservationRule": "trusted-bound"},
+    {"name": "subagentDispatches", "unit": "dispatches", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "webCalls", "unit": "calls", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "browserCalls", "unit": "calls", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "toolCalls", "unit": "calls", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "retainedResultBytes", "unit": "bytes", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "wallTimeMs", "unit": "milliseconds", "amountShape": "integer", "reservationRule": "trusted-bound-no-release"},
+    {"name": "retries", "unit": "attempts", "amountShape": "integer", "reservationRule": "trusted-bound"},
+    {"name": "concurrency", "unit": "activePermits", "amountShape": "integer", "reservationRule": "lease"}
+  ]
+}

@@ -14,6 +14,8 @@
 # Considers a doc "indexed" if its basename appears as a markdown link
 # target in at least one well-known index:
 #   - README.md
+#   - copilot-instructions.md (the governance root of a downstream install,
+#     where the repo root is .github/ and no README.md exists)
 #   - agents/bubbles_shared/agent-common.md
 #   - agents/bubbles_shared/scope-workflow.md
 #   - docs/governance-index.md (the canonical roll-up index)
@@ -138,6 +140,8 @@ push_index() {
 }
 
 push_index "README.md"
+# A downstream repo root is .github/, which carries no README.md but always this.
+push_index "copilot-instructions.md"
 push_index "agents/bubbles_shared/agent-common.md"
 push_index "agents/bubbles_shared/scope-workflow.md"
 push_index "docs/governance-index.md"

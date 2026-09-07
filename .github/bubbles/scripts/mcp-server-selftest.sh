@@ -436,7 +436,10 @@ else
   fail "T15: prompts/list missing expected prompt catalog: $prompts_reply"
 fi
 
-# T16: prompts/get returns the workflow prompt body as a user message.
+# T16: prompts/get inlines the bound agent persona (not just its name) plus
+# the prompt body — this is the actual fix, not a placeholder pointer, because
+# only VS Code Copilot Chat's native agent mode resolves `agent:` frontmatter
+# on its own; every other MCP client needs the persona content handed to it.
 prompt_reply="$(get 15)"
 ok="$(echo "$prompt_reply" | python3 -c "
 import json,sys
@@ -444,12 +447,43 @@ r = json.load(sys.stdin)
 res = r.get('result') or {}
 messages = res.get('messages') or []
 text = (((messages[0] if messages else {}).get('content') or {}).get('text') or '')
-print('YES' if ('Use agent: bubbles.workflow' in text and 'workflow orchestrator' in text) else 'NO')
+checks = [
+    '# Agent persona: bubbles.workflow' in text,
+    '**Name:** bubbles.workflow' in text,   # from agents/bubbles.workflow.agent.md body, not just a name
+    'workflow orchestrator' in text,        # from the prompt body itself
+    '## Task' in text,
+]
+print('YES' if all(checks) else 'NO')
 ")"
 if [[ "$ok" == "YES" ]]; then
-  pass "T16: prompts/get bubbles.workflow returns user message with agent + prompt body"
+  pass "T16: prompts/get bubbles.workflow inlines the agent persona body, not just its name"
 else
-  fail "T16: prompts/get bubbles.workflow did not return expected prompt: $prompt_reply"
+  fail "T16: prompts/get bubbles.workflow did not inline the persona: $prompt_reply"
+fi
+
+# T30: the inlined agent persona carries its own frontmatter verbatim
+# (including nested `handoffs:` entries a naive key:value parser would
+# mangle) plus an explicit disclaimer that tools:/handoffs: are guidance
+# only here, not an enforced restriction or an automatic dispatch the way
+# VS Code Copilot's agent mode makes them.
+ok="$(echo "$prompt_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+res = r.get('result') or {}
+messages = res.get('messages') or []
+text = (((messages[0] if messages else {}).get('content') or {}).get('text') or '')
+checks = [
+    'handoffs:' in text,
+    'label: Business Analysis' in text,   # a nested handoffs list entry, proving verbatim passthrough
+    'guidance' in text.lower(),
+    'not an enforced' in text.lower(),
+]
+print('YES' if all(checks) else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T30: inlined persona carries verbatim frontmatter (incl. nested handoffs) + a no-enforcement disclaimer"
+else
+  fail "T30: inlined persona missing verbatim frontmatter or disclaimer: $prompt_reply"
 fi
 
 # T17: prompts/get unknown prompt returns ERR_PROMPT_NOT_FOUND.

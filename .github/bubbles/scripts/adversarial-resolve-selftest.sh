@@ -460,7 +460,7 @@ run_resolver() {
   RUN_STDOUT=""
   RUN_STDERR=""
   RUN_STATUS=0
-  if RUN_STDOUT="$(env -i PATH="$TEST_PATH" "$@" 2>"$stderr_file")"; then
+  if RUN_STDOUT="$(/usr/bin/env -i PATH="$TEST_PATH" "$@" 2>"$stderr_file")"; then
     RUN_STATUS=0
   else
     RUN_STATUS=$?
@@ -1770,7 +1770,7 @@ run_directive_file_with_timeout() {
   RUN_STDERR=""
   RUN_STATUS=0
   if bubbles_run_with_timeout "$seconds" \
-    env -i PATH="$TEST_PATH" TMPDIR="$parser_tmp" \
+    /usr/bin/env -i PATH="$TEST_PATH" TMPDIR="$parser_tmp" \
     bash "$directive_runner" "$directive_file" "$RESOLVE" "$empty_repo" \
     > "$stdout_file" 2> "$stderr_file"; then
     RUN_STATUS=0

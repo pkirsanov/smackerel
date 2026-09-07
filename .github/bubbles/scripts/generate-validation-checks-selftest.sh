@@ -50,7 +50,7 @@ WORK="$(mktemp -d)" || exit 2
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
 FIX="$WORK/repo"
-mkdir -p "$FIX/bubbles/scripts" "$FIX/bubbles/registry"
+mkdir -p "$FIX/bubbles/scripts" "$FIX/bubbles/registry" "$FIX/bubbles/schemas"
 
 # A miniature framework: one selftest with a fully resolvable closure, and one
 # check that walks the tree and therefore has none.
@@ -58,6 +58,7 @@ cat >"$FIX/bubbles/scripts/framework-validate.sh" <<'EOF'
 #!/usr/bin/env bash
 run_check "Alpha selftest" bash "$SCRIPT_DIR/alpha-selftest.sh"
 run_check_self_only "Tree walker (live)" bash "$SCRIPT_DIR/tree-walker.sh"
+run_check "Python selftest" python3 "$SCRIPT_DIR/python-selftest.py"
 EOF
 
 cat >"$FIX/bubbles/scripts/alpha-selftest.sh" <<'EOF'
@@ -76,6 +77,16 @@ cat >"$FIX/bubbles/scripts/tree-walker.sh" <<'EOF'
 #!/usr/bin/env bash
 find "$REPO_ROOT" -name 'anything' -print
 EOF
+
+cat >"$FIX/bubbles/scripts/python-selftest.py" <<'EOF'
+from pathlib import Path
+HERE = Path(__file__).resolve().parent
+RUNTIME = HERE / "python-runtime.py"
+SCHEMA = HERE.parent / "schemas" / "python-runtime.schema.json"
+EOF
+
+printf 'VALUE = 1\n' >"$FIX/bubbles/scripts/python-runtime.py"
+printf '{}\n' >"$FIX/bubbles/schemas/python-runtime.schema.json"
 
 printf 'gates: []\n' >"$FIX/bubbles/registry/gates.yaml"
 
@@ -110,23 +121,33 @@ else
   bad "P2 traced closure members" "block=$(printf '%s' "$alpha_block" | tr '\n' '|')"
 fi
 
-# --- P3. honest incompleteness ---------------------------------------------
+
+python_block="$(entry_block "$TARGET" "vc-bubbles-scripts-python-selftest")"
+if printf '%s\n' "$python_block" | grep -q '^    - bubbles/scripts/python-runtime\.py$' &&
+  printf '%s\n' "$python_block" | grep -q '^    - bubbles/schemas/python-runtime\.schema\.json$' &&
+  printf '%s\n' "$python_block" | grep -q '^    closureComplete: true$'; then
+  ok "P3 Python checks and pathlib dependencies land in the traced closure"
+else
+  bad "P3 Python closure members" "block=$(printf '%s' "$python_block" | tr '\n' '|')"
+fi
+
+# --- P4. honest incompleteness ---------------------------------------------
 # A check that walks the tree has no enumerable input set. Recording `true` here
 # would be the staleness the whole map exists to remove.
 walker_block="$(entry_block "$TARGET" "vc-bubbles-scripts-tree-walker")"
 if printf '%s\n' "$walker_block" | grep -q '^    closureComplete: false$'; then
-  ok "P3 a tree-walking check is recorded closureComplete: false"
+  ok "P4 a tree-walking check is recorded closureComplete: false"
 else
-  bad "P3 tree walker incomplete" "block=$(printf '%s' "$walker_block" | tr '\n' '|')"
+  bad "P4 tree walker incomplete" "block=$(printf '%s' "$walker_block" | tr '\n' '|')"
 fi
 
-# --- P4. a clean regeneration verifies ---------------------------------------
+# --- P5. a clean regeneration verifies ---------------------------------------
 check_out="$(bash "$GEN" --repo-root "$FIX" --check 2>&1)"
 check_rc=$?
 if [[ "$check_rc" -eq 0 ]] && printf '%s' "$check_out" | grep -q 'OK'; then
-  ok "P4 --check accepts the file the generator just wrote"
+  ok "P5 --check accepts the file the generator just wrote"
 else
-  bad "P4 clean --check" "rc=$check_rc out=$(printf '%s' "$check_out" | tr '\n' '|')"
+  bad "P5 clean --check" "rc=$check_rc out=$(printf '%s' "$check_out" | tr '\n' '|')"
 fi
 
 # --- A1. ADVERSARIAL: a hand edit inside the generated region is REFUSED -----

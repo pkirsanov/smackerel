@@ -49,6 +49,26 @@
 #   --max-iterations <N>   Exhaust after N iterations (default 10)
 #   --format text|json     Output format (default: text)
 #   --dry-run              Resolve the plan and the cursor; execute NOTHING
+#   --mbe-posture <mode>   off (default), shadow, advisory, or reference-enforce
+#   --mbe-store-root PATH  Required only for reference-enforce
+#   --mbe-action ID=PATH   Exact broker action file for one occurrence
+#   --mbe-permit-consumption ID=PATH
+#                          Exact one-use permit consumption for one occurrence
+#
+# reference-enforce dispatches through mutable-dispatch-gateway.sh (IMP-056
+# SCOPE-4), never the broker directly (SCOPE-6: no orchestrator receives an
+# implicit exemption from the composed authorization chain). All of the
+# following are therefore REQUIRED together with reference-enforce; there is
+# no reduced-authorization fallback:
+#   --mbe-repo-root PATH           Repository root passed to the gateway
+#   --mbe-authority-file PATH      mutable-dispatch-authorization signing key
+#   --mbe-session-id ID            Current repository-binding session id
+#   --mbe-session-control-file PATH
+#   --mbe-packet-file PATH         Current actionable repository packet
+#   --mbe-feature-dir DIR          Boundary-classification feature directory
+#   --mbe-candidate-repo SLUG      Boundary-classification candidate repo
+#   --mbe-receipt-file PATH        Current pre-dispatch G134 receipt
+#   --mbe-session-file PATH        Current goal-contract session file
 #
 # There is no --skip, --force, --ignore or --replay flag. An occurrence is
 # resolved by running it, never by asserting it.
@@ -66,6 +86,7 @@ NAME="phase-coordinator"
 RELEVANCE="$SCRIPT_DIR/phase-relevance-resolve.sh"
 TEST_IMPACT="$SCRIPT_DIR/test-impact-plan.sh"
 SCENARIO_RESOLVER="$SCRIPT_DIR/scenario-state-resolve.sh"
+GATEWAY="${BUBBLES_MUTABLE_DISPATCH_GATEWAY:-$SCRIPT_DIR/mutable-dispatch-gateway.sh}"
 
 # Occurrence identity is shared with test-leaf-receipt.sh (IMP-048 SCOPE-3),
 # which extends these guarantees one level down to individual test leaves. One
@@ -82,9 +103,22 @@ PLAN_NAMES=()
 PLAN_COMMANDS=()
 PLAN_KINDS=()
 CHANGED_FILES=()
+MBE_POSTURE="off"
+MBE_STORE_ROOT=""
+MBE_ACTION_BINDINGS=()
+MBE_CONSUMPTION_BINDINGS=()
+MBE_REPO_ROOT=""
+MBE_AUTHORITY_FILE=""
+MBE_SESSION_ID=""
+MBE_SESSION_CONTROL_FILE=""
+MBE_PACKET_FILE=""
+MBE_FEATURE_DIR=""
+MBE_CANDIDATE_REPO=""
+MBE_RECEIPT_FILE=""
+MBE_SESSION_FILE=""
 
 usage() {
-  sed -n '38,60p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '38,75p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 die_usage() {
@@ -114,6 +148,19 @@ while [[ $# -gt 0 ]]; do
     --max-iterations) MAX_ITERATIONS="${2:-}"; shift 2 ;;
     --format) FORMAT="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN="true"; shift ;;
+    --mbe-posture) MBE_POSTURE="${2:-}"; shift 2 ;;
+    --mbe-store-root) MBE_STORE_ROOT="${2:-}"; shift 2 ;;
+    --mbe-action) MBE_ACTION_BINDINGS+=("${2:-}"); shift 2 ;;
+    --mbe-permit-consumption) MBE_CONSUMPTION_BINDINGS+=("${2:-}"); shift 2 ;;
+    --mbe-repo-root) MBE_REPO_ROOT="${2:-}"; shift 2 ;;
+    --mbe-authority-file) MBE_AUTHORITY_FILE="${2:-}"; shift 2 ;;
+    --mbe-session-id) MBE_SESSION_ID="${2:-}"; shift 2 ;;
+    --mbe-session-control-file) MBE_SESSION_CONTROL_FILE="${2:-}"; shift 2 ;;
+    --mbe-packet-file) MBE_PACKET_FILE="${2:-}"; shift 2 ;;
+    --mbe-feature-dir) MBE_FEATURE_DIR="${2:-}"; shift 2 ;;
+    --mbe-candidate-repo) MBE_CANDIDATE_REPO="${2:-}"; shift 2 ;;
+    --mbe-receipt-file) MBE_RECEIPT_FILE="${2:-}"; shift 2 ;;
+    --mbe-session-file) MBE_SESSION_FILE="${2:-}"; shift 2 ;;
     -h | --help) usage; exit 0 ;;
     --skip* | --force* | --ignore* | --replay* | --assume*)
       printf '%s: "%s" does not exist. An occurrence is resolved by running it.\n' "$NAME" "$1" >&2
@@ -131,11 +178,36 @@ case "$FORMAT" in
   text | json) ;;
   *) die_usage "--format must be text or json (got: $FORMAT)" ;;
 esac
+case "$MBE_POSTURE" in
+  off | shadow | advisory | reference-enforce) ;;
+  *) die_usage "--mbe-posture must be off, shadow, advisory, or reference-enforce (got: $MBE_POSTURE)" ;;
+esac
+if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+  [[ -n "$MBE_STORE_ROOT" && -d "$MBE_STORE_ROOT" ]] || die_usage "reference-enforce requires an existing --mbe-store-root"
+  # IMP-056 SCOPE-6: reference-enforce dispatches through the canonical
+  # gateway, never the broker directly, so every invariant the gateway
+  # composes must have its input supplied here too. There is no reduced
+  # form -- an orchestrator that cannot supply these is not exempt, it
+  # simply cannot use reference-enforce.
+  for pair in "mbe-repo-root:$MBE_REPO_ROOT" "mbe-authority-file:$MBE_AUTHORITY_FILE" \
+    "mbe-session-id:$MBE_SESSION_ID" "mbe-session-control-file:$MBE_SESSION_CONTROL_FILE" \
+    "mbe-packet-file:$MBE_PACKET_FILE" "mbe-feature-dir:$MBE_FEATURE_DIR" \
+    "mbe-candidate-repo:$MBE_CANDIDATE_REPO" "mbe-receipt-file:$MBE_RECEIPT_FILE" \
+    "mbe-session-file:$MBE_SESSION_FILE"; do
+    [[ -n "${pair#*:}" ]] || die_usage "reference-enforce requires --${pair%%:*}"
+  done
+fi
 
 command -v python3 >/dev/null 2>&1 || {
   printf '%s: python3 is required\n' "$NAME" >&2
   exit 2
 }
+if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+  command -v jq >/dev/null 2>&1 || {
+    printf '%s: jq is required for reference-enforce (gateway dispatch)\n' "$NAME" >&2
+    exit 2
+  }
+fi
 
 [[ -n "$CURSOR" ]] || CURSOR="$SPEC_DIR/.phase-cursor.json"
 
@@ -215,6 +287,19 @@ RESULT_OUTCOMES=()
 RESULT_REASONS=()
 RESULT_EXITS=()
 
+binding_path() {
+  local occurrence="$1"
+  shift
+  local binding
+  for binding in "$@"; do
+    if [[ "${binding%%=*}" == "$occurrence" ]]; then
+      printf '%s' "${binding#*=}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 chained_failed=""
 
 for i in "${!OCCURRENCE_IDS[@]}"; do
@@ -286,9 +371,38 @@ for i in "${!OCCURRENCE_IDS[@]}"; do
     continue
   fi
 
-  # ACTUAL EXECUTION.
-  BUBBLES_PHASE_OCCURRENCE="$occ" bash -c "$command_line"
-  rc=$?
+  # ACTUAL EXECUTION. Absent/off, shadow, and advisory retain the exact legacy
+  # path. Only the explicit repository-reference posture can interpose, and it
+  # consumes action/permit files created by admission rather than minting its
+  # own authority. Native host interception remains unsupported.
+  rc=0
+  if [[ "$MBE_POSTURE" == "reference-enforce" ]]; then
+    action_file="$(binding_path "$occ" "${MBE_ACTION_BINDINGS[@]}" || true)"
+    consumption_file="$(binding_path "$occ" "${MBE_CONSUMPTION_BINDINGS[@]}" || true)"
+    if [[ -z "$action_file" || ! -f "$action_file" || -z "$consumption_file" || ! -f "$consumption_file" ]]; then
+      printf '%s: reference-enforce occurrence %s requires existing action and permit-consumption files\n' "$NAME" "$occ" >&2
+      rc=3
+    else
+      # IMP-056 SCOPE-6: dispatches through the canonical gateway, never the
+      # broker directly. permit_id is read from the SAME consumption file
+      # already bound to this occurrence, not a separate binding -- it is
+      # the one fact the gateway needs that this file already carries.
+      occ_permit_id="$(jq -r '.permit_id // .permitId // ""' "$consumption_file")"
+      if [[ -z "$occ_permit_id" ]]; then
+        printf '%s: reference-enforce occurrence %s permit-consumption file has no permit id\n' "$NAME" "$occ" >&2
+        rc=3
+      else
+        bash "$GATEWAY" dispatch \
+          --repo-root "$MBE_REPO_ROOT" --store-root "$MBE_STORE_ROOT" --authority-file "$MBE_AUTHORITY_FILE" \
+          --session-id "$MBE_SESSION_ID" --session-control-file "$MBE_SESSION_CONTROL_FILE" \
+          --packet-file "$MBE_PACKET_FILE" --feature-dir "$MBE_FEATURE_DIR" --candidate-repo "$MBE_CANDIDATE_REPO" \
+          --receipt-file "$MBE_RECEIPT_FILE" --session-file "$MBE_SESSION_FILE" \
+          --permit-id "$occ_permit_id" --action "$action_file" --permit-consumption "$consumption_file" || rc=$?
+      fi
+    fi
+  else
+    BUBBLES_PHASE_OCCURRENCE="$occ" bash -c "$command_line" || rc=$?
+  fi
   RESULT_IDS+=("$occ")
   RESULT_EXITS+=("$rc")
   if [[ "$rc" -eq 0 ]]; then

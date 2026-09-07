@@ -1,0 +1,36 @@
+{
+  "contractType": "execution-control-security-outcome-ledger",
+  "schemaVersion": 2,
+  "outcomes": [
+    {"id":"SEC-ECF-01","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"Store"},"adversarialTest":{"file":"bubbles/scripts/execution-control-lock-selftest.py","marker":"SEC-ECF-01 first use creates the complete protected layout"}},
+    {"id":"SEC-ECF-02","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"parse_json"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-02 duplicate members produce one bounded error envelope"}},
+    {"id":"SEC-ECF-03","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"append"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-03 exact retry is idempotent"}},
+    {"id":"SEC-ECF-04","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"append"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-04 duplicate physical attempt is rejected"}},
+    {"id":"SEC-ECF-05","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"project"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-05 projection excludes event identities"}},
+    {"id":"SEC-ECF-06","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"bounded_read"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-06 object prefix boundary plus one is rejected before materialization"}},
+    {"id":"SEC-ECF-07","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"validate_metadata"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-07 protected object is private and single-link"}},
+    {"id":"SEC-ECF-08","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"locked"},"adversarialTest":{"file":"bubbles/scripts/execution-control-lock-selftest.py","marker":"SEC-ECF-08 missing fcntl refuses before mutation"}},
+    {"id":"SEC-ECF-09","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"validate_lineage"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-09 lineage branching is rejected"}},
+    {"id":"SEC-ECF-10","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"validate_checkpoint"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-10 stale checkpoint is rejected"}},
+    {"id":"SEC-ECF-11","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"recover"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-ECF-11 crash recovery closes"}},
+    {"id":"ECF-SEC-12","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"install_imported_test_fault_hook"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"ECF-SEC-12 ordinary CLI argv/environment cannot activate an imported-only fault hook"}},
+    {"id":"ECF-SEC-13","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"recover"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"ECF-SEC-13 malformed pending"}},
+    {"id":"ECF-SEC-14","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"contains_external"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"checkpoint inside"}},
+    {"id":"ECF-SEC-15","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"validate_checkpoint"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"ECF-SEC-15 checkpoint exact-field closure is enforced"}},
+    {"id":"ECF-SEC-16","status":"closed","implementation":{"file":"bubbles/scripts/execution-control-store.py","symbol":"verify_event_prefix"},"adversarialTest":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"ECF-SEC-16 invalid committed lineage refuses recovery without changing ledger/head/pending bytes"}}
+  ],
+  "reviewCrosswalk": {
+    "namespace": "security-runtime-review-v1",
+    "labelsAreAliases": false,
+    "findings": [
+      {"reviewId":"SEC-01","summary":"Authenticators bind the key, action, repository, and session context.","evidence":{"file":"bubbles/scripts/security-authority-selftest.py","marker":"test_authenticator_is_bound_to_key_action_repository_and_session"}},
+      {"reviewId":"SEC-02","summary":"Authority files reject invalid purpose, permissions, symlinks, and descriptor replacement races.","evidence":{"file":"bubbles/scripts/security-authority-selftest.py","marker":"test_open_descriptor_remains_bound_during_atomic_path_replacement"}},
+      {"reviewId":"SEC-03","summary":"Session epochs require exact authenticated host proof and a valid rollover chain.","evidence":{"file":"bubbles/scripts/measured-budget-runtime-v2-selftest.py","marker":"test_epoch_rollover_requires_closed_predecessor_and_exact_proof"}},
+      {"reviewId":"SEC-04","summary":"Action permits are authorization-bound and replay cannot execute a child.","evidence":{"file":"bubbles/scripts/measured-budget-runtime-v2-selftest.py","marker":"test_reference_broker_constructs_settlement_and_refuses_replay"}},
+      {"reviewId":"SEC-05","summary":"Usage receipts require valid authenticators and reject forged receipt verification.","evidence":{"file":"bubbles/scripts/usage-adapter-v2-selftest.sh","marker":"forged receipt authenticator accepted"}},
+      {"reviewId":"SEC-06","summary":"Research budget decisions require complete validated accounting and reject forged accounting state.","evidence":{"file":"bubbles/scripts/research-runtime-selftest.py","marker":"test_local_route_rejects_incomplete_or_forged_mbe_accounting"}},
+      {"reviewId":"SEC-07","summary":"Publication requires exact validation evidence bound to the terminal snapshot.","evidence":{"file":"bubbles/scripts/research-runtime-selftest.py","marker":"test_publication_requires_exact_validation_and_binds_terminal_snapshot"}},
+      {"reviewId":"SEC-08","summary":"Rollback resistance requires an independently retained authenticated fresh checkpoint.","evidence":{"file":"bubbles/scripts/execution-control-v2-selftest.py","marker":"SEC-08 independently retained authenticated fresh checkpoint establishes rollback resistance"}}
+    ]
+  }
+}
