@@ -37,17 +37,20 @@ litellm==1.84.0
 # sentence-transformers; sentence-transformers==3.3.0 capped transformers
 # <5.0.0, so bump sentence-transformers 3.3.0 -> 5.6.0 — the current release
 # whose spec relaxes the cap to `transformers<6.0.0,>=4.41.0`, permitting the
-# transformers 5.x line — and add an explicit transformers==5.5.0 pin (below)
+# transformers 5.x line — and add an explicit transformers pin (below)
 # for a deterministic, auditable lock visible to the image Trivy scan. The
 # sidecar uses ONLY the stable SentenceTransformer(name).encode(text,
 # normalize_embeddings=True) API (ml/app/embedder.py), unchanged across the
 # 3.x -> 5.x bump — reviewed, so no app-code change is required.
 sentence-transformers==5.6.0
 # transformers is normally transitive via sentence-transformers; pinned
-# explicitly here so the CVE-2026-4372 and CVE-2026-5241 fixes (>=5.5.0) are deterministic and
-# visible to `trivy fs ml/requirements.txt`. Must stay >=5.5.0 and within
-# sentence-transformers' range (transformers<6.0.0,>=4.41.0).
-transformers==5.5.0
+# explicitly here so CVE fixes are deterministic and visible to
+# `trivy fs ml/requirements.txt`. Bumped 5.5.0 -> 5.10.0 (evo-x2 home-lab
+# redeploy, 2026-09-08) to resolve CVE-2026-9856 (HIGH, save_pretrained path
+# traversal allowing arbitrary file writes via a crafted chat template name).
+# Must stay >=5.10.0 and within sentence-transformers' range
+# (transformers<6.0.0,>=4.41.0).
+transformers==5.10.0
 prometheus_client==0.21.0
 youtube-transcript-api==0.6.3
 trafilatura==1.12.0
