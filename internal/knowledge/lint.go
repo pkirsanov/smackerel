@@ -425,92 +425,119 @@ func (l *Linter) retrySynthesisBacklog(ctx context.Context) {
 			continue
 		}
 
-		// Load full artifact data to build a complete synthesis request (C-025-C002)
-		artifact, err := l.store.GetArtifactForSynthesis(ctx, a.ID)
-		if err != nil {
-			slog.Warn("lint: failed to load artifact for retry", "artifact_id", a.ID, "error", err)
-			continue
-		}
-
-		// Parse ML-extracted fields
-		var keyIdeas []string
-		_ = json.Unmarshal(artifact.KeyIdeasJSON, &keyIdeas)
-		var entities map[string][]string
-		_ = json.Unmarshal(artifact.EntitiesJSON, &entities)
-		var topics []string
-		_ = json.Unmarshal(artifact.TopicsJSON, &topics)
-
-		// Truncate content for LLM context window budget
-		contentRaw := artifact.ContentRaw
-		if l.cfg.MaxSynthesisContentChars > 0 && len(contentRaw) > l.cfg.MaxSynthesisContentChars {
-			contentRaw = stringutil.TruncateUTF8(contentRaw, l.cfg.MaxSynthesisContentChars)
-		}
-
-		// Load existing concepts for context
-		contextLimit := l.cfg.MaxSynthesisContextItems
-		if contextLimit <= 0 {
-			contextLimit = 50
-		}
-		type conceptSummary struct {
-			ID      string `json:"id"`
-			Title   string `json:"title"`
-			Summary string `json:"summary"`
-		}
-		type entitySummary struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-			Type string `json:"type"`
-		}
-
-		var conceptSummaries []conceptSummary
-		existingConcepts, _, cErr := l.store.ListConcepts(ctx, contextLimit, 0)
-		if cErr == nil {
-			for _, c := range existingConcepts {
-				conceptSummaries = append(conceptSummaries, conceptSummary{
-					ID: c.ID, Title: c.Title, Summary: c.Summary,
-				})
-			}
-		}
-
-		var entitySummaries []entitySummary
-		existingEntities, _, eErr := l.store.ListEntities(ctx, contextLimit, 0)
-		if eErr == nil {
-			for _, e := range existingEntities {
-				entitySummaries = append(entitySummaries, entitySummary{
-					ID: e.ID, Name: e.Name, Type: e.EntityType,
-				})
-			}
-		}
-
-		contractVersion := l.cfg.PromptContractVersion
-
-		req := map[string]interface{}{
-			"artifact_id":             a.ID,
-			"content_type":            artifact.ArtifactType,
-			"title":                   artifact.Title,
-			"summary":                 artifact.Summary,
-			"content_raw":             contentRaw,
-			"key_ideas":               keyIdeas,
-			"entities":                entities,
-			"topics":                  topics,
-			"source_id":               artifact.SourceID,
-			"source_type":             artifact.ArtifactType,
-			"existing_concepts":       conceptSummaries,
-			"existing_entities":       entitySummaries,
-			"prompt_contract_version": contractVersion,
-			"retry_count":             a.RetryCount + 1,
-			"triggered_by":            "lint_retry",
-		}
-		data, err := json.Marshal(req)
-		if err != nil {
-			slog.Warn("lint: failed to marshal retry request", "artifact_id", a.ID, "error", err)
-			continue
-		}
-		if err := l.nats.Publish(ctx, smacknats.SubjectSynthesisExtract, data); err != nil {
+		if err := l.PublishSynthesisExtractRequest(ctx, a, "lint_retry"); err != nil {
 			slog.Warn("lint: failed to re-publish artifact for synthesis", "artifact_id", a.ID, "error", err)
 			continue
 		}
 
 		slog.Info("lint: re-published artifact for synthesis retry", "artifact_id", a.ID, "retry_count", a.RetryCount+1)
 	}
+}
+
+// BuildSynthesisExtractRequest builds the exact JSON payload the ML sidecar's
+// synthesis.extract consumer expects (C-025-C002 schema), for the given
+// artifact's current pending/failed row. triggeredBy is recorded on the
+// request for operator-facing traceability (e.g. "lint_retry",
+// "backfill_cli") and does not affect processing.
+//
+// This is the single source of truth for the message shape: both the
+// linter's automatic retry path and any operator-invoked requeue tool
+// (e.g. `smackerel knowledge backfill-synthesis`) MUST build their request
+// through this function so a stuck backlog is always requeued using the
+// exact contract the live subscriber already consumes — never a
+// hand-rolled or drifted payload.
+func (l *Linter) BuildSynthesisExtractRequest(ctx context.Context, a ArtifactSynthesisStatusRow, triggeredBy string) ([]byte, error) {
+	artifact, err := l.store.GetArtifactForSynthesis(ctx, a.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load artifact for synthesis request: %w", err)
+	}
+
+	// Parse ML-extracted fields
+	var keyIdeas []string
+	_ = json.Unmarshal(artifact.KeyIdeasJSON, &keyIdeas)
+	var entities map[string][]string
+	_ = json.Unmarshal(artifact.EntitiesJSON, &entities)
+	var topics []string
+	_ = json.Unmarshal(artifact.TopicsJSON, &topics)
+
+	// Truncate content for LLM context window budget
+	contentRaw := artifact.ContentRaw
+	if l.cfg.MaxSynthesisContentChars > 0 && len(contentRaw) > l.cfg.MaxSynthesisContentChars {
+		contentRaw = stringutil.TruncateUTF8(contentRaw, l.cfg.MaxSynthesisContentChars)
+	}
+
+	// Load existing concepts for context
+	contextLimit := l.cfg.MaxSynthesisContextItems
+	if contextLimit <= 0 {
+		contextLimit = 50
+	}
+	type conceptSummary struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Summary string `json:"summary"`
+	}
+	type entitySummary struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+
+	var conceptSummaries []conceptSummary
+	existingConcepts, _, cErr := l.store.ListConcepts(ctx, contextLimit, 0)
+	if cErr == nil {
+		for _, c := range existingConcepts {
+			conceptSummaries = append(conceptSummaries, conceptSummary{
+				ID: c.ID, Title: c.Title, Summary: c.Summary,
+			})
+		}
+	}
+
+	var entitySummaries []entitySummary
+	existingEntities, _, eErr := l.store.ListEntities(ctx, contextLimit, 0)
+	if eErr == nil {
+		for _, e := range existingEntities {
+			entitySummaries = append(entitySummaries, entitySummary{
+				ID: e.ID, Name: e.Name, Type: e.EntityType,
+			})
+		}
+	}
+
+	contractVersion := l.cfg.PromptContractVersion
+
+	req := map[string]interface{}{
+		"artifact_id":             a.ID,
+		"content_type":            artifact.ArtifactType,
+		"title":                   artifact.Title,
+		"summary":                 artifact.Summary,
+		"content_raw":             contentRaw,
+		"key_ideas":               keyIdeas,
+		"entities":                entities,
+		"topics":                  topics,
+		"source_id":               artifact.SourceID,
+		"source_type":             artifact.ArtifactType,
+		"existing_concepts":       conceptSummaries,
+		"existing_entities":       entitySummaries,
+		"prompt_contract_version": contractVersion,
+		"retry_count":             a.RetryCount + 1,
+		"triggered_by":            triggeredBy,
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal synthesis extract request: %w", err)
+	}
+	return data, nil
+}
+
+// PublishSynthesisExtractRequest builds (via BuildSynthesisExtractRequest) and
+// publishes a fresh synthesis.extract request for the given artifact onto the
+// same JetStream subject the live SynthesisResultSubscriber already consumes.
+func (l *Linter) PublishSynthesisExtractRequest(ctx context.Context, a ArtifactSynthesisStatusRow, triggeredBy string) error {
+	data, err := l.BuildSynthesisExtractRequest(ctx, a, triggeredBy)
+	if err != nil {
+		return err
+	}
+	if err := l.nats.Publish(ctx, smacknats.SubjectSynthesisExtract, data); err != nil {
+		return fmt.Errorf("publish synthesis extract request: %w", err)
+	}
+	return nil
 }

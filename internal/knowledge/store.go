@@ -553,6 +553,89 @@ func (ks *KnowledgeStore) GetArtifactsBySynthesisStatus(ctx context.Context, sta
 	return result, rows.Err()
 }
 
+// GetSynthesisBackfillCandidates returns artifacts stuck at synthesis_status='pending'
+// that are safe to requeue right now, ordered by created_at (oldest first) so a
+// batched run makes steady forward progress and is resumable from wherever it
+// stopped.
+//
+// Idempotency: an artifact whose synthesis_error already carries the
+// "requeued_by_backfill:<RFC3339 timestamp>" marker (set by
+// MarkRequeuedByBackfill after a successful publish) is excluded unless that
+// marker is older than cooldown — so a re-run of the tool (including one
+// resuming after an interruption) never double-publishes an item that was
+// already requeued and is still waiting on the ML sidecar, but WILL retry an
+// item whose requeue evidently never got processed (cooldown elapsed, still
+// pending). Any artifact that already transitioned to 'completed', 'failed',
+// or 'abandoned' is excluded unconditionally by the status filter — the
+// idempotency guarantee this function makes is purely about avoiding
+// redundant re-publishing while an item is already in flight.
+func (ks *KnowledgeStore) GetSynthesisBackfillCandidates(ctx context.Context, limit int, cooldown time.Duration) ([]ArtifactSynthesisStatusRow, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	cooldownInterval := fmt.Sprintf("%d seconds", int(cooldown.Seconds()))
+	rows, err := ks.pool.Query(ctx, `
+		SELECT id, COALESCE(title, ''), synthesis_status, COALESCE(synthesis_error, ''), COALESCE(synthesis_retry_count, 0)
+		FROM artifacts
+		WHERE synthesis_status = 'pending'
+		  AND (
+			synthesis_error IS NULL
+			OR synthesis_error NOT LIKE 'requeued_by_backfill:%'
+			OR synthesis_at < NOW() - $3::interval
+		  )
+		ORDER BY created_at ASC
+		LIMIT $1 OFFSET $2`, limit, 0, cooldownInterval)
+	if err != nil {
+		return nil, fmt.Errorf("query synthesis backfill candidates: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ArtifactSynthesisStatusRow
+	for rows.Next() {
+		var a ArtifactSynthesisStatusRow
+		if err := rows.Scan(&a.ID, &a.Title, &a.SynthesisStatus, &a.SynthesisError, &a.RetryCount); err != nil {
+			return nil, fmt.Errorf("scan synthesis backfill candidate: %w", err)
+		}
+		result = append(result, a)
+	}
+	return result, rows.Err()
+}
+
+// synthesisBackfillMarkerPrefix tags synthesis_error with a machine-readable
+// marker (rather than clearing it) so GetSynthesisBackfillCandidates can tell
+// "requeued by the backfill tool, awaiting the ML sidecar" apart from every
+// other reason an artifact might be pending, without adding a new column.
+const synthesisBackfillMarkerPrefix = "requeued_by_backfill:"
+
+// MarkRequeuedByBackfill stamps an artifact's synthesis_error with the
+// backfill-requeue marker (current UTC timestamp) immediately after a
+// successful republish, so a subsequent GetSynthesisBackfillCandidates call
+// — in this run or a later resumed one — will not select it again inside the
+// cooldown window. Status is left as 'pending' (unchanged): completion is
+// still reported exclusively by the live SynthesisResultSubscriber when the
+// ML sidecar responds.
+func (ks *KnowledgeStore) MarkRequeuedByBackfill(ctx context.Context, artifactID string) error {
+	marker := synthesisBackfillMarkerPrefix + time.Now().UTC().Format(time.RFC3339)
+	_, err := ks.pool.Exec(ctx, `
+		UPDATE artifacts SET synthesis_error = $2, synthesis_at = NOW()
+		WHERE id = $1`, artifactID, marker)
+	if err != nil {
+		return fmt.Errorf("mark artifact requeued by backfill: %w", err)
+	}
+	return nil
+}
+
+// CountArtifactsBySynthesisStatus returns the number of artifacts currently at
+// the given synthesis_status, for before/after progress reporting.
+func (ks *KnowledgeStore) CountArtifactsBySynthesisStatus(ctx context.Context, status string) (int, error) {
+	var n int
+	err := ks.pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE synthesis_status = $1`, status).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count artifacts by synthesis status %q: %w", status, err)
+	}
+	return n, nil
+}
+
 // StoreLintReport creates a new lint report from findings and duration.
 func (ks *KnowledgeStore) StoreLintReport(ctx context.Context, findings []LintFinding, duration time.Duration) error {
 	findingsJSON, err := json.Marshal(findings)

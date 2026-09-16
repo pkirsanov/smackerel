@@ -72,6 +72,14 @@ func main() {
 		defer cancel()
 		os.Exit(runConnectorCommand(ctx, os.Args[2:]))
 	}
+	// `smackerel-core knowledge <subcommand>` operator surface
+	// (backfill-synthesis: requeue a stuck synthesis_status='pending'
+	// backlog after an incident that lost the original NATS messages).
+	if len(os.Args) > 1 && os.Args[1] == "knowledge" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		os.Exit(runKnowledgeCommand(ctx, os.Args[2:]))
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
 		os.Exit(1)
