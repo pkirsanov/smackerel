@@ -60,7 +60,7 @@ trafilatura==1.12.0
 # stable PdfReader(stream).pages[].extract_text() API (ml/app/pdf_extract.py),
 # unchanged across the 4.x -> 6.x bump, and ml/tests/test_pdf_extract.py already
 # exercises it against this line via the floating pyproject dev pin.
-pypdf==6.15.0
+pypdf==6.17.0
 numpy==1.26.0
 jsonschema==4.23.0
 PyYAML==6.0.2
