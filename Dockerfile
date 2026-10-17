@@ -1,12 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # --- Build stage ---
-# 1.25.13 is the minimal patch-level fix for the stdlib CVEs trivy flags at
-# 1.25.12 (CVE-2026-33818, CVE-2026-46600, CVE-2026-56853, CVE-2026-56858,
-# CVE-2026-56859, CVE-2026-56860, CVE-2026-56862). Stay on the 1.25 line:
-# go.mod declares `go 1.25.10` with no toolchain directive, and the builder
-# contract test pins minor == 25.
-FROM golang:1.25.13-alpine AS builder
+# 1.26.9 is the first release carrying the stdlib fixes trivy flags at 1.25.13
+# (CVE-2026-78667, CVE-2026-78669, CVE-2026-97031); no 1.25.x patch has them.
+# go.mod keeps `go 1.25.10` with no toolchain directive, so the module still
+# builds on the older language level; the builder contract test pins minor == 26.
+FROM golang:1.26.9-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 

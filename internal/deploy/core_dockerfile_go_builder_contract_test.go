@@ -17,17 +17,19 @@ import (
 
 const (
 	requiredGoBuilderMajor = 1
-	requiredGoBuilderMinor = 25
-	// Floor 13 fixes the Go stdlib CVEs trivy flags at 1.25.12: CVE-2026-33818,
+	requiredGoBuilderMinor = 26
+	// Floor 1.26.9 fixes the Go stdlib CVEs trivy flags at 1.25.13 (no 1.25.x
+	// patch carries the fix): CVE-2026-78667, CVE-2026-78669, CVE-2026-97031.
+	// Earlier floor 1.25.13 fixed CVE-2026-33818,
 	// CVE-2026-46600, CVE-2026-56853, CVE-2026-56858, CVE-2026-56859,
 	// CVE-2026-56860, CVE-2026-56862. Prior floor 12 covered CVE-2026-39822.
-	requiredGoBuilderPatch = 13
+	requiredGoBuilderPatch = 9
 
 	// minimumAcceptedGoBuilderPatch may only ever be RAISED. Deriving the
 	// adversarial fixtures from requiredGoBuilderPatch keeps routine bumps
 	// cheap, but it also means those fixtures would keep passing if the floor
 	// were lowered. This literal is the guarantee they can no longer give.
-	minimumAcceptedGoBuilderPatch = 13
+	minimumAcceptedGoBuilderPatch = 9
 )
 
 // goBuilderSecurityFloor renders the active floor as major.minor.patch.
