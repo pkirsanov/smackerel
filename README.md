@@ -1032,3 +1032,48 @@ tailnet at `grafana.<tailnet>.ts.net`.
 
 See the knb operator runbook `docs/Observability.md` for architecture, the
 per-product instrumentation contract, and the go-live sequence.
+
+## DeepSeek Harness & Claude Code Integration
+
+This repository is configured for DeepSeek Harness per-project profiles and Claude Code bubbles.
+
+### DSH profile
+
+Profile name: `smackerel`
+Location: `~/.dsh/profiles/smackerel`
+Local scaffolding: `.dsh/`
+
+Bubbles artifacts are automatically discovered:
+
+* Instructions: `AGENTS.md`, `CLAUDE.md`, `.claude/instructions/bubbles-*.instructions.md`
+* Skills: `.claude/skills`, `.github/skills`
+* Agents: `.claude/agents/bubbles-*.md`
+
+Run with the project wrapper:
+```bash
+./dsh --dump-config
+./dsh headless "explain the architecture"
+```
+
+Or directly:
+```bash
+dsh --profile smackerel --dump-config
+```
+
+### Claude Code
+
+Claude Code already finds bubbles via `.claude/agents`, `.claude/instructions`, `.claude/skills`, and `.github/skills`.
+
+Use the project-specific DSH profile for full harness features: prompts, agents, skills, subagents, session logging.
+
+### Quick start
+
+```bash
+# DSH with project profile
+./dsh headless "summarize this repo"
+
+# Claude Code
+claude
+```
+
+See `.dsh/package.json` and `.dsh/cordis.patch.yml` for the exact mappings.

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+REAL_DSH="/Users/pkirsanov/.npm/_npx/1e7f6d9597241db0/node_modules/.bin/dsh"
+exec "$REAL_DSH" --profile smackerel "$@"

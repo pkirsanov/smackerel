@@ -1,0 +1,18 @@
+{
+  "name": "dsh-profile-smackerel",
+  "private": true,
+  "version": "0.1.0",
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-agent-instructions",
+        "@deepseek-ai/dsh-agent-preset",
+        "@deepseek-ai/dsh-skill",
+        "@deepseek-ai/dsh-skill-filesystem",
+        "@deepseek-ai/dsh-subagent"
+      ]
+    }
+  },
+  "description": "DeepSeek Harness per-project profile for smackerel with bubbles agents/instructions/skills"
+}

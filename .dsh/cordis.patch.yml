@@ -1,0 +1,33 @@
+# DeepSeek Harness per-project patch for smackerel
+- id: agent-instructions-smackerel
+  name: "@deepseek-ai/dsh-agent-instructions"
+  config:
+    maxBytes: 131072
+    instructionFileCandidates:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".claude/instructions/bubbles-*.instructions.md"
+
+- id: skill-filesystem-smackerel
+  name: "@deepseek-ai/dsh-skill-filesystem"
+  config:
+    includeDefaultRoots: false
+    roots:
+      - path: "!!js process.cwd() + '/.claude/skills'"
+        label: "smackerel-claude-skills"
+      - path: "!!js process.cwd() + '/.github/skills'"
+        label: "smackerel-github-skills"
+
+- id: agent-preset-smackerel
+  name: "@deepseek-ai/dsh-agent-preset"
+  config:
+    presets:
+      - name: "bubbles"
+        description: "smackerel bubbles agents from .claude/agents"
+        files:
+          - "!!js process.cwd() + '/.claude/agents/bubbles-*.md'"
+
+- id: session-log-smackerel
+  name: "@deepseek-ai/dsh-session-log-deepseek"
+  config:
+    enabled: true
