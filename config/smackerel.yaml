@@ -187,7 +187,7 @@ cors:
 # envelope arithmetic there and docs/Operations.md "Model Envelope Sizing".
 llm:
   provider: "ollama" # REQUIRED: set to ollama, openai, or anthropic
-  model: muse-glimmer-30b # 3-model min-set generalist
+  model: muse-glimmer:30b # 3-model min-set generalist
   api_key: "dev-not-needed-for-ollama"
   # OPERATOR-SUPPLIED SEAM — intentionally EMPTY here. The shared host Ollama
   # address is per-operator deployment topology and MUST NOT be committed
@@ -197,11 +197,11 @@ llm:
   # when neither this key nor SMACKEREL_OLLAMA_URL yields a value — never a
   # silent localhost/container default (smackerel-no-defaults).
   ollama_url: ""
-  ollama_model: muse-glimmer-30b # Multimodal generalist
-  ollama_vision_model: muse-glimmer-30b # Multimodal generalist covers vision
+  ollama_model: muse-glimmer:30b # Multimodal generalist
+  ollama_vision_model: muse-glimmer:30b # Multimodal generalist covers vision
   ollama_ocr_model: deepseek-ocr:3b # commodity OCR specialist (2828 MiB resident @ num_ctx 4096 × 4 parallel)
-  ollama_reasoning_model: muse-glimmer-30b # Multimodal reasoning
-  ollama_fast_model: muse-glimmer-30b # Multimodal fast path
+  ollama_reasoning_model: muse-glimmer:30b # Multimodal reasoning
+  ollama_fast_model: muse-glimmer:30b # Multimodal fast path
 
   # ───────────────────────────────────────────────────────────────────
   # Spec 096 SCOPE-01 — Multi-Provider AI Model Connections (registry).
