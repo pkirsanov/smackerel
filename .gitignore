@@ -133,3 +133,12 @@ improvements/
 
 # Claude Code sessions - exclude from git
 .claude/sessions/
+
+# Claude Code local state
+.claude/worktrees/
+
+# Claude Code local state
+.claude/settings.local.json
+
+# Claude Code local state
+.claude/.history/
